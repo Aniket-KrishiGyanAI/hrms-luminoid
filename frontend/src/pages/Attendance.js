@@ -36,12 +36,14 @@ const Attendance = () => {
     return () => clearInterval(timer);
   }, [selectedUser]);
 
+  /*fixed Bug:CheckOut btn*/
   const fetchTodayStatus = async (userId = "") => {
     try {
       let url = "/api/attendance/today";
       if (userId) url += `?userId=${userId}`;
 
-      const { data } = await api.get(url);
+      const response = await api.get(url);
+      const data = response.data;
 
       if (!data) {
         setTodayStatus(null);
@@ -50,10 +52,18 @@ const Attendance = () => {
 
       setTodayStatus({
         ...data,
-        hasCheckedIn: Boolean(data.checkIn),
-        hasCheckedOut: Boolean(data.checkOut),
-        checkInTime: data.checkIn,
-        checkOutTime: data.checkOut,
+        hasCheckedIn: Boolean(data.checkInTime || data.checkIn),
+        hasCheckedOut: Boolean(data.checkOutTime || data.checkOut),
+        checkInTime: data.checkInTime || data.checkIn,
+        checkOutTime: data.checkOutTime || data.checkOut,
+      });
+      
+      console.log('Today Status Updated:', {
+        hasCheckedIn: Boolean(data.checkInTime || data.checkIn),
+        hasCheckedOut: Boolean(data.checkOutTime || data.checkOut),
+        checkIn: data.checkInTime || data.checkIn,
+        checkOut: data.checkOutTime || data.checkOut,
+        rawData: data
       });
     } catch (error) {
       console.error("Error fetching today status:", error);
@@ -142,8 +152,11 @@ const Attendance = () => {
       await api.post("/api/attendance/checkin", { location });
 
       toast.success("Checked in successfully");
-      fetchTodayStatus();
-      fetchAttendanceHistory();
+      
+      // Refresh data immediately
+      await fetchTodayStatus(selectedUser);
+      await fetchAttendanceHistory(selectedUser);
+      await fetchWeekSummary(selectedUser);
     } catch (error) {
       toast.error(
         error.response?.data?.message ||
@@ -154,9 +167,20 @@ const Attendance = () => {
     }
   };
 
+  /*fixed bug: checkout button*/
   const handleCheckOut = async () => {
+    if (loading) return;
+
     if (selectedUser && selectedUser !== user?.id) {
       return toast.error("Cannot check out for another user");
+    }
+
+    if (!todayStatus?.hasCheckedIn) {
+      return toast.error("Please check in first");
+    }
+
+    if (todayStatus?.hasCheckedOut) {
+      return toast.error("Already checked out");
     }
 
     setLoading(true);
@@ -164,6 +188,7 @@ const Attendance = () => {
     try {
       if (!navigator.geolocation) {
         toast.error("Geolocation not supported by your browser");
+        setLoading(false);
         return;
       }
 
@@ -181,12 +206,18 @@ const Attendance = () => {
         accuracy: position.coords.accuracy,
       };
 
-      await api.post("/api/attendance/checkout", { location });
+      const { data } = await api.post("/api/attendance/checkout", { location });
 
-      toast.success("Checked out successfully");
-      fetchTodayStatus();
-      fetchAttendanceHistory();
+      toast.success(data.message || "Checked out successfully");
+
+      // Refresh UI data
+      await Promise.all([
+        fetchTodayStatus(selectedUser),
+        fetchAttendanceHistory(selectedUser),
+      ]);
     } catch (error) {
+      console.error(error);
+
       toast.error(
         error.response?.data?.message ||
           "Unable to check out. Please enable location.",
@@ -214,13 +245,12 @@ const Attendance = () => {
       timeZone: "Asia/Kolkata",
     });
   };
-
+ 
   const formatTime = (dateString) => {
-    return dateString
-      ? new Date(dateString).toLocaleTimeString("en-IN", {
-          timeZone: "Asia/Kolkata",
-        })
-      : "N/A";
+    if (!dateString) return "-";
+    return new Date(dateString).toLocaleTimeString("en-IN", {
+      timeZone: "Asia/Kolkata",
+    });
   };
 
   const formatDuration = (hours = 0) => {
