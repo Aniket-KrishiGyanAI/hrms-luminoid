@@ -10,11 +10,14 @@ import {
   Form,
 } from "react-bootstrap";
 import { useAuth } from "../context/AuthContext";
+import { useNavigate } from "react-router-dom";
 import api from "../utils/api";
 import { toast } from "react-toastify";
+import { showAnnouncementNotification } from "../utils/notificationService";
 
 const Dashboard = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [announcements, setAnnouncements] = useState([]);
@@ -77,7 +80,15 @@ const Dashboard = () => {
   const fetchAnnouncements = async () => {
     try {
       const response = await api.get("/api/announcements");
-      setAnnouncements(response.data);
+      const newAnnouncements = response.data;
+      
+      // Show notification for new announcements
+      if (announcements.length > 0 && newAnnouncements.length > announcements.length) {
+        const latestAnnouncement = newAnnouncements[0];
+        showAnnouncementNotification(latestAnnouncement);
+      }
+      
+      setAnnouncements(newAnnouncements);
     } catch (error) {
       console.error("Error fetching announcements:", error);
     }
@@ -277,7 +288,11 @@ const Dashboard = () => {
                       border: '1px solid rgba(255, 255, 255, 0.2)'
                     }}
                   >
-                    <i className="fas fa-quote-right text-white" style={{ fontSize: '1.8rem', opacity: 0.9 }}></i>
+                    {dashboardData.motivationalQuote.icon ? (
+                      <i className={`${dashboardData.motivationalQuote.icon} text-white`} style={{ fontSize: '1.8rem', opacity: 0.9 }}></i>
+                    ) : (
+                      <i className="fas fa-quote-right text-white" style={{ fontSize: '1.8rem', opacity: 0.9 }}></i>
+                    )}
                   </div>
                   <div className="flex-grow-1">
                     <p
@@ -323,6 +338,84 @@ const Dashboard = () => {
 
       {user?.role === "EMPLOYEE" && dashboardData && (
         <>
+          {/* Quick Actions */}
+          <Row className="mb-4">
+            <Col>
+              <Card className="modern-card">
+                <Card.Body className="p-3">
+                  <div className="d-flex gap-2 flex-wrap justify-content-center">
+                    <Button variant="primary" href="/apply-leave" className="btn-modern">
+                      <i className="fas fa-calendar-plus me-2"></i>Apply Leave
+                    </Button>
+                    <Button variant="success" href="/attendance" className="btn-modern">
+                      <i className="fas fa-clock me-2"></i>Mark Attendance
+                    </Button>
+                    <Button variant="info" href="/my-leaves" className="btn-modern">
+                      <i className="fas fa-history me-2"></i>Leave History
+                    </Button>
+                    <Button variant="warning" href="/files" className="btn-modern">
+                      <i className="fas fa-file-alt me-2"></i>Documents
+                    </Button>
+                  </div>
+                </Card.Body>
+              </Card>
+            </Col>
+          </Row>
+
+          {/* Stats Row */}
+          <Row className="mb-4">
+            <Col md={3}>
+              <Card className="modern-card hover-lift h-100">
+                <Card.Body className="text-center">
+                  <div className="stats-icon mx-auto mb-3" style={{ backgroundColor: '#10b981' }}>
+                    <i className="fas fa-calendar-check"></i>
+                  </div>
+                  <div className="stats-number">
+                    {dashboardData.balances?.reduce((sum, b) => sum + (b.available || 0), 0) || 0}
+                  </div>
+                  <p className="stats-label mb-0">Total Leave Balance</p>
+                </Card.Body>
+              </Card>
+            </Col>
+            <Col md={3}>
+              <Card className="modern-card hover-lift h-100">
+                <Card.Body className="text-center">
+                  <div className="stats-icon mx-auto mb-3" style={{ backgroundColor: '#f59e0b' }}>
+                    <i className="fas fa-clock"></i>
+                  </div>
+                  <div className="stats-number">
+                    {dashboardData.balances?.reduce((sum, b) => sum + (b.pending || 0), 0) || 0}
+                  </div>
+                  <p className="stats-label mb-0">Pending Approvals</p>
+                </Card.Body>
+              </Card>
+            </Col>
+            <Col md={3}>
+              <Card className="modern-card hover-lift h-100">
+                <Card.Body className="text-center">
+                  <div className="stats-icon mx-auto mb-3" style={{ backgroundColor: '#ef4444' }}>
+                    <i className="fas fa-umbrella-beach"></i>
+                  </div>
+                  <div className="stats-number">
+                    {holidays.filter(h => new Date(h.date) >= new Date()).length || 0}
+                  </div>
+                  <p className="stats-label mb-0">Upcoming Holidays</p>
+                </Card.Body>
+              </Card>
+            </Col>
+            <Col md={3}>
+              <Card className="modern-card hover-lift h-100">
+                <Card.Body className="text-center">
+                  <div className="stats-icon mx-auto mb-3" style={{ backgroundColor: '#06b6d4' }}>
+                    <i className="fas fa-bullhorn"></i>
+                  </div>
+                  <div className="stats-number">{announcements.length || 0}</div>
+                  <p className="stats-label mb-0">Active Announcements</p>
+                </Card.Body>
+              </Card>
+            </Col>
+          </Row>
+
           <Row className="mb-4">
             <Col md={6}>
               <Card className="widget-card modern-card hover-lift">
@@ -386,83 +479,68 @@ const Dashboard = () => {
               </Card>
             </Col>
             <Col md={6}>
-              <Card
-                className="widget-card modern-card hover-lift d-flex flex-column"
-                style={{ height: "400px" }}
-              >
-                <Card.Header className="border-0 pb-0">
-                  <div className="d-flex align-items-center">
-                    <div
-                      className="rounded-circle d-flex align-items-center justify-content-center me-3"
-                      style={{
-                        width: "48px",
-                        height: "48px",
-                        background:
-                          "linear-gradient(135deg, var(--info), #0891b2)",
-                      }}
-                    >
-                      <i className="fas fa-bullhorn text-white"></i>
-                    </div>
-                    <div>
-                      <h6 className="card-title mb-0">Announcements</h6>
-                      <small className="text-muted-modern">
-                        Latest updates
-                      </small>
-                    </div>
-                  </div>
+              <Card className="modern-card h-100">
+                <Card.Header>
+                  <i className="fas fa-bullhorn me-2 text-info"></i>
+                  Latest Announcements
                 </Card.Header>
-
-                <Card.Body
-                  className="p-0 d-flex flex-column"
-                  style={{ minHeight: 0 }}
-                >
-                  <div
-                    style={{
-                      flex: 1,
-                      minHeight: 0,
-                      overflowY: "auto",
-                      overflowX: "hidden",
-                      padding: "1rem",
-                    }}
-                    className="custom-scrollbar"
-                  >
+                <Card.Body className="p-0">
+                  <div style={{ maxHeight: '400px', overflowY: 'auto', padding: '1rem' }}>
                     {announcements.length > 0 ? (
-                      announcements.map((ann) => (
+                      announcements.slice(0, 5).map((ann) => (
                         <div
                           key={ann._id}
-                          style={{
-                            marginBottom: "1rem",
-                            paddingBottom: "1rem",
-                            borderBottom: "1px solid #e5e7eb",
-                          }}
+                          className="d-flex align-items-start mb-3 pb-3 border-bottom"
                         >
-                          <div className="d-flex align-items-start">
-                            <div
-                              className="me-3 d-flex align-items-center justify-content-center text-white rounded"
-                              style={{
-                                backgroundColor:
+                          <div
+                            className="rounded d-flex align-items-center justify-content-center text-white me-2"
+                            style={{
+                              backgroundColor:
+                                ann.priority === "HIGH"
+                                  ? "#ef4444"
+                                  : ann.priority === "MEDIUM"
+                                    ? "#f59e0b"
+                                    : "#3b82f6",
+                              width: "35px",
+                              height: "35px",
+                              minWidth: "35px",
+                              fontSize: '0.875rem'
+                            }}
+                          >
+                            <i className="fas fa-bullhorn"></i>
+                          </div>
+                          <div className="flex-grow-1" style={{ minWidth: 0 }}>
+                            <div className="d-flex justify-content-between align-items-start mb-1">
+                              <h6 className="mb-0 text-truncate" style={{ fontSize: '0.9rem' }}>{ann.title}</h6>
+                              <Badge
+                                bg={
                                   ann.priority === "HIGH"
-                                    ? "#ef4444"
+                                    ? "danger"
                                     : ann.priority === "MEDIUM"
-                                      ? "#f59e0b"
-                                      : "#3b82f6",
-                                width: "40px",
-                                height: "40px",
-                              }}
-                            >
-                              <i className="fas fa-bullhorn"></i>
+                                      ? "warning"
+                                      : "info"
+                                }
+                                className="ms-2"
+                                style={{ fontSize: '0.7rem' }}
+                              >
+                                {ann.priority}
+                              </Badge>
                             </div>
-                            <div style={{ flex: 1 }}>
-                              <h6 className="mb-1">{ann.title}</h6>
-                              <p className="text-muted small mb-0">
-                                {ann.content}
-                              </p>
-                            </div>
+                            <p className="text-muted mb-1" style={{ fontSize: '0.8rem', lineHeight: '1.4' }}>
+                              {ann.content}
+                            </p>
+                            <small className="text-muted" style={{ fontSize: '0.7rem' }}>
+                              <i className="fas fa-clock me-1"></i>
+                              {new Date(ann.createdAt).toLocaleDateString()}
+                            </small>
                           </div>
                         </div>
                       ))
                     ) : (
-                      <p className="text-muted mb-0">No announcements</p>
+                      <div className="text-center py-4">
+                        <i className="fas fa-bullhorn text-muted fs-1 mb-3" style={{ color: '#94a3b8' }}></i>
+                        <p className="text-muted mb-0">No announcements</p>
+                      </div>
                     )}
                   </div>
                 </Card.Body>
@@ -470,88 +548,104 @@ const Dashboard = () => {
             </Col>
           </Row>
 
-          {/* Upcoming Holidays & Files */}
+          {/* Upcoming Holidays, Files & Quick Links */}
           <Row className="mb-4">
-            <Col md={6}>
-              <Card>
+            {dashboardData.birthdaysToday?.length > 0 && (
+              <Col md={12} className="mb-3">
+                <Card className="modern-card" style={{ background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)', border: 'none' }}>
+                  <Card.Body className="p-3">
+                    <div className="d-flex align-items-center">
+                      <div className="me-3" style={{ fontSize: '2rem' }}>🎉</div>
+                      <div className="flex-grow-1">
+                        <h6 className="mb-1" style={{ color: '#92400e' }}>
+                          <i className="fas fa-birthday-cake me-2"></i>
+                          Birthday Today!
+                        </h6>
+                        <p className="mb-0" style={{ color: '#78350f' }}>
+                          {dashboardData.birthdaysToday.map((emp, idx) => (
+                            <span key={emp._id}>
+                              <strong>{emp.firstName} {emp.lastName}</strong>
+                              {idx < dashboardData.birthdaysToday.length - 1 && ', '}
+                            </span>
+                          ))}
+                        </p>
+                      </div>
+                      <Button size="sm" variant="warning" style={{ fontWeight: '600' }}>
+                        <i className="fas fa-gift me-1"></i>Send Wishes
+                      </Button>
+                    </div>
+                  </Card.Body>
+                </Card>
+              </Col>
+            )}
+            <Col md={4}>
+              <Card className="modern-card h-100">
                 <Card.Header>
                   <i className="fas fa-calendar-alt me-2 text-success"></i>
                   Upcoming Holidays
                 </Card.Header>
-                <Card.Body>
+                <Card.Body style={{ maxHeight: "300px", overflowY: "auto" }}>
                   {holidays
                     .filter((h) => new Date(h.date) >= new Date())
                     .slice(0, 5)
                     .map((holiday) => (
                       <div
                         key={holiday._id}
-                        className="d-flex justify-content-between align-items-center mb-2"
+                        className="d-flex justify-content-between align-items-center mb-3 p-2 rounded"
+                        style={{ backgroundColor: '#f0fdf4', border: '1px solid #86efac' }}
                       >
-                        <div>
-                          <strong>{holiday.name}</strong>
-                          <br />
+                        <div className="flex-grow-1">
+                          <div className="fw-bold" style={{ fontSize: '0.9rem' }}>{holiday.name}</div>
                           <small className="text-muted">
-                            {new Date(holiday.date).toLocaleDateString()}
+                            {new Date(holiday.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
                           </small>
                         </div>
-                        <div className="d-flex align-items-center gap-2">
-                          <Badge
-                            bg={
-                              holiday.type === "FESTIVAL" ? "warning" : "info"
-                            }
-                          >
-                            {holiday.type}
-                          </Badge>
-                          {["HR", "ADMIN"].includes(user?.role) && (
-                            <Button
-                              size="sm"
-                              variant="outline-success"
-                              onClick={() =>
-                                handleMarkHolidayAttendance(holiday.date)
-                              }
-                              title="Mark attendance for all employees"
-                            >
-                              <i className="fas fa-check"></i>
-                            </Button>
-                          )}
-                        </div>
+                        <Badge bg={holiday.type === "FESTIVAL" ? "warning" : "info"}>
+                          {holiday.type}
+                        </Badge>
                       </div>
                     ))}
+                  {holidays.filter((h) => new Date(h.date) >= new Date()).length === 0 && (
+                    <p className="text-muted mb-0 text-center py-3">No upcoming holidays</p>
+                  )}
                 </Card.Body>
               </Card>
             </Col>
-            <Col md={6}>
-              <Card>
+            <Col md={4}>
+              <Card className="modern-card h-100">
                 <Card.Header>
-                  <i className="fas fa-file me-2 text-primary"></i>Recent Files
+                  <i className="fas fa-file me-2 text-primary"></i>Recent Documents
                 </Card.Header>
-                <Card.Body style={{ maxHeight: "200px", overflowY: "auto" }}>
-                  {files.slice(0, 5).map((file) => (
-                    <div
-                      key={file._id}
-                      className="d-flex justify-content-between align-items-center mb-2"
-                    >
-                      <div>
-                        <strong>{file.name}</strong>
-                        <br />
-                        <small className="text-muted">{file.category}</small>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline-primary"
-                        href={`/api/files/download/${file._id}`}
+                <Card.Body style={{ maxHeight: "300px", overflowY: "auto" }}>
+                  {files.length > 0 ? (
+                    files.slice(0, 5).map((file) => (
+                      <div
+                        key={file._id}
+                        className="d-flex justify-content-between align-items-center mb-3 p-2 rounded"
+                        style={{ backgroundColor: '#eff6ff', border: '1px solid #93c5fd' }}
                       >
-                        <i className="fas fa-download"></i>
-                      </Button>
-                    </div>
-                  ))}
+                        <div className="flex-grow-1" style={{ minWidth: 0 }}>
+                          <div className="fw-bold text-truncate" style={{ fontSize: '0.9rem' }}>{file.name}</div>
+                          <small className="text-muted">{file.category}</small>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline-primary"
+                          href={`/api/files/download/${file._id}`}
+                          style={{ minWidth: '36px' }}
+                        >
+                          <i className="fas fa-download"></i>
+                        </Button>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-muted mb-0 text-center py-3">No documents available</p>
+                  )}
                 </Card.Body>
               </Card>
             </Col>
-          </Row>
-          <Row className="mb-4">
-            <Col>
-              <Card>
+            <Col md={4}>
+              <Card className="modern-card h-100">
                 <Card.Header className="d-flex justify-content-between align-items-center">
                   <span>
                     <i className="fas fa-star me-2 text-warning"></i>Quick Links
@@ -564,26 +658,28 @@ const Dashboard = () => {
                     <i className="fas fa-plus"></i>
                   </Button>
                 </Card.Header>
-                <Card.Body>
+                <Card.Body style={{ maxHeight: "300px", overflowY: "auto" }}>
                   {favorites.length > 0 ? (
-                    <div className="d-flex flex-wrap gap-2">
+                    <div className="d-flex flex-column gap-2">
                       {favorites.map((fav) => (
-                        <Button
+                        <a
                           key={fav._id}
-                          variant="outline-secondary"
-                          size="sm"
                           href={fav.url}
                           target="_blank"
+                          rel="noopener noreferrer"
+                          className="d-flex align-items-center p-2 rounded text-decoration-none"
+                          style={{ backgroundColor: '#fef3c7', border: '1px solid #fbbf24', color: '#92400e' }}
                         >
                           {fav.icon && (
-                            <i className={`fas fa-${fav.icon} me-1`}></i>
+                            <i className={`fas fa-${fav.icon} me-2`}></i>
                           )}
-                          {fav.title}
-                        </Button>
+                          <span className="fw-semibold">{fav.title}</span>
+                          <i className="fas fa-external-link-alt ms-auto" style={{ fontSize: '0.75rem' }}></i>
+                        </a>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-muted mb-0">No quick links added</p>
+                    <p className="text-muted mb-0 text-center py-3">No quick links added</p>
                   )}
                 </Card.Body>
               </Card>
@@ -923,7 +1019,7 @@ const Dashboard = () => {
                     Department Distribution
                   </span>
                   <Badge bg="primary" className="badge-modern">
-                    {dashboardData.totalEmployees} Total
+                    {dashboardData.departmentStats?.length || 0} Total
                   </Badge>
                 </Card.Header>
                 <Card.Body>
@@ -954,7 +1050,7 @@ const Dashboard = () => {
                                 transition: 'all 0.3s ease',
                                 cursor: 'pointer'
                               }}
-                              onClick={() => toast.info(`${dept._id}: ${dept.count} employees`)}
+                              onClick={() => dept.departmentId && navigate(`/departments/${dept.departmentId}`)}
                               onMouseEnter={(e) => {
                                 e.currentTarget.style.transform = 'translateY(-3px)';
                                 e.currentTarget.style.boxShadow = `0 4px 8px ${color.bg}30`;

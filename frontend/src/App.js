@@ -6,11 +6,18 @@ import 'react-toastify/dist/ReactToastify.css';
 import './styles/custom.css';
 import './styles/modern.css';
 import './styles/enhanced.css';
+import './styles/enhanced-navbar.css';
+import './styles/sidebar-dark.css';
+import './styles/mobile-responsive.css';
+import './styles/desktop-enhanced.css';
+import './styles/compact-pages.css';
+import './styles/darkmode.css';
 
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
+import EnhancedLayout from './components/EnhancedLayout';
 
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -27,7 +34,6 @@ import EmployeeProfile from './pages/EmployeeProfile';
 import Expenses from './pages/Expenses';
 import Assets from './pages/Assets';
 import Reports from './pages/Reports';
-import EmployeeImport from './pages/EmployeeImport';
 import Departments from './pages/Departments';
 import DepartmentDetails from './pages/DepartmentDetails';
 
@@ -43,144 +49,136 @@ function App() {
             
             <Route path="/dashboard" element={
               <ProtectedRoute>
-                <Layout>
+                <EnhancedLayout>
                   <Dashboard />
-                </Layout>
+                </EnhancedLayout>
               </ProtectedRoute>
             } />
             
             <Route path="/apply-leave" element={
               <ProtectedRoute roles={['EMPLOYEE']}>
-                <Layout>
+                <EnhancedLayout>
                   <ApplyLeave />
-                </Layout>
+                </EnhancedLayout>
               </ProtectedRoute>
             } />
             
             <Route path="/my-leaves" element={
               <ProtectedRoute roles={['EMPLOYEE']}>
-                <Layout>
+                <EnhancedLayout>
                   <MyLeaves />
-                </Layout>
+                </EnhancedLayout>
               </ProtectedRoute>
             } />
             
             <Route path="/approvals" element={
               <ProtectedRoute roles={['MANAGER', 'HR', 'ADMIN']}>
-                <Layout>
+                <EnhancedLayout>
                   <Approvals />
-                </Layout>
+                </EnhancedLayout>
               </ProtectedRoute>
             } />
             
             <Route path="/leave-types" element={
               <ProtectedRoute roles={['HR', 'ADMIN']}>
-                <Layout>
+                <EnhancedLayout>
                   <LeaveTypes />
-                </Layout>
+                </EnhancedLayout>
               </ProtectedRoute>
             } />
             
             <Route path="/employee-directory" element={
               <ProtectedRoute roles={['MANAGER', 'HR', 'ADMIN']}>
-                <Layout>
+                <EnhancedLayout>
                   <EmployeeDirectory />
-                </Layout>
+                </EnhancedLayout>
               </ProtectedRoute>
             } />
 
             <Route path="/team-calendar" element={
               <ProtectedRoute roles={['MANAGER', 'HR', 'ADMIN']}>
-                <Layout>
+                <EnhancedLayout>
                   <TeamCalendar />
-                </Layout>
+                </EnhancedLayout>
               </ProtectedRoute>
             } />
             
             <Route path="/attendance" element={
               <ProtectedRoute>
-                <Layout>
+                <EnhancedLayout>
                   <Attendance />
-                </Layout>
+                </EnhancedLayout>
               </ProtectedRoute>
             } />
             
             <Route path="/files" element={
               <ProtectedRoute>
-                <Layout>
+                <EnhancedLayout>
                   <Files />
-                </Layout>
+                </EnhancedLayout>
               </ProtectedRoute>
             } />
             
             <Route path="/announcements" element={
               <ProtectedRoute roles={['HR', 'ADMIN']}>
-                <Layout>
+                <EnhancedLayout>
                   <Announcements />
-                </Layout>
+                </EnhancedLayout>
               </ProtectedRoute>
             } />
             
             <Route path="/profile" element={
               <ProtectedRoute>
-                <Layout>
+                <EnhancedLayout>
                   <EmployeeProfile />
-                </Layout>
+                </EnhancedLayout>
               </ProtectedRoute>
             } />
             <Route path="/profile/:id" element={
               <ProtectedRoute>
-                <Layout>
+                <EnhancedLayout>
                   <EmployeeProfile />
-                </Layout>
+                </EnhancedLayout>
               </ProtectedRoute>
             } />
             
             <Route path="/expenses" element={
               <ProtectedRoute>
-                <Layout>
+                <EnhancedLayout>
                   <Expenses />
-                </Layout>
+                </EnhancedLayout>
               </ProtectedRoute>
             } />
             
             <Route path="/assets" element={
               <ProtectedRoute roles={['HR', 'ADMIN']}>
-                <Layout>
+                <EnhancedLayout>
                   <Assets />
-                </Layout>
+                </EnhancedLayout>
               </ProtectedRoute>
             } />
 
             <Route path="/reports" element={
               <ProtectedRoute roles={['HR', 'ADMIN']}>
-                <Layout>
+                <EnhancedLayout>
                   <Reports />
-                </Layout>
-              </ProtectedRoute>
-            } />
-
-            <Route path="/employee-import" element={
-              <ProtectedRoute roles={['HR', 'ADMIN']}>
-                <Layout>
-                  <EmployeeImport />
-                </Layout>
+                </EnhancedLayout>
               </ProtectedRoute>
             } />
 
             <Route path="/departments" element={
               <ProtectedRoute roles={['ADMIN']}>
-                <Layout>
+                <EnhancedLayout>
                   <Departments />
-                </Layout>
+                </EnhancedLayout>
               </ProtectedRoute>
             } />
 
             <Route path="/departments/:id" element={
               <ProtectedRoute roles={['ADMIN', 'HR', 'MANAGER']}>
-                <Layout>
+                <EnhancedLayout>
                   <DepartmentDetails />
-                </Layout>
+                </EnhancedLayout>
               </ProtectedRoute>
             } />
           </Routes>

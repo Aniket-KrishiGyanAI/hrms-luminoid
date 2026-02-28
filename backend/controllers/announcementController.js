@@ -4,7 +4,26 @@ const { sendAnnouncementNotification } = require('../utils/emailService');
 
 const getAnnouncements = async (req, res) => {
   try {
-    const announcements = await Announcement.find({ isActive: true })
+    const now = new Date();
+    const query = {
+      isActive: true,
+      $or: [
+        { expiryDate: { $exists: false } },
+        { expiryDate: null },
+        { expiryDate: { $gte: now } }
+      ]
+    };
+
+    // Filter by user role if targetRoles is specified
+    if (req.user?.role) {
+      query.$or = [
+        { targetRoles: { $size: 0 } },
+        { targetRoles: req.user.role },
+        ...query.$or
+      ];
+    }
+
+    const announcements = await Announcement.find(query)
       .populate('createdBy', 'firstName lastName')
       .sort({ createdAt: -1 });
 

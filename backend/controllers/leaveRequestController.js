@@ -12,7 +12,10 @@ const applyLeave = async (req, res) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { leaveTypeId, startDate, endDate, isHalfDay, halfDayType, reason } = req.body;
+    const { 
+      leaveTypeId, startDate, endDate, isHalfDay, halfDayType, reason,
+      contactNumber, emergencyContact, addressDuringLeave, handoverTo
+    } = req.body;
     const userId = req.user.id;
 
     // Check for overlapping leaves
@@ -63,6 +66,10 @@ const applyLeave = async (req, res) => {
       isHalfDay,
       halfDayType,
       reason,
+      contactNumber: contactNumber || undefined,
+      emergencyContact: emergencyContact || undefined,
+      addressDuringLeave: addressDuringLeave || undefined,
+      handoverTo: handoverTo || undefined,
       isLOP
     });
 
@@ -402,16 +409,22 @@ const testLeaveReminder = async (req, res) => {
 
 const checkConflicts = async (req, res) => {
   try {
-    const { startDate, endDate, userId } = req.body;
+    const { startDate, endDate } = req.body;
+    const userId = req.user.id;
     
     // Get user's team members (same manager or department)
     const user = await User.findById(userId);
+    if (!user) {
+      return res.json({ conflicts: [] });
+    }
+    
     const teamMembers = await User.find({
       $or: [
         { managerId: user.managerId },
         { department: user.department }
       ],
-      _id: { $ne: userId }
+      _id: { $ne: userId },
+      isActive: true
     });
     
     const teamMemberIds = teamMembers.map(member => member._id);
@@ -437,7 +450,8 @@ const checkConflicts = async (req, res) => {
     
     res.json({ conflicts: conflictData });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    console.error('Error checking conflicts:', error);
+    res.json({ conflicts: [] });
   }
 };
 
@@ -450,36 +464,121 @@ const getEmployeeDetails = async (req, res) => {
       return res.status(404).json({ message: 'Employee not found' });
     }
 
-    // Get leave balances
+    // Get leave balances (filter out invalid ones)
     const currentYear = new Date().getFullYear();
-    const balances = await LeaveBalance.find({ userId: employeeId, year: currentYear })
-      .populate('leaveTypeId', 'name color');
+    const currentMonth = new Date().getMonth();
+    const balances = await LeaveBalance.find({ 
+      userId: employeeId, 
+      year: currentYear,
+      leaveTypeId: { $ne: null }
+    }).populate('leaveTypeId', 'name color');
 
     // Get all leave requests
     const leaves = await LeaveRequest.find({ userId: employeeId })
       .populate('leaveTypeId', 'name color')
       .sort({ startDate: -1 });
 
-    // Calculate present days (days not on leave in current year)
+    // Get attendance records from Attendance model
+    const Attendance = require('../models/Attendance');
     const yearStart = new Date(currentYear, 0, 1);
     const today = new Date();
-    const totalDays = Math.ceil((today - yearStart) / (1000 * 60 * 60 * 24));
-    const approvedLeaves = leaves.filter(l => 
-      l.status === 'HR_APPROVED' && 
-      l.startDate.getFullYear() === currentYear
-    );
-    const leaveDays = approvedLeaves.reduce((sum, l) => sum + l.days, 0);
-    const presentDays = totalDays - leaveDays;
+    
+    const attendanceRecords = await Attendance.find({
+      userId: employeeId,
+      date: { $gte: yearStart, $lte: today },
+      isDeleted: { $ne: true }
+    }).sort({ date: 1 });
+
+    // Calculate monthly attendance from real data
+    const monthlyPresent = [];
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    for (let month = 0; month <= currentMonth; month++) {
+      const monthStart = new Date(currentYear, month, 1);
+      const monthEnd = month === currentMonth ? new Date() : new Date(currentYear, month + 1, 0);
+      
+      // Get attendance records for this month
+      const monthAttendance = attendanceRecords.filter(record => {
+        const recordDate = new Date(record.date);
+        return recordDate >= monthStart && recordDate <= monthEnd;
+      });
+      
+      // Count present days (Present, Late, Half Day)
+      const presentDays = monthAttendance.filter(record => 
+        ['Present', 'Late', 'Half Day'].includes(record.status)
+      ).length;
+      
+      // Count leave days
+      const leaveDays = monthAttendance.filter(record => 
+        ['On Leave', 'LOP'].includes(record.status)
+      ).length;
+      
+      // Count absent days
+      const absentDays = monthAttendance.filter(record => 
+        record.status === 'Absent'
+      ).length;
+      
+      // Calculate total working days in month (excluding weekends)
+      let workingDays = 0;
+      let currentDate = new Date(monthStart);
+      
+      while (currentDate <= monthEnd) {
+        const dayOfWeek = currentDate.getDay();
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+          workingDays++;
+        }
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+      
+      monthlyPresent.push({
+        month: monthNames[month],
+        workingDays,
+        presentDays,
+        leaveDays,
+        absentDays,
+        totalRecords: monthAttendance.length
+      });
+    }
+    
+    // Calculate year-to-date totals from real attendance
+    const totalPresentDays = attendanceRecords.filter(record => 
+      ['Present', 'Late', 'Half Day'].includes(record.status)
+    ).length;
+    
+    const totalLeaveDays = attendanceRecords.filter(record => 
+      ['On Leave', 'LOP'].includes(record.status)
+    ).length;
+    
+    const totalAbsentDays = attendanceRecords.filter(record => 
+      record.status === 'Absent'
+    ).length;
+    
+    // Calculate total working days
+    let totalWorkingDays = 0;
+    let currentDate = new Date(yearStart);
+    
+    while (currentDate <= today) {
+      const dayOfWeek = currentDate.getDay();
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+        totalWorkingDays++;
+      }
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
 
     res.json({
       employee: user,
       balances,
       leaves,
+      monthlyPresent,
       stats: {
-        presentDays,
+        presentDays: totalPresentDays,
         totalLeaves: leaves.length,
         approvedLeaves: leaves.filter(l => l.status === 'HR_APPROVED').length,
-        pendingLeaves: leaves.filter(l => l.status === 'PENDING' || l.status === 'MANAGER_APPROVED').length
+        pendingLeaves: leaves.filter(l => l.status === 'PENDING' || l.status === 'MANAGER_APPROVED').length,
+        totalWorkingDays,
+        totalLeaveDays,
+        totalAbsentDays,
+        attendancePercentage: totalWorkingDays > 0 ? Math.round((totalPresentDays / totalWorkingDays) * 100) : 0
       }
     });
   } catch (error) {

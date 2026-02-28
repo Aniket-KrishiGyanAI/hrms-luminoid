@@ -24,7 +24,7 @@ function getDistanceInMeters(lat1, lon1, lat2, lon2) {
 
 const checkIn = async (req, res) => {
   try {
-    const { location } = req.body;
+    const { location, workMode = 'OFFICE' } = req.body;
     const userId = req.user.id;
 
     const today = moment.tz("Asia/Kolkata").startOf("day").toDate();
@@ -46,12 +46,20 @@ const checkIn = async (req, res) => {
       location.longitude,
     );
 
-    if (distance > ALLOWED_RADIUS) {
-      return res.status(403).json({
-        message: "You are not within office premises",
-        distance: Math.round(distance),
-      });
+    // Validate based on work mode
+    if (workMode === 'OFFICE') {
+      // Strict validation for office mode
+      if (distance > ALLOWED_RADIUS) {
+        return res.status(403).json({
+          message: "You are not within office premises",
+          distance: Math.round(distance),
+        });
+      }
+    } else if (workMode === 'HYBRID') {
+      // Auto-detect: if near office, switch to office mode
+      // This is handled by just storing the mode as-is
     }
+    // For REMOTE mode, no distance validation needed
 
     let attendance = await Attendance.findOne({ userId, date: today });
 
@@ -64,7 +72,7 @@ const checkIn = async (req, res) => {
     }
 
     attendance.checkIn = new Date();
-    // Status will be determined by pre-save hook based on check-in time
+    attendance.workMode = workMode;
     attendance.location = {
       checkInLocation: location,
     };
@@ -156,25 +164,6 @@ const checkOut = async (req, res) => {
       });
     }
 
-    // 📍 Office coordinates
-    const officeLat = Number(process.env.OFFICE_LAT);
-    const officeLng = Number(process.env.OFFICE_LNG);
-    const allowedRadius = Number(process.env.OFFICE_RADIUS_METERS || 100);
-
-    const distance = getDistanceInMeters(
-      officeLat,
-      officeLng,
-      location.latitude,
-      location.longitude,
-    );
-
-    if (distance > allowedRadius) {
-      return res.status(403).json({
-        message: "Check-out allowed only within office premises",
-        distance: Math.round(distance),
-      });
-    }
-
     // 🗂️ Fetch today's attendance
     const attendance = await Attendance.findOne({ userId, date: today });
 
@@ -189,6 +178,28 @@ const checkOut = async (req, res) => {
         message: "Already checked out today",
       });
     }
+
+    // Validate based on work mode (only for OFFICE mode)
+    if (attendance.workMode === 'OFFICE') {
+      const officeLat = Number(process.env.OFFICE_LAT);
+      const officeLng = Number(process.env.OFFICE_LNG);
+      const allowedRadius = Number(process.env.OFFICE_RADIUS_METERS || 100);
+
+      const distance = getDistanceInMeters(
+        officeLat,
+        officeLng,
+        location.latitude,
+        location.longitude,
+      );
+
+      if (distance > allowedRadius) {
+        return res.status(403).json({
+          message: "Check-out allowed only within office premises",
+          distance: Math.round(distance),
+        });
+      }
+    }
+    // For REMOTE/HYBRID: just capture location, no validation
 
     // ⏱️ Save check-out
     attendance.checkOut = new Date();
@@ -286,11 +297,19 @@ const getTodayStatus = async (req, res) => {
       // Get total active employees count
       const totalActiveEmployees = await User.countDocuments({ isActive: true });
 
+      // Calculate work mode statistics
+      const workModeStats = allAttendance.reduce((acc, a) => {
+        const mode = a.workMode || 'OFFICE';
+        acc[mode] = (acc[mode] || 0) + 1;
+        return acc;
+      }, {});
+
       const summary = {
         totalEmployees: totalActiveEmployees,
         checkedIn: allAttendance.filter(a => a.checkIn).length,
         checkedOut: allAttendance.filter(a => a.checkOut).length,
         totalHours: allAttendance.reduce((sum, a) => sum + (a.totalHours || 0), 0),
+        workModeStats,
         statusCounts: allAttendance.reduce((acc, a) => {
           acc[a.status] = (acc[a.status] || 0) + 1;
           return acc;

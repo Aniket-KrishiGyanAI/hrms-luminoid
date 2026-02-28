@@ -346,6 +346,42 @@ const sendBirthdayWishes = async (employee) => {
   }
 };
 
+const sendWelcomeEmail = async ({ to, name, password, loginUrl }) => {
+  try {
+    const mailOptions = {
+      from: process.env.SMTP_FROM || 'noreply@company.com',
+      to: to,
+      subject: 'Welcome to the Team! 🎉',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #28a745;">🎉 Welcome Aboard!</h2>
+          <p>Dear ${name},</p>
+          <p>Welcome to our team! We're excited to have you on board.</p>
+          
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="color: #007bff; margin: 0 0 15px 0;">Your Login Credentials</h3>
+            <p style="margin: 5px 0;"><strong>Email:</strong> ${to}</p>
+            <p style="margin: 5px 0;"><strong>Temporary Password:</strong> <code style="background: #e9ecef; padding: 5px 10px; border-radius: 4px;">${password}</code></p>
+            <p style="margin: 15px 0 5px 0;"><strong>Login URL:</strong> <a href="${loginUrl}">${loginUrl}</a></p>
+          </div>
+          
+          <div style="background-color: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <p style="margin: 0; color: #856404;">⚠️ <strong>Important:</strong> Please change your password after first login for security.</p>
+          </div>
+          
+          <p>If you have any questions, feel free to reach out to HR.</p>
+          <p>Best regards,<br>HR Team</p>
+        </div>
+      `
+    };
+    
+    await transporter.sendMail(mailOptions);
+  } catch (error) {
+    console.error('Error sending welcome email:', error);
+    throw error;
+  }
+};
+
 module.exports = { 
   sendHolidayNotification, 
   sendLeaveApplicationNotification, 
@@ -353,5 +389,6 @@ module.exports = {
   sendHalfDayLOPNotification,
   sendLeaveApprovalNotification,
   sendAnnouncementNotification,
-  sendBirthdayWishes
+  sendBirthdayWishes,
+  sendWelcomeEmail
 };

@@ -1,0 +1,349 @@
+/* Modern Login Page Styles */
+
+.modern-login-container {
+  min-height: 100vh;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+/* Animated Background */
+.animated-bg {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.gradient-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.5;
+  animation: float 20s infinite ease-in-out;
+}
+
+.orb-1 {
+  width: 500px;
+  height: 500px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  top: -10%;
+  left: -10%;
+  animation-delay: 0s;
+}
+
+.orb-2 {
+  width: 400px;
+  height: 400px;
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  bottom: -10%;
+  right: -10%;
+  animation-delay: 5s;
+}
+
+.orb-3 {
+  width: 350px;
+  height: 350px;
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation-delay: 10s;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(30px, -50px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+}
+
+/* Brand Section */
+.brand-section {
+  max-width: 500px;
+  padding: 2rem;
+}
+
+.brand-icon-large {
+  width: 100px;
+  height: 100px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  animation: pulse 3s infinite;
+}
+
+.brand-icon-large i {
+  font-size: 3rem;
+  color: white;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 20px 10px rgba(255, 255, 255, 0);
+  }
+}
+
+.feature-list {
+  margin-top: 2rem;
+}
+
+.feature-item {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 0;
+  font-size: 1.1rem;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.feature-item i {
+  color: #4ade80;
+  font-size: 1.2rem;
+}
+
+/* Glass Card */
+.glass-card {
+  background: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(20px);
+  border-radius: 24px !important;
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  transition: all 0.3s ease;
+}
+
+.glass-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 48px 0 rgba(31, 38, 135, 0.5) !important;
+}
+
+/* Login Icon */
+.login-icon-wrapper {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: iconBounce 2s infinite;
+}
+
+.login-icon-wrapper i {
+  font-size: 2.5rem;
+  color: white;
+}
+
+@keyframes iconBounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+/* Form Styles */
+.form-label-modern {
+  font-weight: 600;
+  color: #374151;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+}
+
+.form-label-modern i {
+  color: #667eea;
+}
+
+.form-control-modern {
+  padding: 0.75rem 1rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  background: #f9fafb;
+}
+
+.form-control-modern:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+  background: white;
+  outline: none;
+}
+
+.form-control-modern::placeholder {
+  color: #9ca3af;
+}
+
+/* Password Toggle Button */
+.password-toggle-btn {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0.5rem;
+  transition: color 0.3s ease;
+  z-index: 10;
+}
+
+.password-toggle-btn:hover {
+  color: #667eea;
+}
+
+/* Modern Button */
+.btn-modern {
+  padding: 0.875rem 2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 12px;
+  border: none;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 15px 0 rgba(102, 126, 234, 0.4);
+}
+
+.btn-modern:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px 0 rgba(102, 126, 234, 0.6);
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+  color: white;
+}
+
+.btn-modern:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-modern:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* Link Modern */
+.link-modern {
+  color: #667eea !important;
+  transition: all 0.3s ease;
+}
+
+.link-modern:hover {
+  color: #764ba2 !important;
+  text-decoration: underline !important;
+}
+
+/* Alert Modern */
+.alert-modern {
+  border-radius: 12px;
+  border: none;
+  background: #fee2e2;
+  color: #991b1b;
+  padding: 1rem;
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Animations */
+.fade-in-up {
+  animation: fadeInUp 0.6s ease;
+}
+
+.fade-in-left {
+  animation: fadeInLeft 0.8s ease;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Shadow Utilities */
+.shadow-2xl {
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+}
+
+/* Responsive */
+@media (max-width: 991px) {
+  .modern-login-container {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  }
+  
+  .glass-card {
+    margin: 1rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .login-icon-wrapper {
+    width: 60px;
+    height: 60px;
+  }
+  
+  .login-icon-wrapper i {
+    font-size: 2rem;
+  }
+  
+  .glass-card {
+    background: rgba(255, 255, 255, 0.98) !important;
+  }
+  
+  .btn-modern {
+    padding: 0.75rem 1.5rem;
+  }
+}
+
+/* Loading Spinner */
+.spinner-border-sm {
+  width: 1rem;
+  height: 1rem;
+  border-width: 0.15em;
+}

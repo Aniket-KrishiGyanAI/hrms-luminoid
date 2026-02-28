@@ -74,7 +74,7 @@ exports.getDepartmentById = async (req, res) => {
     }
     
     const employees = await User.find({ department: req.params.id })
-      .select('firstName lastName email designation role joinDate profileImage');
+      .select('firstName lastName email designation role joinDate profileImage department');
     
     // Get sub-departments
     const subDepartments = await Department.find({ parentDepartment: req.params.id })
@@ -83,8 +83,6 @@ exports.getDepartmentById = async (req, res) => {
     // Calculate stats
     const stats = {
       totalEmployees: employees.length,
-      activeGoals: department.goals.filter(g => g.status === 'IN_PROGRESS').length,
-      completedGoals: department.goals.filter(g => g.status === 'COMPLETED').length,
       totalDocuments: department.documents.length,
       subDepartments: subDepartments.length
     };
@@ -245,20 +243,24 @@ exports.transferEmployees = async (req, res) => {
   try {
     const { employeeIds, fromDepartmentId, toDepartmentId } = req.body;
     
+    if (!employeeIds || employeeIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'No employees selected' });
+    }
+    
     const toDept = await Department.findById(toDepartmentId);
     if (!toDept) {
       return res.status(404).json({ success: false, message: 'Target department not found' });
     }
     
-    await User.updateMany(
-      { _id: { $in: employeeIds }, department: fromDepartmentId },
+    const result = await User.updateMany(
+      { _id: { $in: employeeIds } },
       { department: toDepartmentId }
     );
     
-    await updateEmployeeCount(fromDepartmentId);
+    if (fromDepartmentId) await updateEmployeeCount(fromDepartmentId);
     await updateEmployeeCount(toDepartmentId);
     
-    res.json({ success: true, message: `${employeeIds.length} employees transferred successfully` });
+    res.json({ success: true, message: `${result.modifiedCount} employees transferred successfully` });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

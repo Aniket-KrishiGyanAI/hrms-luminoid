@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Environment variables - NEVER COMMIT THESE
+.env
+.env.*
+!.env.example
+backend/.env
+frontend/.env
+
+# Build outputs
+build/
+dist/
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Uploads
+uploads/

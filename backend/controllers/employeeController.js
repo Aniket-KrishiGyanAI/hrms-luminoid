@@ -32,6 +32,13 @@ const getProfile = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
+    // Convert department ObjectId to name if needed
+    const Department = require('../models/Department');
+    if (user.department && mongoose.Types.ObjectId.isValid(user.department)) {
+      const dept = await Department.findById(user.department);
+      if (dept) user.department = dept.name;
+    }
+
     // Set default dates to null if they are invalid
     if (user.joinDate && (user.joinDate.getFullYear() < 1900 || user.joinDate.getFullYear() > 2100)) {
       user.joinDate = null;
@@ -178,9 +185,17 @@ const updateProfile = async (req, res) => {
     // Populate and return
     await profile.populate('userId', 'firstName lastName email role department designation joinDate dateOfBirth');
     
+    // Convert department ObjectId to name
+    const profileObj = profile.toObject();
+    if (profileObj.userId.department && mongoose.Types.ObjectId.isValid(profileObj.userId.department)) {
+      const Department = require('../models/Department');
+      const dept = await Department.findById(profileObj.userId.department);
+      profileObj.userId.department = dept?.name || profileObj.userId.department;
+    }
+    
     res.json({ 
       message: 'Profile saved successfully', 
-      profile 
+      profile: profileObj
     });
   } catch (error) {
     console.error('updateProfile error:', error);
@@ -351,9 +366,22 @@ const getAllEmployees = async (req, res) => {
   try {
     const users = await User.find({ isActive: true })
       .select('firstName lastName email role department designation')
-      .sort({ firstName: 1 });
+      .sort({ firstName: 1 })
+      .lean();
     
-    res.json(users);
+    const Department = require('../models/Department');
+    const deptIds = [...new Set(users.map(u => u.department).filter(d => d && mongoose.Types.ObjectId.isValid(d)))];
+    const depts = await Department.find({ _id: { $in: deptIds } }).select('_id name').lean();
+    const deptMap = Object.fromEntries(depts.map(d => [d._id.toString(), d.name]));
+    
+    const formattedUsers = users.map(user => {
+      if (user.department && deptMap[user.department.toString()]) {
+        user.department = deptMap[user.department.toString()];
+      }
+      return user;
+    });
+    
+    res.json(formattedUsers);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }

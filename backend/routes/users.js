@@ -1,9 +1,15 @@
 const express = require('express');
 const { body } = require('express-validator');
-const { updateRole, updateUser, changePassword, resetPassword } = require('../controllers/userController');
+const { updateRole, updateUser, changePassword, resetPassword, getUserById, clearRoleNotification } = require('../controllers/userController');
 const { auth, authorize } = require('../middleware/auth');
 
 const router = express.Router();
+
+// Get user by ID
+router.get('/:userId', auth, getUserById);
+
+// Clear role change notification
+router.post('/:userId/clear-notification', auth, clearRoleNotification);
 
 // Only ADMIN can change roles
 router.put('/:userId/role', auth, authorize('ADMIN'), [

@@ -58,7 +58,9 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const response = await axios.post(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/auth/login`, { email, password });
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      console.log('API URL:', apiUrl);
+      const response = await axios.post(`${apiUrl}/api/auth/login`, { email, password });
       const { user, accessToken, refreshToken } = response.data;
       
       localStorage.setItem('token', accessToken);
@@ -75,7 +77,8 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (payload) => {
     try {
-      const response = await axios.post(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/auth/register`, payload);
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const response = await axios.post(`${apiUrl}/api/auth/register`, payload);
       const { user, accessToken, refreshToken } = response.data;
 
       localStorage.setItem('token', accessToken);

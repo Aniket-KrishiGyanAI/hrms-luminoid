@@ -2,25 +2,40 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema({
-  email: { type: String, required: true, unique: true },
+  email: { type: String, required: true, unique: true, index: true },
   password: { type: String, required: true },
-  firstName: { type: String, required: true },
-  lastName: { type: String, required: true },
+  firstName: { type: String, required: true, index: true },
+  lastName: { type: String, required: true, index: true },
   role: { 
     type: String, 
     enum: ['ADMIN', 'HR', 'MANAGER', 'EMPLOYEE'], 
-    default: 'EMPLOYEE' 
+    default: 'EMPLOYEE',
+    index: true
   },
   roleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Role' },
   customPermissions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Permission' }],
-  managerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  department: { type: mongoose.Schema.Types.Mixed },
+  managerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
+  department: { type: mongoose.Schema.Types.Mixed, index: true },
   designation: String,
-  joinDate: { type: Date, default: null },
+  joinDate: { type: Date, default: null, index: true },
   dateOfBirth: { type: Date, default: null },
-  profileImage: String, // S3 URL for profile image
-  isActive: { type: Boolean, default: true },
-  refreshToken: String
+  profileImage: String,
+  isActive: { type: Boolean, default: true, index: true },
+  refreshToken: String,
+  roleChangeNotification: {
+    hasNotification: { type: Boolean, default: false },
+    oldRole: String,
+    newRole: String
+  },
+  exitDetails: {
+    reason: String,
+    exitDate: Date,
+    exitInterview: String,
+    handoverStatus: String,
+    notes: String,
+    deactivatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    deactivatedAt: Date
+  }
 }, { timestamps: true });
 
 userSchema.pre('save', async function(next) {

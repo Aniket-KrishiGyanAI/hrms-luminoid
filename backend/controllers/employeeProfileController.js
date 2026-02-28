@@ -4,12 +4,14 @@ const { uploadProfileImage, deleteProfileImage } = require('../utils/s3Utils');
 
 const getProfile = async (req, res) => {
   try {
+    const mongoose = require('mongoose');
+    const Department = require('../models/Department');
+    
     let profile = await EmployeeProfile.findOne({ userId: req.user.id })
       .populate('userId', 'firstName lastName email role department joinDate dateOfBirth profileImage')
       .populate('professionalInfo.reportingManager', 'firstName lastName');
     
     if (!profile) {
-      // If profile doesn't exist, create one with basic user information
       const user = await User.findById(req.user.id);
       if (!user) {
         return res.status(404).json({ message: 'User not found' });
@@ -62,13 +64,19 @@ const getProfile = async (req, res) => {
       
       await profile.save();
       
-      // Populate the profile with user data
       profile = await EmployeeProfile.findById(profile._id)
         .populate('userId', 'firstName lastName email role department joinDate dateOfBirth profileImage')
         .populate('professionalInfo.reportingManager', 'firstName lastName');
     }
     
-    res.json(profile);
+    // Convert department ObjectId to name
+    const profileObj = profile.toObject();
+    if (profileObj.userId.department && mongoose.Types.ObjectId.isValid(profileObj.userId.department)) {
+      const dept = await Department.findById(profileObj.userId.department);
+      profileObj.userId.department = dept?.name || profileObj.userId.department;
+    }
+    
+    res.json(profileObj);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -76,9 +84,10 @@ const getProfile = async (req, res) => {
 
 const updateProfile = async (req, res) => {
   try {
+    const mongoose = require('mongoose');
+    const Department = require('../models/Department');
     const { employeeId, ...profileData } = req.body;
     
-    // If employeeId is provided at root level, move it to professionalInfo
     if (employeeId !== undefined) {
       if (!profileData.professionalInfo) {
         profileData.professionalInfo = {};
@@ -93,7 +102,14 @@ const updateProfile = async (req, res) => {
     ).populate('userId', 'firstName lastName email role department joinDate dateOfBirth profileImage')
      .populate('professionalInfo.reportingManager', 'firstName lastName');
     
-    res.json(profile);
+    // Convert department ObjectId to name
+    const profileObj = profile.toObject();
+    if (profileObj.userId.department && mongoose.Types.ObjectId.isValid(profileObj.userId.department)) {
+      const dept = await Department.findById(profileObj.userId.department);
+      profileObj.userId.department = dept?.name || profileObj.userId.department;
+    }
+    
+    res.json(profileObj);
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
@@ -152,10 +168,24 @@ const deleteProfilePicture = async (req, res) => {
 
 const getAllProfiles = async (req, res) => {
   try {
+    const mongoose = require('mongoose');
+    const Department = require('../models/Department');
+    
     const profiles = await EmployeeProfile.find()
       .populate('userId', 'firstName lastName email role department joinDate profileImage')
       .populate('professionalInfo.reportingManager', 'firstName lastName');
-    res.json(profiles);
+    
+    // Convert department ObjectIds to names
+    const formattedProfiles = await Promise.all(profiles.map(async (profile) => {
+      const profileObj = profile.toObject();
+      if (profileObj.userId.department && mongoose.Types.ObjectId.isValid(profileObj.userId.department)) {
+        const dept = await Department.findById(profileObj.userId.department);
+        profileObj.userId.department = dept?.name || profileObj.userId.department;
+      }
+      return profileObj;
+    }));
+    
+    res.json(formattedProfiles);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

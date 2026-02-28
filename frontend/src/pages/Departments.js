@@ -3,6 +3,7 @@ import { Card, Button, Modal, Form, Table, Badge, Container, Row, Col, Paginatio
 import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import { toast } from 'react-toastify';
+import { SkeletonTable } from '../components/Skeleton';
 
 const Departments = () => {
   const navigate = useNavigate();
@@ -33,6 +34,7 @@ const Departments = () => {
   const [bulkData, setBulkData] = useState({ employeeIds: [], departmentId: '' });
   const [transferData, setTransferData] = useState({ employeeIds: [], fromDepartmentId: '', toDepartmentId: '' });
   const [importFile, setImportFile] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchDepartments();
@@ -54,6 +56,7 @@ const Departments = () => {
 
   const fetchDepartments = async () => {
     try {
+      setLoading(true);
       const params = new URLSearchParams({
         page,
         limit: 10,
@@ -72,6 +75,8 @@ const Departments = () => {
     } catch (error) {
       console.error('Error fetching departments:', error);
       toast.error('Failed to load departments');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -549,6 +554,9 @@ const Departments = () => {
 
       <Card className="dept-card">
         <Card.Body className="p-0">
+          {loading ? (
+            <SkeletonTable rows={10} columns={8} />
+          ) : (
           <Table responsive className="dept-table mb-0">
             <thead>
               <tr>
@@ -634,6 +642,7 @@ const Departments = () => {
               )}
             </tbody>
           </Table>
+          )}
         </Card.Body>
       </Card>
 
@@ -937,10 +946,11 @@ const Departments = () => {
               <Form.Label>Select Employees *</Form.Label>
               <Form.Select multiple size={5} value={transferData.employeeIds}
                 onChange={(e) => setTransferData({...transferData, employeeIds: Array.from(e.target.selectedOptions, opt => opt.value)})} required>
-                {employees.filter(e => e.department === transferData.fromDepartmentId).map(emp => (
+                {employees.filter(e => e.department?._id === transferData.fromDepartmentId || e.department === transferData.fromDepartmentId).map(emp => (
                   <option key={emp._id} value={emp._id}>{emp.firstName} {emp.lastName}</option>
                 ))}
               </Form.Select>
+              <Form.Text className="text-muted">Hold Ctrl/Cmd to select multiple</Form.Text>
             </Form.Group>
             <Form.Group className="mb-3">
               <Form.Label>To Department *</Form.Label>

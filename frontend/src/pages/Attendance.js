@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Row, Col, Card, Button, Table, Badge, Form, Modal } from "react-bootstrap";
 import { toast } from "react-toastify";
 import api from "../utils/api";
@@ -13,6 +13,7 @@ const Attendance = () => {
   const [selectedUser, setSelectedUser] = useState("");
   const [loading, setLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [workMode, setWorkMode] = useState('OFFICE');
   const [weekSummary, setWeekSummary] = useState({
     presentDays: 0,
     totalHours: 0,
@@ -24,7 +25,35 @@ const Attendance = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState(null);
   const [editingRecord, setEditingRecord] = useState(null);
+  const [checkInAddress, setCheckInAddress] = useState('');
+  const [checkOutAddress, setCheckOutAddress] = useState('');
+  const [loadingAddress, setLoadingAddress] = useState(false);
+  const [addressCache, setAddressCache] = useState({});
+  const [liveHours, setLiveHours] = useState(0);
+
+  // Calculate live hours for checked-in employees
+  useEffect(() => {
+    const calculateLiveHours = () => {
+      if (todayStatus?.hasCheckedIn && !todayStatus?.hasCheckedOut && todayStatus?.checkInTime) {
+        const checkInTime = new Date(todayStatus.checkInTime);
+        const now = new Date();
+        const diffMs = now - checkInTime;
+        const hours = diffMs / (1000 * 60 * 60);
+        setLiveHours(Math.max(0, hours));
+      } else if (todayStatus?.totalHours) {
+        setLiveHours(todayStatus.totalHours);
+      } else {
+        setLiveHours(0);
+      }
+    };
+
+    calculateLiveHours();
+    const interval = setInterval(calculateLiveHours, 30000); // Update every 30 seconds
+    return () => clearInterval(interval);
+  }, [todayStatus]);
   const [editForm, setEditForm] = useState({
     checkIn: "",
     checkOut: "",
@@ -42,15 +71,16 @@ const Attendance = () => {
   });
 
   useEffect(() => {
-    fetchTodayStatus(selectedUser);
-    fetchAttendanceHistory(selectedUser);
-    fetchWeekSummary(selectedUser);
+    const initData = async () => {
+      await Promise.all([
+        fetchTodayStatus(selectedUser),
+        fetchWeekSummary(selectedUser)
+      ]);
+      fetchAttendanceHistory(selectedUser);
+    };
+    initData();
 
-    if (
-      user?.role &&
-      ["MANAGER", "HR", "ADMIN"].includes(user.role) &&
-      employees.length === 0
-    ) {
+    if (user?.role && ["MANAGER", "HR", "ADMIN"].includes(user.role) && employees.length === 0) {
       fetchEmployees();
     }
 
@@ -60,11 +90,11 @@ const Attendance = () => {
 
   const fetchTodayStatus = async (userId = "") => {
     try {
+      setLoading(true);
       let url = "/api/attendance/today";
       if (userId && userId.trim() !== "") {
         url += `?userId=${userId}`;
       } else if (["MANAGER", "HR", "ADMIN"].includes(user?.role)) {
-        // For "All" option, pass empty or "all" to get aggregated data
         url += "?userId=all";
       }
 
@@ -76,12 +106,11 @@ const Attendance = () => {
         return;
       }
 
-      // Handle aggregated data for "All" option
       if (data.isAggregated) {
         setTodayStatus({
           ...data,
-          hasCheckedIn: false, // Not applicable for aggregated view
-          hasCheckedOut: false, // Not applicable for aggregated view
+          hasCheckedIn: false,
+          hasCheckedOut: false,
           checkInTime: null,
           checkOutTime: null,
           isAggregated: true
@@ -95,11 +124,11 @@ const Attendance = () => {
           checkOutTime: data.checkOutTime || data.checkOut,
         });
       }
-      
-      console.log('Today Status Updated:', data);
     } catch (error) {
       console.error("Error fetching today status:", error);
       setTodayStatus(null);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -189,9 +218,9 @@ const Attendance = () => {
         accuracy: position.coords.accuracy,
       };
 
-      await api.post("/api/attendance/checkin", { location });
+      await api.post("/api/attendance/checkin", { location, workMode });
 
-      toast.success("Checked in successfully");
+      toast.success(`Checked in successfully (${workMode === 'OFFICE' ? '🏢 Office' : workMode === 'REMOTE' ? '🏠 Remote' : '🔄 Hybrid/Field'})`);
       
       // Refresh data immediately
       await fetchTodayStatus(selectedUser);
@@ -267,7 +296,7 @@ const Attendance = () => {
     }
   };
 
-  const getStatusBadge = (status) => {
+  const getStatusBadge = useCallback((status) => {
     const config = {
       Present: { bg: "success", icon: "check-circle" },
       Absent: { bg: "danger", icon: "times-circle" },
@@ -283,7 +312,7 @@ const Attendance = () => {
         {status}
       </Badge>
     );
-  };
+  }, []);
 
   const formatDate = (date) => {
     if (!date) return "N/A";
@@ -305,6 +334,77 @@ const Attendance = () => {
     const m = Math.round((hours - h) * 60);
     return `${h}h ${m}m`;
   };
+
+  const showLocationDetails = useCallback((record) => {
+    setSelectedLocation(record.location);
+    setShowLocationModal(true);
+  }, []);
+
+  const getAddressFromCoordinates = async (lat, lng) => {
+    const cacheKey = `${lat.toFixed(4)},${lng.toFixed(4)}`;
+    if (addressCache[cacheKey]) {
+      return addressCache[cacheKey];
+    }
+
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+        { headers: { 'User-Agent': 'HRMS-Attendance-App' } }
+      );
+      const data = await response.json();
+      const address = data.display_name || `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+      setAddressCache(prev => ({ ...prev, [cacheKey]: address }));
+      return address;
+    } catch (error) {
+      return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    }
+  };
+
+  useEffect(() => {
+    const loadAddresses = async () => {
+      if (showLocationModal && selectedLocation) {
+        setLoadingAddress(true);
+        const promises = [];
+        
+        if (selectedLocation.checkInLocation) {
+          promises.push(
+            getAddressFromCoordinates(
+              selectedLocation.checkInLocation.latitude,
+              selectedLocation.checkInLocation.longitude
+            ).then(addr => setCheckInAddress(addr))
+          );
+        }
+        
+        if (selectedLocation.checkOutLocation) {
+          promises.push(
+            getAddressFromCoordinates(
+              selectedLocation.checkOutLocation.latitude,
+              selectedLocation.checkOutLocation.longitude
+            ).then(addr => setCheckOutAddress(addr))
+          );
+        }
+        
+        await Promise.all(promises);
+        setLoadingAddress(false);
+      }
+    };
+    loadAddresses();
+  }, [showLocationModal, selectedLocation]);
+
+  const getWorkModeBadge = useCallback((mode) => {
+    const config = {
+      OFFICE: { bg: 'primary', icon: 'building', text: 'Office' },
+      REMOTE: { bg: 'success', icon: 'home', text: 'Remote' },
+      HYBRID: { bg: 'info', icon: 'sync-alt', text: 'Hybrid' }
+    };
+    const { bg, icon, text } = config[mode] || config.OFFICE;
+    return (
+      <Badge bg={bg} className="status-badge-enhanced">
+        <i className={`fas fa-${icon} me-1`}></i>
+        {text}
+      </Badge>
+    );
+  }, []);
 
   const downloadCSV = async () => {
     try {
@@ -475,9 +575,9 @@ const Attendance = () => {
         {/* Today's Status */}
         <Col lg={8} className="mb-3 mb-lg-0">
           <Card className="h-100 shadow-sm attendance-card">
-            <Card.Header className="d-flex align-items-center justify-content-between bg-light">
-              <div className="d-flex align-items-center gap-3">
-                <i className="fas fa-calendar-day me-2 text-primary"></i>
+            <Card.Header className="d-flex align-items-center justify-content-between bg-light flex-wrap">
+              <div className="d-flex align-items-center gap-3 mb-2 mb-md-0">
+                <i className="fas fa-calendar-day me-2 text-primary d-none d-sm-inline"></i>
                 <div>
                   <div>Today's Attendance</div>
                   <small className="text-muted">
@@ -489,14 +589,15 @@ const Attendance = () => {
                   </small>
                 </div>
               </div>
-              <div className="d-flex align-items-center gap-2">
+              <div className="d-flex align-items-center gap-2 flex-wrap">
                 {user?.role &&
                   ["MANAGER", "HR", "ADMIN"].includes(user.role) && (
                     <Form.Select
                       size="sm"
                       value={selectedUser}
                       onChange={(e) => setSelectedUser(e.target.value)}
-                      style={{ width: "220px" }}
+                      style={{ width: "220px", minWidth: "150px" }}
+                      className="mb-2 mb-md-0"
                     >
                       <option value="">View Self / All</option>
                       {employees.map((emp) => (
@@ -506,54 +607,192 @@ const Attendance = () => {
                       ))}
                     </Form.Select>
                   )}
-                <div className="text-muted fs-6">
-                  {currentTime.toLocaleDateString("en-GB")} -{" "}
-                  {currentTime.toLocaleTimeString()}
+                <div className="d-flex align-items-center px-2 px-md-3 py-2" style={{ 
+                  background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)', 
+                  borderRadius: '10px',
+                  boxShadow: '0 2px 8px rgba(30, 58, 138, 0.3)'
+                }}>
+                  <i className="fas fa-clock me-2" style={{ color: 'white', fontSize: '1.1rem' }}></i>
+                  <div style={{ color: 'white' }}>
+                    <div style={{ fontSize: '0.95rem', fontWeight: '600', letterSpacing: '0.5px' }}>
+                      {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', opacity: 0.9, marginTop: '-2px' }}>
+                      {currentTime.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </div>
+                  </div>
                 </div>
               </div>
             </Card.Header>
             <Card.Body>
-              {todayStatus ? (
+              {loading ? (
+                <div className="text-center py-4">
+                  <div className="spinner-border text-primary mb-3" role="status"></div>
+                  <p className="text-muted">Loading attendance data...</p>
+                </div>
+              ) : todayStatus ? (
                 todayStatus.isAggregated ? (
                   // Aggregated view for "All" employees
-                  <Row>
-                    <Col md={3}>
-                      <div className="text-center p-3 bg-light rounded">
-                        <h4 className="text-primary mb-1">
-                          {todayStatus.summary?.totalEmployees || 0}
-                        </h4>
-                        <small className="text-muted">Total Employees</small>
-                      </div>
-                    </Col>
-                    <Col md={3}>
-                      <div className="text-center p-3 bg-light rounded">
-                        <h4 className="text-success mb-1">
-                          {todayStatus.summary?.checkedIn || 0}
-                        </h4>
-                        <small className="text-muted">Checked In</small>
-                      </div>
-                    </Col>
-                    <Col md={3}>
-                      <div className="text-center p-3 bg-light rounded">
-                        <h4 className="text-danger mb-1">
-                          {todayStatus.summary?.checkedOut || 0}
-                        </h4>
-                        <small className="text-muted">Checked Out</small>
-                      </div>
-                    </Col>
-                    <Col md={3}>
-                      <div className="text-center p-3 bg-light rounded">
-                        <h4 className="text-info mb-1">
-                          {formatDuration(todayStatus.summary?.totalHours || 0)}
-                        </h4>
-                        <small className="text-muted">Total Hours</small>
-                      </div>
-                    </Col>
-                  </Row>
+                  <>
+                    <Row className="g-3 mb-4">
+                      <Col md={6}>
+                        <div className="text-center p-3" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)', borderRadius: '12px', color: 'white', boxShadow: '0 4px 12px rgba(30, 58, 138, 0.3)' }}>
+                          <i className="fas fa-users fa-2x mb-2"></i>
+                          <h3 className="fw-bold mb-1">{todayStatus.summary?.totalEmployees || 0}</h3>
+                          <small>Total Employees</small>
+                        </div>
+                      </Col>
+                      <Col md={3}>
+                        <div className="text-center p-2" style={{ background: 'linear-gradient(135deg, #065f46 0%, #10b981 100%)', borderRadius: '10px', color: 'white', boxShadow: '0 3px 10px rgba(6, 95, 70, 0.25)' }}>
+                          <i className="fas fa-sign-in-alt fa-lg mb-1"></i>
+                          <h4 className="fw-bold mb-0">{todayStatus.summary?.checkedIn || 0}</h4>
+                          <small style={{ fontSize: '0.75rem' }}>Checked In</small>
+                          <div className="mt-1" style={{ fontSize: '0.7rem', opacity: 0.9 }}>
+                            {todayStatus.summary?.totalEmployees > 0 && (
+                              `${Math.round((todayStatus.summary?.checkedIn / todayStatus.summary?.totalEmployees) * 100)}%`
+                            )}
+                          </div>
+                        </div>
+                      </Col>
+                      <Col md={3}>
+                        <div className="text-center p-2" style={{ background: 'linear-gradient(135deg, #be123c 0%, #f43f5e 100%)', borderRadius: '10px', color: 'white', boxShadow: '0 3px 10px rgba(190, 18, 60, 0.25)' }}>
+                          <i className="fas fa-sign-out-alt fa-lg mb-1"></i>
+                          <h4 className="fw-bold mb-0">{todayStatus.summary?.checkedOut || 0}</h4>
+                          <small style={{ fontSize: '0.75rem' }}>Checked Out</small>
+                          <div className="mt-1" style={{ fontSize: '0.7rem', opacity: 0.9 }}>
+                            {todayStatus.summary?.checkedIn > 0 && (
+                              `${Math.round((todayStatus.summary?.checkedOut / todayStatus.summary?.checkedIn) * 100)}%`
+                            )}
+                          </div>
+                        </div>
+                      </Col>
+                    </Row>
+
+                    {/* Work Mode Distribution */}
+                    <Row className="g-3 mb-4">
+                      <Col md={4}>
+                        <div className="p-3" style={{ background: '#eff6ff', borderRadius: '12px', border: '2px solid #3b82f6' }}>
+                          <div className="d-flex align-items-center justify-content-between mb-2">
+                            <div className="d-flex align-items-center">
+                              <div className="rounded-circle d-flex align-items-center justify-content-center me-2" style={{ width: '36px', height: '36px', background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)' }}>
+                                <i className="fas fa-building text-white"></i>
+                              </div>
+                              <span className="fw-semibold">Office</span>
+                            </div>
+                            <h4 className="mb-0 fw-bold" style={{ color: '#1e3a8a' }}>
+                              {todayStatus.summary?.workModeStats?.OFFICE || 0}
+                            </h4>
+                          </div>
+                          <div className="progress" style={{ height: '6px' }}>
+                            <div className="progress-bar" style={{ width: `${todayStatus.summary?.checkedIn > 0 ? ((todayStatus.summary?.workModeStats?.OFFICE || 0) / todayStatus.summary?.checkedIn) * 100 : 0}%`, background: 'linear-gradient(90deg, #1e3a8a 0%, #3b82f6 100%)' }}></div>
+                          </div>
+                        </div>
+                      </Col>
+                      <Col md={4}>
+                        <div className="p-3" style={{ background: '#f0fdf4', borderRadius: '12px', border: '2px solid #10b981' }}>
+                          <div className="d-flex align-items-center justify-content-between mb-2">
+                            <div className="d-flex align-items-center">
+                              <div className="rounded-circle d-flex align-items-center justify-content-center me-2" style={{ width: '36px', height: '36px', background: 'linear-gradient(135deg, #065f46 0%, #10b981 100%)' }}>
+                                <i className="fas fa-home text-white"></i>
+                              </div>
+                              <span className="fw-semibold">Remote</span>
+                            </div>
+                            <h4 className="mb-0 fw-bold" style={{ color: '#065f46' }}>
+                              {todayStatus.summary?.workModeStats?.REMOTE || 0}
+                            </h4>
+                          </div>
+                          <div className="progress" style={{ height: '6px' }}>
+                            <div className="progress-bar" style={{ width: `${todayStatus.summary?.checkedIn > 0 ? ((todayStatus.summary?.workModeStats?.REMOTE || 0) / todayStatus.summary?.checkedIn) * 100 : 0}%`, background: 'linear-gradient(90deg, #065f46 0%, #10b981 100%)' }}></div>
+                          </div>
+                        </div>
+                      </Col>
+                      <Col md={4}>
+                        <div className="p-3" style={{ background: '#fef2f2', borderRadius: '12px', border: '2px solid #f43f5e' }}>
+                          <div className="d-flex align-items-center justify-content-between mb-2">
+                            <div className="d-flex align-items-center">
+                              <div className="rounded-circle d-flex align-items-center justify-content-center me-2" style={{ width: '36px', height: '36px', background: 'linear-gradient(135deg, #be123c 0%, #f43f5e 100%)' }}>
+                                <i className="fas fa-sync-alt text-white"></i>
+                              </div>
+                              <span className="fw-semibold">Hybrid</span>
+                            </div>
+                            <h4 className="mb-0 fw-bold" style={{ color: '#be123c' }}>
+                              {todayStatus.summary?.workModeStats?.HYBRID || 0}
+                            </h4>
+                          </div>
+                          <div className="progress" style={{ height: '6px' }}>
+                            <div className="progress-bar" style={{ width: `${todayStatus.summary?.checkedIn > 0 ? ((todayStatus.summary?.workModeStats?.HYBRID || 0) / todayStatus.summary?.checkedIn) * 100 : 0}%`, background: 'linear-gradient(90deg, #be123c 0%, #f43f5e 100%)' }}></div>
+                          </div>
+                        </div>
+                      </Col>
+                    </Row>
+
+                    {/* Status Distribution */}
+                    <Row className="g-3">
+                      <Col md={12}>
+                        <div className="p-3" style={{ background: 'white', borderRadius: '12px', border: '1px solid #e5e7eb' }}>
+                          <h6 className="mb-3 fw-semibold">Today's Status Breakdown</h6>
+                          <Row className="g-2">
+                            {todayStatus.summary?.statusCounts && Object.entries(todayStatus.summary.statusCounts).map(([status, count]) => (
+                              <Col md={2} key={status}>
+                                <div className="text-center p-2" style={{ background: '#f9fafb', borderRadius: '8px' }}>
+                                  {getStatusBadge(status)}
+                                  <div className="mt-2 fw-bold" style={{ fontSize: '1.25rem' }}>{count}</div>
+                                </div>
+                              </Col>
+                            ))}
+                            <Col md={2}>
+                              <div className="text-center p-2" style={{ background: '#fef2f2', borderRadius: '8px' }}>
+                                <Badge bg="secondary" className="status-badge-enhanced">
+                                  <i className="fas fa-user-slash"></i>
+                                  Absent
+                                </Badge>
+                                <div className="mt-2 fw-bold" style={{ fontSize: '1.25rem' }}>
+                                  {(todayStatus.summary?.totalEmployees || 0) - (todayStatus.summary?.checkedIn || 0)}
+                                </div>
+                              </div>
+                            </Col>
+                          </Row>
+                        </div>
+                      </Col>
+                    </Row>
+                  </>
                 ) : (
                   // Individual employee view
-                  <Row>
-                    <Col md={6}>
+                  <>
+                    {/* Work Mode Selector - Only show if not checked in */}
+                    {(!selectedUser || selectedUser === user?.id) && !todayStatus.hasCheckedIn && (
+                      <div className="mb-4 p-3" style={{ background: 'linear-gradient(135deg, #f8f9ff 0%, #e8f0fe 100%)', borderRadius: '12px', border: '2px solid #e0e7ff' }}>
+                        <label className="form-label fw-semibold mb-3 d-flex align-items-center">
+                          <i className="fas fa-map-marker-alt me-2" style={{ color: '#667eea' }}></i>
+                          Select Work Location
+                        </label>
+                        <div className="btn-group w-100" role="group">
+                          <input type="radio" className="btn-check" name="workMode" id="office" checked={workMode === 'OFFICE'} onChange={() => setWorkMode('OFFICE')} />
+                          <label className="btn btn-outline-primary" htmlFor="office" style={{ padding: '12px', fontWeight: '600', borderRadius: '10px 0 0 10px' }}>
+                            <i className="fas fa-building fa-lg mb-2 d-block"></i>
+                            Office
+                            <small className="d-block text-muted" style={{ fontSize: '0.75rem' }}>GPS Required</small>
+                          </label>
+
+                          <input type="radio" className="btn-check" name="workMode" id="remote" checked={workMode === 'REMOTE'} onChange={() => setWorkMode('REMOTE')} />
+                          <label className="btn btn-outline-success" htmlFor="remote" style={{ padding: '12px', fontWeight: '600' }}>
+                            <i className="fas fa-home fa-lg mb-2 d-block"></i>
+                            Remote
+                            <small className="d-block text-muted" style={{ fontSize: '0.75rem' }}>Work from Home</small>
+                          </label>
+
+                          <input type="radio" className="btn-check" name="workMode" id="hybrid" checked={workMode === 'HYBRID'} onChange={() => setWorkMode('HYBRID')} />
+                          <label className="btn btn-outline-info" htmlFor="hybrid" style={{ padding: '12px', fontWeight: '600', borderRadius: '0 10px 10px 0' }}>
+                            <i className="fas fa-sync-alt fa-lg mb-2 d-block"></i>
+                            Hybrid / Field
+                            <small className="d-block text-muted" style={{ fontSize: '0.75rem' }}>Flexible / On-site</small>
+                          </label>
+                        </div>
+                      </div>
+                    )}
+
+                    <Row>
+                    <Col xs={12} md={6} className="mb-3 mb-md-0">
                       <div className="checkin-section">
                         <div className="d-flex align-items-center justify-content-between">
                           <div>
@@ -597,7 +836,7 @@ const Attendance = () => {
                         </div>
                       </div>
                     </Col>
-                    <Col md={6}>
+                    <Col xs={12} md={6} className="mb-3 mb-md-0">
                       <div className="checkout-section">
                         <div className="d-flex align-items-center justify-content-between">
                           <div>
@@ -646,15 +885,22 @@ const Attendance = () => {
                         </div>
                       </div>
                     </Col>
-                    <Col md={6}>
+                    <Col xs={12} md={6} className="mb-3 mb-md-0">
                       <div className="text-center p-3 bg-light rounded">
                         <h4 className="text-primary mb-1">
-                          {formatDuration(todayStatus.totalHours)}
+                          {formatDuration(liveHours)}
                         </h4>
-                        <small className="text-muted">Total Hours</small>
+                        <small className="text-muted">Total Hours{todayStatus.hasCheckedIn && !todayStatus.hasCheckedOut ? ' (Live)' : ''}</small>
+                        {todayStatus.hasCheckedIn && !todayStatus.hasCheckedOut && (
+                          <div className="mt-1">
+                            <span className="badge bg-success" style={{ fontSize: '0.65rem' }}>
+                              <i className="fas fa-circle" style={{ fontSize: '0.4rem', animation: 'pulse 2s infinite' }}></i> Live
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </Col>
-                    <Col md={6}>
+                    <Col xs={12} md={6}>
                       <div className="text-center p-3 bg-light rounded">
                         <h4 className="mb-1">
                           {getStatusBadge(todayStatus.status)}
@@ -663,14 +909,12 @@ const Attendance = () => {
                       </div>
                     </Col>
                   </Row>
+                  </>
                 )
               ) : (
                 <div className="text-center py-4">
-                  <div
-                    className="spinner-border text-primary mb-3"
-                    role="status"
-                  ></div>
-                  <p className="text-muted">Loading today's status...</p>
+                  <i className="fas fa-calendar-times text-muted fa-3x mb-3"></i>
+                  <p className="text-muted">No attendance record for today</p>
                 </div>
               )}
             </Card.Body>
@@ -682,85 +926,177 @@ const Attendance = () => {
           <Card className="h-100 shadow-sm attendance-card">
             <Card.Header className="d-flex align-items-center bg-light">
               <i className="fas fa-chart-bar me-2 text-success"></i>
-              This Week Summary
+              {(selectedUser && selectedUser !== '') || user?.role === 'EMPLOYEE' ? 'This Week Summary' : 'Team Week Summary'}
             </Card.Header>
             <Card.Body>
-              {/* Present Days Progress */}
-              <div className="mb-3">
-                <div className="d-flex justify-content-between align-items-center mb-2">
-                  <small className="text-muted fw-semibold">Present Days</small>
-                  <span className="text-success fw-bold">
-                    {selectedUser ? `${weekSummary.presentDays}/7` : weekSummary.presentDays}
-                  </span>
-                </div>
-                <div className="progress" style={{ height: '8px' }}>
-                  <div
-                    className="progress-bar bg-success"
-                    style={{ 
-                      width: selectedUser 
-                        ? `${(weekSummary.presentDays / 7) * 100}%`
-                        : employees.length > 0 
-                          ? `${Math.min((weekSummary.presentDays / (employees.length * 7)) * 100, 100)}%`
-                          : `${Math.min((weekSummary.presentDays / 7) * 100, 100)}%`
-                    }}
-                  ></div>
-                </div>
-                <small className="text-muted">
-                  {selectedUser 
-                    ? `${Math.round((weekSummary.presentDays / 7) * 100)}%`
-                    : employees.length > 0
-                      ? `${Math.round(Math.min((weekSummary.presentDays / (employees.length * 7)) * 100, 100))}%`
-                      : `${Math.round(Math.min((weekSummary.presentDays / 7) * 100, 100))}%`
-                  }
-                </small>
-              </div>
-
-              {/* Total Hours Progress */}
-              <div className="mb-3">
-                <div className="d-flex justify-content-between align-items-center mb-2">
-                  <small className="text-muted fw-semibold">Total Hours</small>
-                  <span className="text-primary fw-bold">
-                    {formatDuration(weekSummary.totalHours)}
-                    {selectedUser ? "/45h" : ""}
-                  </span>
-                </div>
-                <div className="progress" style={{ height: '8px' }}>
-                  <div
-                    className="progress-bar bg-primary"
-                    style={{ 
-                      width: selectedUser 
-                        ? `${Math.min((weekSummary.totalHours / 45) * 100, 100)}%`
-                        : employees.length > 0
-                          ? `${Math.min((weekSummary.totalHours / (employees.length * 45)) * 100, 100)}%`
-                          : `${Math.min((weekSummary.totalHours / 45) * 100, 100)}%`
-                    }}
-                  ></div>
-                </div>
-                <small className="text-muted">
-                  {selectedUser 
-                    ? `${Math.round(Math.min((weekSummary.totalHours / 45) * 100, 100))}%`
-                    : employees.length > 0
-                      ? `${Math.round(Math.min((weekSummary.totalHours / (employees.length * 45)) * 100, 100))}%`
-                      : `${Math.round(Math.min((weekSummary.totalHours / 45) * 100, 100))}%`
-                  }
-                </small>
-              </div>
-
-              {/* Late & Absent Stats */}
-              <div className="row mt-3">
-                <div className="col-6">
-                  <div className="text-center p-2 bg-light rounded">
-                    <div className="text-warning fs-5 fw-bold">{weekSummary.lateDays}</div>
-                    <small className="text-muted">Late Days</small>
+              {(selectedUser && selectedUser !== '') || user?.role === 'EMPLOYEE' ? (
+                // Individual employee view
+                <>
+                  {/* Weekly Performance Score */}
+                  <div className="mb-3 p-3 text-center" style={{ background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)', borderRadius: '12px', border: '2px solid #3b82f6' }}>
+                    <div className="mb-2">
+                      <i className="fas fa-trophy fa-2x" style={{ color: '#1e3a8a' }}></i>
+                    </div>
+                    <h2 className="fw-bold mb-1" style={{ color: '#1e3a8a' }}>
+                      {Math.round((weekSummary.presentDays / 7) * 100)}%
+                    </h2>
+                    <small className="text-muted fw-semibold">Weekly Attendance Score</small>
+                    <div className="mt-2">
+                      <small style={{ color: '#1e3a8a' }}>
+                        {weekSummary.presentDays === 7 ? '🌟 Perfect Week!' : 
+                         weekSummary.presentDays >= 5 ? '✅ Great Job!' : 
+                         weekSummary.presentDays >= 3 ? '👍 Keep Going!' : '⚠️ Needs Improvement'}
+                      </small>
+                    </div>
                   </div>
-                </div>
-                <div className="col-6">
-                  <div className="text-center p-2 bg-light rounded">
-                    <div className="text-danger fs-5 fw-bold">{weekSummary.absentDays}</div>
-                    <small className="text-muted">Absent Days</small>
+
+                  {/* Present Days */}
+                  <div className="mb-3">
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <small className="text-muted fw-semibold">Present Days</small>
+                      <span className="fw-bold" style={{ color: '#065f46' }}>
+                        {weekSummary.presentDays}/7
+                      </span>
+                    </div>
+                    <div className="progress" style={{ height: '10px', borderRadius: '10px' }}>
+                      <div
+                        className="progress-bar"
+                        style={{ 
+                          width: `${(weekSummary.presentDays / 7) * 100}%`,
+                          background: weekSummary.presentDays === 7 ? 'linear-gradient(90deg, #065f46 0%, #10b981 100%)' :
+                                     weekSummary.presentDays >= 5 ? 'linear-gradient(90deg, #0891b2 0%, #06b6d4 100%)' :
+                                     'linear-gradient(90deg, #d97706 0%, #f59e0b 100%)'
+                        }}
+                      ></div>
+                    </div>
                   </div>
-                </div>
-              </div>
+
+                  {/* Total Hours */}
+                  <div className="mb-3">
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <small className="text-muted fw-semibold">Total Hours</small>
+                      <span className="fw-bold" style={{ color: '#1e3a8a' }}>
+                        {formatDuration(weekSummary.totalHours)}
+                        <span className="text-muted" style={{ fontSize: '0.8rem' }}> / 45h</span>
+                      </span>
+                    </div>
+                    <div className="progress" style={{ height: '10px', borderRadius: '10px' }}>
+                      <div
+                        className="progress-bar"
+                        style={{ 
+                          width: `${Math.min((weekSummary.totalHours / 45) * 100, 100)}%`,
+                          background: 'linear-gradient(90deg, #1e3a8a 0%, #3b82f6 100%)'
+                        }}
+                      ></div>
+                    </div>
+                    <small className="text-muted">
+                      {weekSummary.presentDays > 0 ? `Avg: ${formatDuration(weekSummary.totalHours / weekSummary.presentDays)} per day` : 'No data'}
+                    </small>
+                  </div>
+
+                  {/* Issues */}
+                  <div className="row g-2">
+                    <div className="col-6">
+                      <div className="text-center p-2" style={{ 
+                        background: weekSummary.lateDays > 0 ? '#fef3c7' : '#f3f4f6', 
+                        borderRadius: '8px', 
+                        border: weekSummary.lateDays > 0 ? '1px solid #fbbf24' : '1px solid #e5e7eb'
+                      }}>
+                        <div className="fw-bold" style={{ color: weekSummary.lateDays > 0 ? '#92400e' : '#6b7280', fontSize: '1.25rem' }}>
+                          {weekSummary.lateDays}
+                        </div>
+                        <small style={{ color: weekSummary.lateDays > 0 ? '#92400e' : '#6b7280', fontSize: '0.7rem' }}>Late Days</small>
+                      </div>
+                    </div>
+                    <div className="col-6">
+                      <div className="text-center p-2" style={{ 
+                        background: weekSummary.absentDays > 0 ? '#fee2e2' : '#f3f4f6', 
+                        borderRadius: '8px', 
+                        border: weekSummary.absentDays > 0 ? '1px solid #f87171' : '1px solid #e5e7eb'
+                      }}>
+                        <div className="fw-bold" style={{ color: weekSummary.absentDays > 0 ? '#991b1b' : '#6b7280', fontSize: '1.25rem' }}>
+                          {weekSummary.absentDays}
+                        </div>
+                        <small style={{ color: weekSummary.absentDays > 0 ? '#991b1b' : '#6b7280', fontSize: '0.7rem' }}>Absent Days</small>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                // Admin/HR aggregated view
+                <>
+                  {/* Total Attendance */}
+                  <div className="mb-3 p-3" style={{ background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)', borderRadius: '10px', border: '1px solid #3b82f6' }}>
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <div>
+                        <i className="fas fa-calendar-check me-2" style={{ color: '#1e3a8a' }}></i>
+                        <span className="fw-semibold" style={{ color: '#1e3a8a' }}>Total Attendance</span>
+                      </div>
+                      <h4 className="mb-0 fw-bold" style={{ color: '#1e3a8a' }}>
+                        {weekSummary.presentDays}
+                      </h4>
+                    </div>
+                    <small className="text-muted">Total check-ins this week</small>
+                  </div>
+
+                  {/* Average Daily Attendance */}
+                  <div className="mb-3">
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <small className="text-muted fw-semibold">Avg Daily Attendance</small>
+                      <span className="fw-bold" style={{ color: '#065f46' }}>
+                        {employees.length > 0 ? Math.round((weekSummary.presentDays / 7) / employees.length * 100) : 0}%
+                      </span>
+                    </div>
+                    <div className="progress" style={{ height: '8px' }}>
+                      <div
+                        className="progress-bar"
+                        style={{ 
+                          width: `${employees.length > 0 ? Math.min((weekSummary.presentDays / 7) / employees.length * 100, 100) : 0}%`,
+                          background: 'linear-gradient(90deg, #065f46 0%, #10b981 100%)'
+                        }}
+                      ></div>
+                    </div>
+                  </div>
+
+                  {/* Total Hours */}
+                  <div className="mb-3">
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <small className="text-muted fw-semibold">Total Hours Worked</small>
+                      <span className="fw-bold" style={{ color: '#1e3a8a' }}>
+                        {formatDuration(weekSummary.totalHours)}
+                      </span>
+                    </div>
+                    <div className="progress" style={{ height: '8px' }}>
+                      <div
+                        className="progress-bar"
+                        style={{ 
+                          width: `${employees.length > 0 ? Math.min((weekSummary.totalHours / (employees.length * 45)) * 100, 100) : 0}%`,
+                          background: 'linear-gradient(90deg, #1e3a8a 0%, #3b82f6 100%)'
+                        }}
+                      ></div>
+                    </div>
+                    <small className="text-muted">
+                      Avg: {employees.length > 0 && weekSummary.presentDays > 0 ? formatDuration(weekSummary.totalHours / weekSummary.presentDays) : '0h 0m'} per attendance
+                    </small>
+                  </div>
+
+                  {/* Issues Summary */}
+                  <div className="row mt-3 g-2">
+                    <div className="col-6">
+                      <div className="text-center p-2" style={{ background: '#fef3c7', borderRadius: '8px', border: '1px solid #fbbf24' }}>
+                        <div className="fw-bold" style={{ color: '#92400e', fontSize: '1.1rem' }}>{weekSummary.lateDays}</div>
+                        <small style={{ color: '#92400e', fontSize: '0.7rem' }}>Late Arrivals</small>
+                      </div>
+                    </div>
+                    <div className="col-6">
+                      <div className="text-center p-2" style={{ background: '#fee2e2', borderRadius: '8px', border: '1px solid #f87171' }}>
+                        <div className="fw-bold" style={{ color: '#991b1b', fontSize: '1.1rem' }}>{weekSummary.absentDays}</div>
+                        <small style={{ color: '#991b1b', fontSize: '0.7rem' }}>Absences</small>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
             </Card.Body>
           </Card>
         </Col>
@@ -768,10 +1104,10 @@ const Attendance = () => {
 
       {/* Attendance History */}
       <Card className="shadow-sm">
-        <Card.Header className="d-flex align-items-center justify-content-between bg-light">
-          <i className="fas fa-history me-2 text-info"></i>
-          <div>Recent Attendance History</div>
-          <div className="d-flex align-items-center gap-2">
+        <Card.Header className="d-flex align-items-center justify-content-between bg-light flex-wrap">
+          <i className="fas fa-history me-2 text-info d-none d-sm-inline"></i>
+          <div className="mb-2 mb-md-0">Recent Attendance History</div>
+          <div className="d-flex align-items-center gap-2 flex-wrap">
             {user?.role && ["MANAGER", "HR", "ADMIN"].includes(user.role) && (
               <>
                 {/* Toggle for deleted records */}
@@ -792,7 +1128,8 @@ const Attendance = () => {
                     setSelectedUser(e.target.value);
                     fetchAttendanceHistory(e.target.value);
                   }}
-                  style={{ width: "220px" }}
+                  style={{ width: "220px", minWidth: "150px" }}
+                  className="mb-2 mb-md-0"
                 >
                   <option value="">All Employees</option>
                   {employees.map((emp) => (
@@ -805,6 +1142,7 @@ const Attendance = () => {
                   size="sm"
                   variant="outline-primary"
                   onClick={() => setShowDownloadModal(true)}
+                  className="mb-2 mb-md-0"
                 >
                   <i className="fas fa-download me-1"></i>Download
                 </Button>
@@ -915,6 +1253,18 @@ const Attendance = () => {
                         padding: "1rem",
                       }}
                     >
+                      Work Mode
+                    </th>
+                    <th
+                      style={{
+                        color: "#475569",
+                        fontWeight: "600",
+                        fontSize: "0.875rem",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.025em",
+                        padding: "1rem",
+                      }}
+                    >
                       Actions
                     </th>
                   </tr>
@@ -967,6 +1317,18 @@ const Attendance = () => {
                             Deleted
                           </Badge>
                         )}
+                      </td>
+                      <td>
+                        {getWorkModeBadge(record.workMode || 'OFFICE')}
+                        <Button
+                          variant="link"
+                          size="sm"
+                          className="p-0 ms-2"
+                          onClick={() => showLocationDetails(record)}
+                          title="View location details"
+                        >
+                          <i className="fas fa-map-marker-alt text-primary"></i>
+                        </Button>
                       </td>
                       <td>
                         {/* Show deleted info for Admin/HR */}
@@ -1387,6 +1749,114 @@ const Attendance = () => {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowDetailsModal(false)}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Location Details Modal */}
+      <Modal show={showLocationModal} onHide={() => setShowLocationModal(false)} size="lg">
+        <Modal.Header closeButton style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', border: 'none' }}>
+          <Modal.Title>
+            <i className="fas fa-map-marked-alt me-2"></i>
+            Location Details
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="p-4">
+          {selectedLocation && (
+            <>
+              {/* Check-in Location */}
+              <div className="mb-4 p-3" style={{ background: 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)', borderRadius: '12px', border: '2px solid #81c784' }}>
+                <h5 className="mb-3 d-flex align-items-center" style={{ color: '#2e7d32' }}>
+                  <div className="rounded-circle d-flex align-items-center justify-content-center me-3" style={{ width: '40px', height: '40px', background: '#4caf50' }}>
+                    <i className="fas fa-sign-in-alt text-white"></i>
+                  </div>
+                  Check-in Location
+                </h5>
+                {selectedLocation.checkInLocation ? (
+                  <div className="ms-5">
+                    {loadingAddress ? (
+                      <div className="mb-3">
+                        <div className="spinner-border spinner-border-sm text-success me-2" role="status"></div>
+                        <span className="text-muted">Loading address...</span>
+                      </div>
+                    ) : (
+                      <div className="mb-3 p-3" style={{ background: 'white', borderRadius: '8px', border: '1px solid #a5d6a7' }}>
+                        <i className="fas fa-map-marker-alt me-2" style={{ color: '#4caf50' }}></i>
+                        <strong>{checkInAddress}</strong>
+                      </div>
+                    )}
+                    <p className="mb-2 text-muted small">
+                      <i className="fas fa-map-pin me-2"></i>
+                      <strong>Coordinates:</strong> {selectedLocation.checkInLocation.latitude?.toFixed(6)}, {selectedLocation.checkInLocation.longitude?.toFixed(6)}
+                    </p>
+                    <p className="mb-2">
+                      <i className="fas fa-crosshairs me-2" style={{ color: '#4caf50' }}></i>
+                      <strong>Accuracy:</strong> {selectedLocation.checkInLocation.accuracy ? `${Math.round(selectedLocation.checkInLocation.accuracy)}m` : 'N/A'}
+                    </p>
+                    <a
+                      href={`https://www.google.com/maps?q=${selectedLocation.checkInLocation.latitude},${selectedLocation.checkInLocation.longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-sm btn-success mt-2"
+                    >
+                      <i className="fas fa-external-link-alt me-2"></i>
+                      View on Google Maps
+                    </a>
+                  </div>
+                ) : (
+                  <p className="text-muted ms-5">No check-in location recorded</p>
+                )}
+              </div>
+
+              {/* Check-out Location */}
+              {selectedLocation.checkOutLocation && (
+                <div className="p-3" style={{ background: 'linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%)', borderRadius: '12px', border: '2px solid #e57373' }}>
+                  <h5 className="mb-3 d-flex align-items-center" style={{ color: '#c62828' }}>
+                    <div className="rounded-circle d-flex align-items-center justify-content-center me-3" style={{ width: '40px', height: '40px', background: '#f44336' }}>
+                      <i className="fas fa-sign-out-alt text-white"></i>
+                    </div>
+                    Check-out Location
+                  </h5>
+                  <div className="ms-5">
+                    {checkOutAddress && (
+                      <div className="mb-3 p-3" style={{ background: 'white', borderRadius: '8px', border: '1px solid #ef9a9a' }}>
+                        <i className="fas fa-map-marker-alt me-2" style={{ color: '#f44336' }}></i>
+                        <strong>{checkOutAddress}</strong>
+                      </div>
+                    )}
+                    <p className="mb-2 text-muted small">
+                      <i className="fas fa-map-pin me-2"></i>
+                      <strong>Coordinates:</strong> {selectedLocation.checkOutLocation.latitude?.toFixed(6)}, {selectedLocation.checkOutLocation.longitude?.toFixed(6)}
+                    </p>
+                    <p className="mb-2">
+                      <i className="fas fa-crosshairs me-2" style={{ color: '#f44336' }}></i>
+                      <strong>Accuracy:</strong> {selectedLocation.checkOutLocation.accuracy ? `${Math.round(selectedLocation.checkOutLocation.accuracy)}m` : 'N/A'}
+                    </p>
+                    <a
+                      href={`https://www.google.com/maps?q=${selectedLocation.checkOutLocation.latitude},${selectedLocation.checkOutLocation.longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-sm btn-danger mt-2"
+                    >
+                      <i className="fas fa-external-link-alt me-2"></i>
+                      View on Google Maps
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              {!selectedLocation.checkOutLocation && (
+                <div className="text-center p-4 bg-light rounded">
+                  <i className="fas fa-clock fa-2x text-muted mb-2"></i>
+                  <p className="text-muted mb-0">Check-out location not yet recorded</p>
+                </div>
+              )}
+            </>
+          )}
+        </Modal.Body>
+        <Modal.Footer style={{ border: 'none' }}>
+          <Button variant="secondary" onClick={() => setShowLocationModal(false)} style={{ borderRadius: '8px', padding: '8px 24px' }}>
             Close
           </Button>
         </Modal.Footer>

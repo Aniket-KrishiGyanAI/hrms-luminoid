@@ -5,28 +5,30 @@ const ThemeContext = createContext();
 export const useTheme = () => {
   const context = useContext(ThemeContext);
   if (!context) {
-    throw new Error('useTheme must be used within a ThemeProvider');
+    throw new Error('useTheme must be used within ThemeProvider');
   }
   return context;
 };
 
 export const ThemeProvider = ({ children }) => {
-  const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('theme') || 'light';
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const saved = localStorage.getItem('darkMode');
+    return saved ? JSON.parse(saved) : false;
   });
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    document.body.className = theme === 'dark' ? 'dark-mode' : '';
-    localStorage.setItem('theme', theme);
-  }, [theme]);
+    localStorage.setItem('darkMode', JSON.stringify(isDarkMode));
+    if (isDarkMode) {
+      document.body.classList.add('dark-mode');
+    } else {
+      document.body.classList.remove('dark-mode');
+    }
+  }, [isDarkMode]);
 
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'light' ? 'dark' : 'light');
-  };
+  const toggleTheme = () => setIsDarkMode(prev => !prev);
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ isDarkMode, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );

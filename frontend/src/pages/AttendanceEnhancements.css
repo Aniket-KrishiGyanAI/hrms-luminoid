@@ -160,3 +160,356 @@
   width: 300px;
   height: 300px;
 }
+
+/* Work Mode Selector Styles */
+.btn-check:checked + .btn-outline-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: #667eea;
+  color: white;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.btn-check:checked + .btn-outline-success {
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+  border-color: #11998e;
+  color: white;
+  box-shadow: 0 4px 12px rgba(17, 153, 142, 0.4);
+}
+
+.btn-check:checked + .btn-outline-info {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  border-color: #4facfe;
+  color: white;
+  box-shadow: 0 4px 12px rgba(79, 172, 254, 0.4);
+}
+
+.btn-outline-primary:hover,
+.btn-outline-success:hover,
+.btn-outline-info:hover {
+  transform: translateY(-2px);
+  transition: all 0.3s ease;
+}
+
+/* Work Mode Badge Styles */
+.badge.bg-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+}
+
+.badge.bg-success {
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%) !important;
+}
+
+.badge.bg-info {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%) !important;
+}
+
+/* Admin Dashboard Enhancements */
+.dashboard-card {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.dashboard-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.dashboard-card:hover::before {
+  left: 100%;
+}
+
+.dashboard-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+}
+
+/* Pulse animation for live stats */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.stat-live {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* Progress bar animations */
+.progress-bar {
+  transition: width 0.6s ease;
+}
+
+/* Count up animation */
+@keyframes countUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.count-animate {
+  animation: countUp 0.5s ease-out;
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Live indicator pulse animation */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+  .page-header h1 {
+    font-size: 1.5rem;
+  }
+
+  .page-header p {
+    font-size: 0.875rem;
+  }
+
+  /* Stack cards vertically */
+  .attendance-card .card-header {
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: flex-start !important;
+  }
+
+  .attendance-card .card-header > div {
+    width: 100%;
+  }
+
+  .attendance-card .card-header .form-select {
+    width: 100% !important;
+  }
+
+  /* Check-in/out sections */
+  .checkin-section,
+  .checkout-section {
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .checkin-section h6,
+  .checkout-section h6 {
+    font-size: 0.875rem;
+  }
+
+  .time-display {
+    font-size: 0.95rem;
+  }
+
+  /* Buttons */
+  .attendance-btn {
+    font-size: 0.875rem;
+    padding: 0.5rem 1rem;
+    width: 100%;
+  }
+
+  /* Status badges */
+  .status-badge-enhanced {
+    font-size: 0.75rem;
+    padding: 4px 10px;
+  }
+
+  /* Work mode selector */
+  .btn-group label {
+    padding: 8px !important;
+    font-size: 0.8rem;
+  }
+
+  .btn-group label i {
+    font-size: 1rem !important;
+  }
+
+  .btn-group label small {
+    font-size: 0.65rem !important;
+  }
+
+  /* Table responsive */
+  .table-responsive {
+    font-size: 0.8rem;
+  }
+
+  .attendance-table th,
+  .attendance-table td {
+    padding: 0.5rem !important;
+    font-size: 0.75rem;
+  }
+
+  .attendance-table th {
+    white-space: nowrap;
+  }
+
+  /* Hide less important columns on mobile */
+  .attendance-table th:nth-child(3),
+  .attendance-table td:nth-child(3) {
+    display: none;
+  }
+
+  /* Week summary cards */
+  .col-6 > div {
+    padding: 0.75rem !important;
+  }
+
+  /* Modal adjustments */
+  .modal-body {
+    padding: 1rem;
+  }
+
+  .modal-title {
+    font-size: 1.1rem;
+  }
+
+  /* Download modal */
+  .modal-header .rounded-circle {
+    width: 36px !important;
+    height: 36px !important;
+  }
+
+  .modal-header h5 {
+    font-size: 1rem;
+  }
+
+  /* Stats cards */
+  .text-center.p-3 h2,
+  .text-center.p-3 h3,
+  .text-center.p-3 h4 {
+    font-size: 1.5rem;
+  }
+
+  /* Progress bars */
+  .progress {
+    height: 6px !important;
+  }
+
+  /* Aggregated view cards */
+  .col-md-3,
+  .col-md-4,
+  .col-md-6 {
+    margin-bottom: 0.75rem;
+  }
+
+  /* Action buttons in table */
+  .d-flex.gap-2 {
+    flex-direction: column;
+    gap: 0.25rem !important;
+  }
+
+  .d-flex.gap-2 .btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 576px) {
+  /* Extra small devices */
+  .page-header {
+    padding: 0.5rem;
+  }
+
+  .page-header h1 {
+    font-size: 1.25rem;
+  }
+
+  .page-header i {
+    font-size: 1.25rem;
+  }
+
+  /* Card padding */
+  .card-body {
+    padding: 0.75rem;
+  }
+
+  .card-header {
+    padding: 0.75rem;
+    font-size: 0.9rem;
+  }
+
+  /* Hide employee column on very small screens */
+  .attendance-table th:nth-child(2),
+  .attendance-table td:nth-child(2) {
+    display: none;
+  }
+
+  /* Stack all columns */
+  .row.g-3 {
+    gap: 0.5rem !important;
+  }
+
+  /* Smaller icons */
+  .fa-2x {
+    font-size: 1.5rem !important;
+  }
+
+  /* Compact stats */
+  .text-center.p-3,
+  .text-center.p-2 {
+    padding: 0.5rem !important;
+  }
+
+  /* Modal full width */
+  .modal-dialog {
+    margin: 0.5rem;
+  }
+
+  /* Form controls */
+  .form-control,
+  .form-select {
+    font-size: 0.875rem;
+  }
+
+  /* Badge adjustments */
+  .badge {
+    font-size: 0.7rem;
+  }
+
+  /* Location modal */
+  .modal-body .rounded-circle {
+    width: 32px !important;
+    height: 32px !important;
+  }
+
+  /* Download button in header */
+  .card-header .btn-sm {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+  }
+
+  /* Time display in header */
+  .card-header .px-3 {
+    padding: 0.5rem !important;
+  }
+
+  .card-header .px-3 div {
+    font-size: 0.8rem !important;
+  }
+
+  .card-header .px-3 small {
+    font-size: 0.6rem !important;
+  }
+}

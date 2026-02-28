@@ -99,7 +99,8 @@ const TeamCalendar = () => {
       setEmployeeDetails(response.data);
     } catch (err) {
       console.error('Error fetching employee details:', err);
-      toast.error('Failed to load employee details');
+      toast.error(err.response?.data?.message || 'Failed to load employee details');
+      setEmployeeDetails(null);
     } finally {
       setLoadingEmployee(false);
     }
@@ -667,105 +668,163 @@ const TeamCalendar = () => {
       {/* Employee Details Modal */}
       <Modal show={showEmployeeModal} onHide={() => setShowEmployeeModal(false)} size="lg" centered>
         <Modal.Header closeButton style={{ border: 'none', paddingBottom: 0 }}>
-          <Modal.Title style={{ color: '#1e293b', fontWeight: '700' }}>
+          <Modal.Title style={{ color: '#1e293b', fontWeight: '700', fontSize: '1.25rem' }}>
             {selectedEmployee && `${selectedEmployee.firstName} ${selectedEmployee.lastName}`}
+            {employeeDetails?.employee?.department && (
+              <div style={{ fontSize: '0.875rem', color: '#64748b', fontWeight: '400', marginTop: '0.25rem' }}>
+                {employeeDetails.employee.department}
+              </div>
+            )}
           </Modal.Title>
         </Modal.Header>
         <Modal.Body style={{ padding: '1.5rem' }}>
           {loadingEmployee ? (
             <div className="text-center py-5">
               <Spinner animation="border" style={{ color: '#6366f1' }} />
+              <p className="text-muted mt-2">Loading employee details...</p>
             </div>
           ) : employeeDetails ? (
             <>
-              <Row className="g-3 mb-4">
-                <Col md={3}>
-                  <div style={{ background: '#f0f9ff', borderRadius: '12px', padding: '1rem', border: '1px solid #bfdbfe' }}>
-                    <div style={{ fontSize: '0.75rem', color: '#1e40af', marginBottom: '0.25rem', fontWeight: '600' }}>Present Days</div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#1e3a8a' }}>{employeeDetails.stats.presentDays}</div>
+              {/* Monthly Attendance */}
+              {employeeDetails.monthlyPresent && employeeDetails.monthlyPresent.length > 0 && (
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <h6 style={{ color: '#1e293b', fontWeight: '700', marginBottom: '1rem' }}>
+                    Monthly Attendance (Real-time Data)
+                  </h6>
+                  <div style={{ background: '#f8fafc', borderRadius: '12px', padding: '1rem', border: '1px solid #e2e8f0' }}>
+                    <Row className="g-2">
+                      {employeeDetails.monthlyPresent.map((month, index) => (
+                        <Col xs={6} md={4} lg={3} key={index}>
+                          <div style={{ 
+                            background: 'white', 
+                            borderRadius: '8px', 
+                            padding: '0.75rem', 
+                            border: '1px solid #e2e8f0',
+                            textAlign: 'center'
+                          }}>
+                            <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: '600', marginBottom: '0.5rem' }}>
+                              {month.month}
+                            </div>
+                            <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#10b981', marginBottom: '0.25rem' }}>
+                              {month.presentDays}
+                            </div>
+                            <div style={{ fontSize: '0.65rem', color: '#64748b', lineHeight: '1.4' }}>
+                              <div><span style={{ color: '#6366f1' }}>Days: {month.workingDays}</span></div>
+                              <div><span style={{ color: '#f59e0b' }}>Leave: {month.leaveDays}</span></div>
+                              <div><span style={{ color: '#ef4444' }}>Absent: {month.absentDays}</span></div>
+                            </div>
+                          </div>
+                        </Col>
+                      ))}
+                    </Row>
                   </div>
-                </Col>
-                <Col md={3}>
-                  <div style={{ background: '#f0fdf4', borderRadius: '12px', padding: '1rem', border: '1px solid #bbf7d0' }}>
-                    <div style={{ fontSize: '0.75rem', color: '#15803d', marginBottom: '0.25rem', fontWeight: '600' }}>Approved</div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#166534' }}>{employeeDetails.stats.approvedLeaves}</div>
-                  </div>
-                </Col>
-                <Col md={3}>
-                  <div style={{ background: '#fef3c7', borderRadius: '12px', padding: '1rem', border: '1px solid #fde68a' }}>
-                    <div style={{ fontSize: '0.75rem', color: '#b45309', marginBottom: '0.25rem', fontWeight: '600' }}>Pending</div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#92400e' }}>{employeeDetails.stats.pendingLeaves}</div>
-                  </div>
-                </Col>
-                <Col md={3}>
-                  <div style={{ background: '#fce7f3', borderRadius: '12px', padding: '1rem', border: '1px solid #fbcfe8' }}>
-                    <div style={{ fontSize: '0.75rem', color: '#be185d', marginBottom: '0.25rem', fontWeight: '600' }}>Total Leaves</div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#9f1239' }}>{employeeDetails.stats.totalLeaves}</div>
-                  </div>
-                </Col>
-              </Row>
+                </div>
+              )}
 
+              {/* Leave Balances */}
               <div style={{ marginBottom: '1.5rem' }}>
                 <h6 style={{ color: '#1e293b', fontWeight: '700', marginBottom: '1rem' }}>Leave Balances</h6>
-                <Row className="g-2">
-                  {employeeDetails.balances.map(balance => (
-                    <Col md={6} key={balance._id}>
-                      <div style={{ background: '#f8fafc', borderRadius: '10px', padding: '0.75rem', border: '1px solid #e2e8f0' }}>
-                        <div className="d-flex justify-content-between align-items-center">
-                          <div>
-                            <Badge style={{ background: balance.leaveTypeId?.color || '#6366f1', marginBottom: '0.25rem' }}>
-                              {balance.leaveTypeId?.name || 'N/A'}
-                            </Badge>
-                            <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Available: {balance.allocated + balance.carryForward - balance.used - balance.pending}</div>
+                {employeeDetails.balances && employeeDetails.balances.length > 0 ? (
+                  <Row className="g-2">
+                    {employeeDetails.balances.map(balance => {
+                      const allocated = balance.allocated || 0;
+                      const carryForward = balance.carryForward || 0;
+                      const used = balance.used || 0;
+                      const pending = balance.pending || 0;
+                      const total = allocated + carryForward;
+                      const available = total - used - pending;
+                      
+                      return (
+                        <Col md={6} key={balance._id}>
+                          <div style={{ background: '#f8fafc', borderRadius: '10px', padding: '1rem', border: '1px solid #e2e8f0' }}>
+                            <div className="d-flex justify-content-between align-items-start mb-2">
+                              <Badge style={{ background: balance.leaveTypeId?.color || '#6366f1', fontSize: '0.875rem', padding: '0.4rem 0.8rem' }}>
+                                {balance.leaveTypeId?.name || 'N/A'}
+                              </Badge>
+                              <div style={{ fontSize: '1.75rem', fontWeight: '700', color: '#1e293b' }}>
+                                {available}
+                              </div>
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: '#64748b', lineHeight: '1.6' }}>
+                              <div className="d-flex justify-content-between mb-1">
+                                <span>Total Allocated:</span>
+                                <span style={{ fontWeight: '600', color: '#1e293b' }}>{total}</span>
+                              </div>
+                              <div className="d-flex justify-content-between mb-1">
+                                <span>Used:</span>
+                                <span style={{ fontWeight: '600', color: '#ef4444' }}>{used}</span>
+                              </div>
+                              <div className="d-flex justify-content-between mb-1">
+                                <span>Pending:</span>
+                                <span style={{ fontWeight: '600', color: '#f59e0b' }}>{pending}</span>
+                              </div>
+                              <div className="d-flex justify-content-between pt-1" style={{ borderTop: '1px solid #e2e8f0' }}>
+                                <span style={{ fontWeight: '600' }}>Available:</span>
+                                <span style={{ fontWeight: '700', color: '#10b981' }}>{available}</span>
+                              </div>
+                            </div>
                           </div>
-                          <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#1e293b' }}>
-                            {balance.allocated + balance.carryForward - balance.used}
-                          </div>
-                        </div>
-                      </div>
-                    </Col>
-                  ))}
-                </Row>
+                        </Col>
+                      );
+                    })}
+                  </Row>
+                ) : (
+                  <div className="text-center py-3" style={{ color: '#64748b', background: '#f8fafc', borderRadius: '10px' }}>
+                    No leave balances found
+                  </div>
+                )}
               </div>
 
+              {/* Leave History */}
               <div>
                 <h6 style={{ color: '#1e293b', fontWeight: '700', marginBottom: '1rem' }}>Leave History</h6>
                 <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                  {employeeDetails.leaves.length === 0 ? (
-                    <div className="text-center py-4" style={{ color: '#64748b' }}>No leave history</div>
-                  ) : (
+                  {employeeDetails.leaves && employeeDetails.leaves.length > 0 ? (
                     employeeDetails.leaves.map(leave => (
                       <div 
                         key={leave._id}
                         style={{
-                          padding: '0.75rem',
+                          padding: '1rem',
                           borderRadius: '10px',
                           background: '#f8fafc',
-                          marginBottom: '0.5rem',
+                          marginBottom: '0.75rem',
                           border: '1px solid #e2e8f0'
                         }}
                       >
-                        <div className="d-flex justify-content-between align-items-start">
-                          <div>
-                            <Badge style={{ background: leave.leaveTypeId?.color || '#6366f1', marginBottom: '0.25rem' }}>
-                              {leave.leaveTypeId?.name || 'N/A'}
-                            </Badge>
-                            <div style={{ fontSize: '0.875rem', color: '#1e293b', marginBottom: '0.25rem' }}>
-                              {formatDate(leave.startDate)} - {formatDate(leave.endDate)} ({leave.days} day{leave.days > 1 ? 's' : ''})
-                            </div>
-                            {leave.reason && (
-                              <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{leave.reason}</div>
-                            )}
-                          </div>
+                        <div className="d-flex justify-content-between align-items-start mb-2">
+                          <Badge style={{ background: leave.leaveTypeId?.color || '#6366f1', fontSize: '0.875rem', padding: '0.4rem 0.8rem' }}>
+                            {leave.leaveTypeId?.name || 'N/A'}
+                          </Badge>
                           {getStatusBadge(leave.status)}
                         </div>
+                        <div style={{ fontSize: '0.875rem', color: '#1e293b', marginBottom: '0.5rem', fontWeight: '600' }}>
+                          <i className="fas fa-calendar me-2" style={{ color: '#6366f1' }}></i>
+                          {formatDate(leave.startDate)} - {formatDate(leave.endDate)}
+                          <span style={{ marginLeft: '0.5rem', color: '#64748b', fontWeight: '400' }}>({leave.days} day{leave.days > 1 ? 's' : ''})</span>
+                        </div>
+                        {leave.reason && (
+                          <div style={{ fontSize: '0.8rem', color: '#64748b', padding: '0.5rem', background: 'white', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                            <i className="fas fa-comment-dots me-2"></i>
+                            {leave.reason}
+                          </div>
+                        )}
                       </div>
                     ))
+                  ) : (
+                    <div className="text-center py-4" style={{ color: '#64748b', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                      <i className="fas fa-calendar-times" style={{ fontSize: '2rem', marginBottom: '0.5rem', opacity: 0.5 }}></i>
+                      <div>No leave history found</div>
+                    </div>
                   )}
                 </div>
               </div>
             </>
-          ) : null}
+          ) : (
+            <div className="text-center py-5">
+              <i className="fas fa-exclamation-circle" style={{ fontSize: '3rem', color: '#ef4444', marginBottom: '1rem' }}></i>
+              <p style={{ color: '#64748b' }}>Failed to load employee details</p>
+            </div>
+          )}
         </Modal.Body>
       </Modal>
     </div>

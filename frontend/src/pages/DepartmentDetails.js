@@ -1,18 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Button, Modal, Form, Table, Badge, Container, Row, Col, Tabs, Tab, ProgressBar } from 'react-bootstrap';
+import { Card, Button, Modal, Form, Table, Badge, Container, Row, Col, Tabs, Tab } from 'react-bootstrap';
 import api from '../utils/api';
 import { toast } from 'react-toastify';
+import { SkeletonDashboard } from '../components/Skeleton';
 
 const DepartmentDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [department, setDepartment] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [showGoalModal, setShowGoalModal] = useState(false);
-  const [goalData, setGoalData] = useState({ title: '', description: '', targetDate: '', owner: '' });
-  const [goalFilter, setGoalFilter] = useState('ALL');
-  const [goalSort, setGoalSort] = useState('targetDate');
 
   useEffect(() => {
     fetchDepartmentDetails();
@@ -41,67 +38,19 @@ const DepartmentDetails = () => {
     }
   };
 
-  const handleAddGoal = async (e) => {
-    e.preventDefault();
-    try {
-      await api.post(`/api/departments/${id}/goals`, goalData);
-      toast.success('Goal added successfully');
-      setShowGoalModal(false);
-      setGoalData({ title: '', description: '', targetDate: '', owner: '' });
-      fetchDepartmentDetails();
-    } catch (error) {
-      toast.error('Failed to add goal');
-    }
-  };
-
-  const handleUpdateGoal = async (goalId, progress, status, owner) => {
-    try {
-      await api.put(`/api/departments/${id}/goals/${goalId}`, { progress, status, owner });
-      toast.success('Goal updated');
-      fetchDepartmentDetails();
-    } catch (error) {
-      toast.error('Failed to update goal');
-    }
-  };
-
-  const getDaysUntilDeadline = (targetDate) => {
-    const today = new Date();
-    const target = new Date(targetDate);
-    const diffTime = target - today;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
-  };
-
-  const getDeadlineAlert = (targetDate, status) => {
-    if (status === 'COMPLETED' || status === 'ARCHIVED') return null;
-    const days = getDaysUntilDeadline(targetDate);
-    if (days < 0) return { color: 'danger', text: `${Math.abs(days)} days overdue`, icon: 'exclamation-circle' };
-    if (days <= 7) return { color: 'warning', text: `${days} days left`, icon: 'clock' };
-    return null;
-  };
-
-  const getFilteredAndSortedGoals = () => {
-    let filtered = department.goals.filter(g => {
-      if (goalFilter === 'ALL') return g.status !== 'ARCHIVED';
-      if (goalFilter === 'ARCHIVED') return g.status === 'ARCHIVED';
-      return g.status === goalFilter;
-    });
-
-    return filtered.sort((a, b) => {
-      if (goalSort === 'targetDate') return new Date(a.targetDate) - new Date(b.targetDate);
-      if (goalSort === 'progress') return b.progress - a.progress;
-      if (goalSort === 'status') return a.status.localeCompare(b.status);
-      return 0;
-    });
-  };
-
   if (loading) return (
-    <div className="text-center p-5">
-      <div className="spinner-border" style={{color: '#667eea'}}></div>
-      <p className="mt-3" style={{color: '#667eea'}}>Loading department details...</p>
-    </div>
+    <Container fluid className="p-4" style={{background: '#f8f9fa', minHeight: '100vh'}}>
+      <SkeletonDashboard />
+    </Container>
   );
-  if (!department) return <div className="text-center p-5">Department not found</div>;
+  if (!department) return (
+    <Container fluid className="p-4">
+      <div className="text-center p-5">
+        <i className="fas fa-exclamation-triangle fa-3x mb-3 text-warning"></i>
+        <h5>Department not found</h5>
+      </div>
+    </Container>
+  );
 
   return (
     <Container fluid className="p-4" style={{background: '#f8f9fa', minHeight: '100vh'}}>
@@ -214,7 +163,7 @@ const DepartmentDetails = () => {
       </div>
 
       <Row className="mb-4">
-        <Col md={3}>
+        <Col md={4}>
           <Card className="stat-card stat-card-1 text-center">
             <Card.Body>
               <i className="fas fa-users fa-3x stat-icon-1 mb-3"></i>
@@ -223,16 +172,7 @@ const DepartmentDetails = () => {
             </Card.Body>
           </Card>
         </Col>
-        <Col md={3}>
-          <Card className="stat-card stat-card-2 text-center">
-            <Card.Body>
-              <i className="fas fa-bullseye fa-3x stat-icon-2 mb-3"></i>
-              <h3 className="fw-bold">{department.stats.activeGoals}</h3>
-              <p className="text-muted mb-0">Active Goals</p>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col md={3}>
+        <Col md={4}>
           <Card className="stat-card stat-card-3 text-center">
             <Card.Body>
               <i className="fas fa-file-alt fa-3x stat-icon-3 mb-3"></i>
@@ -241,7 +181,7 @@ const DepartmentDetails = () => {
             </Card.Body>
           </Card>
         </Col>
-        <Col md={3}>
+        <Col md={4}>
           <Card className="stat-card stat-card-4 text-center">
             <Card.Body>
               <i className="fas fa-sitemap fa-3x stat-icon-4 mb-3"></i>
@@ -296,96 +236,6 @@ const DepartmentDetails = () => {
           </Card>
         </Tab>
 
-        <Tab eventKey="goals" title={<span><i className="fas fa-bullseye me-2"></i>Goals & KPIs</span>}>
-          <Card className="content-card">
-            <Card.Header className="bg-white border-0 pt-3">
-              <div className="d-flex justify-content-between align-items-center mb-3">
-                <h5 className="mb-0 fw-bold">Department Goals</h5>
-                <Button className="btn-add-custom" size="sm" onClick={() => setShowGoalModal(true)}>
-                  <i className="fas fa-plus me-2"></i>Add Goal
-                </Button>
-              </div>
-              <div className="d-flex gap-2">
-                <Form.Select size="sm" value={goalFilter} onChange={(e) => setGoalFilter(e.target.value)} style={{width: 'auto'}}>
-                  <option value="ALL">All Active</option>
-                  <option value="NOT_STARTED">Not Started</option>
-                  <option value="IN_PROGRESS">In Progress</option>
-                  <option value="COMPLETED">Completed</option>
-                  <option value="DELAYED">Delayed</option>
-                  <option value="ARCHIVED">Archived</option>
-                </Form.Select>
-                <Form.Select size="sm" value={goalSort} onChange={(e) => setGoalSort(e.target.value)} style={{width: 'auto'}}>
-                  <option value="targetDate">Sort by Deadline</option>
-                  <option value="progress">Sort by Progress</option>
-                  <option value="status">Sort by Status</option>
-                </Form.Select>
-              </div>
-            </Card.Header>
-            <Card.Body>
-              {getFilteredAndSortedGoals().map(goal => {
-                const alert = getDeadlineAlert(goal.targetDate, goal.status);
-                return (
-                  <Card key={goal._id} className="mb-3 goal-card">
-                    <Card.Body>
-                      <div className="d-flex justify-content-between align-items-start mb-2">
-                        <div className="flex-grow-1">
-                          <div className="d-flex align-items-center gap-2 mb-2">
-                            <h6 className="mb-0">{goal.title}</h6>
-                            {alert && (
-                              <Badge bg={alert.color} className="d-flex align-items-center gap-1">
-                                <i className={`fas fa-${alert.icon}`}></i>
-                                {alert.text}
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="text-muted mb-2">{goal.description}</p>
-                          <div className="d-flex gap-3 text-muted small">
-                            <span><i className="fas fa-calendar me-1"></i>{new Date(goal.targetDate).toLocaleDateString()}</span>
-                            {goal.owner && (
-                              <span><i className="fas fa-user me-1"></i>{goal.owner.firstName} {goal.owner.lastName}</span>
-                            )}
-                          </div>
-                        </div>
-                        <Badge bg={
-                          goal.status === 'COMPLETED' ? 'success' :
-                          goal.status === 'IN_PROGRESS' ? 'primary' :
-                          goal.status === 'DELAYED' ? 'danger' : 
-                          goal.status === 'ARCHIVED' ? 'secondary' : 'secondary'
-                        }>{goal.status.replace('_', ' ')}</Badge>
-                      </div>
-                      <ProgressBar now={goal.progress} label={`${goal.progress}%`} className="mb-2" />
-                      <div className="d-flex gap-2">
-                        <Form.Select size="sm" style={{width: 'auto'}} value={goal.owner?._id || ''}
-                          onChange={(e) => handleUpdateGoal(goal._id, goal.progress, goal.status, e.target.value)}>
-                          <option value="">Assign Owner</option>
-                          {department.employees.map(emp => (
-                            <option key={emp._id} value={emp._id}>{emp.firstName} {emp.lastName}</option>
-                          ))}
-                        </Form.Select>
-                        <Form.Select size="sm" style={{width: 'auto'}} value={goal.progress} 
-                          onChange={(e) => handleUpdateGoal(goal._id, parseInt(e.target.value), goal.status, goal.owner?._id)}>
-                          {[0,25,50,75,100].map(v => <option key={v} value={v}>{v}%</option>)}
-                        </Form.Select>
-                        <Form.Select size="sm" style={{width: 'auto'}} value={goal.status}
-                          onChange={(e) => handleUpdateGoal(goal._id, goal.progress, e.target.value, goal.owner?._id)}>
-                          <option value="NOT_STARTED">Not Started</option>
-                          <option value="IN_PROGRESS">In Progress</option>
-                          <option value="COMPLETED">Completed</option>
-                          <option value="DELAYED">Delayed</option>
-                          <option value="ARCHIVED">Archive</option>
-                        </Form.Select>
-                      </div>
-                    </Card.Body>
-                  </Card>
-                );
-              })}
-              {getFilteredAndSortedGoals().length === 0 && (
-                <p className="text-center text-muted">No goals found</p>
-              )}
-            </Card.Body>
-          </Card>
-        </Tab>
-
         <Tab eventKey="info" title={<span><i className="fas fa-info-circle me-2"></i>Information</span>}>
           <Card className="content-card">
             <Card.Body className="p-4">
@@ -407,44 +257,7 @@ const DepartmentDetails = () => {
         </Tab>
       </Tabs>
 
-      {/* Add Goal Modal */}
-      <Modal show={showGoalModal} onHide={() => setShowGoalModal(false)} centered>
-        <Modal.Header closeButton>
-          <Modal.Title>Add New Goal</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <Form onSubmit={handleAddGoal}>
-            <Form.Group className="mb-3">
-              <Form.Label>Goal Title *</Form.Label>
-              <Form.Control type="text" value={goalData.title} 
-                onChange={(e) => setGoalData({...goalData, title: e.target.value})} required />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Description</Form.Label>
-              <Form.Control as="textarea" rows={3} value={goalData.description}
-                onChange={(e) => setGoalData({...goalData, description: e.target.value})} />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Goal Owner</Form.Label>
-              <Form.Select value={goalData.owner} onChange={(e) => setGoalData({...goalData, owner: e.target.value})}>
-                <option value="">Select Owner</option>
-                {department.employees.map(emp => (
-                  <option key={emp._id} value={emp._id}>{emp.firstName} {emp.lastName}</option>
-                ))}
-              </Form.Select>
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Target Date *</Form.Label>
-              <Form.Control type="date" value={goalData.targetDate}
-                onChange={(e) => setGoalData({...goalData, targetDate: e.target.value})} required />
-            </Form.Group>
-            <div className="d-flex gap-2 justify-content-end">
-              <Button variant="secondary" onClick={() => setShowGoalModal(false)}>Cancel</Button>
-              <Button type="submit">Add Goal</Button>
-            </div>
-          </Form>
-        </Modal.Body>
-      </Modal>
+
     </Container>
   );
 };

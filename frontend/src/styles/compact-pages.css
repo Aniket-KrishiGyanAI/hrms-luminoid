@@ -1,0 +1,439 @@
+/* Compact Page Styles */
+
+/* Global Compact Adjustments */
+body {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.enhanced-content {
+  padding: 1rem;
+  max-width: 1600px;
+  margin: 70px auto 0;
+}
+
+/* Cards - More Compact */
+.card {
+  border-radius: 12px;
+  margin-bottom: 1rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+.card-header {
+  padding: 0.875rem 1.25rem;
+  font-size: 1rem;
+  font-weight: 600;
+  background: #f8fafc;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.card-body {
+  padding: 1.25rem;
+}
+
+/* Page Headers - Smaller */
+.page-header {
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+  border-radius: 12px;
+}
+
+.page-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.page-header p {
+  font-size: 0.875rem;
+  margin-bottom: 0;
+}
+
+/* Buttons - Compact */
+.btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 8px;
+}
+
+.btn-sm {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+.btn-lg {
+  padding: 0.65rem 1.25rem;
+  font-size: 0.95rem;
+}
+
+/* Forms - Compact */
+.form-control,
+.form-select {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  border-radius: 8px;
+}
+
+.form-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+
+.input-group-text {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+/* Tables - Compact */
+.table {
+  font-size: 0.875rem;
+}
+
+.table th {
+  padding: 0.75rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.table td {
+  padding: 0.75rem 0.75rem;
+}
+
+/* Badges - Smaller */
+.badge {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.75rem;
+  border-radius: 6px;
+}
+
+/* Modals - Compact */
+.modal-header {
+  padding: 1rem 1.25rem;
+}
+
+.modal-body {
+  padding: 1.25rem;
+}
+
+.modal-footer {
+  padding: 1rem 1.25rem;
+}
+
+.modal-title {
+  font-size: 1.1rem;
+}
+
+/* Dashboard Stats - Smaller */
+.dashboard-stat {
+  font-size: 2rem;
+}
+
+.analytics-card {
+  padding: 1.25rem;
+}
+
+.analytics-card .metric-value {
+  font-size: 2rem;
+}
+
+.analytics-card .analytics-icon {
+  width: 60px;
+  height: 60px;
+  font-size: 1.5rem;
+}
+
+.analytics-card .metric-label {
+  font-size: 0.8rem;
+}
+
+/* Balance Cards - Compact */
+.balance-card {
+  padding: 1.25rem;
+}
+
+.balance-available {
+  font-size: 1.75rem;
+}
+
+.balance-label {
+  font-size: 0.8rem;
+}
+
+/* Grids - Tighter */
+.dashboard-grid {
+  gap: 1rem;
+}
+
+.stats-grid {
+  gap: 1rem;
+}
+
+.employee-grid {
+  gap: 1rem;
+}
+
+.file-grid {
+  gap: 1rem;
+}
+
+/* Spacing Utilities - Reduced */
+.mb-4 {
+  margin-bottom: 1rem !important;
+}
+
+.mt-4 {
+  margin-top: 1rem !important;
+}
+
+.p-4 {
+  padding: 1.25rem !important;
+}
+
+.mb-3 {
+  margin-bottom: 0.75rem !important;
+}
+
+.mt-3 {
+  margin-top: 0.75rem !important;
+}
+
+.p-3 {
+  padding: 1rem !important;
+}
+
+/* Typography - Smaller */
+h1 {
+  font-size: 1.75rem;
+}
+
+h2 {
+  font-size: 1.5rem;
+}
+
+h3 {
+  font-size: 1.25rem;
+}
+
+h4 {
+  font-size: 1.1rem;
+}
+
+h5 {
+  font-size: 1rem;
+}
+
+h6 {
+  font-size: 0.9rem;
+}
+
+/* Alerts - Compact */
+.alert {
+  padding: 0.875rem 1rem;
+  font-size: 0.875rem;
+  border-radius: 8px;
+}
+
+/* List Groups - Compact */
+.list-group-item {
+  padding: 0.875rem 1rem;
+  font-size: 0.875rem;
+}
+
+/* Breadcrumb - Smaller */
+.breadcrumb {
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+/* Dropdowns - Compact */
+.dropdown-menu {
+  font-size: 0.875rem;
+  padding: 0.5rem 0;
+}
+
+.dropdown-item {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+}
+
+/* Pagination - Smaller */
+.pagination {
+  font-size: 0.875rem;
+}
+
+.page-link {
+  padding: 0.5rem 0.75rem;
+}
+
+/* Progress Bars - Thinner */
+.progress {
+  height: 0.75rem;
+  border-radius: 6px;
+}
+
+/* Tabs - Compact */
+.nav-tabs .nav-link {
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+}
+
+/* Accordion - Compact */
+.accordion-button {
+  padding: 0.875rem 1rem;
+  font-size: 0.9rem;
+}
+
+.accordion-body {
+  padding: 1rem;
+}
+
+/* Employee Cards - Compact */
+.employee-card {
+  padding: 1rem;
+}
+
+.employee-avatar {
+  width: 70px;
+  height: 70px;
+}
+
+/* Approval Cards - Compact */
+.approval-card {
+  padding: 1rem;
+}
+
+/* Expense Cards - Compact */
+.expense-card {
+  padding: 1rem;
+}
+
+.expense-amount {
+  font-size: 1.5rem;
+}
+
+/* Announcement Cards - Compact */
+.announcement-card {
+  padding: 1rem;
+}
+
+/* Report Cards - Compact */
+.report-card {
+  padding: 1rem;
+}
+
+/* Charts - Smaller */
+.chart-container {
+  height: 300px;
+}
+
+/* Row Spacing - Tighter */
+.row {
+  margin-left: -0.5rem;
+  margin-right: -0.5rem;
+}
+
+.row > * {
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+
+/* Desktop Adjustments */
+@media (min-width: 992px) {
+  .enhanced-content {
+    padding: 1.5rem 2rem;
+  }
+
+  .card-header {
+    padding: 1rem 1.5rem;
+  }
+
+  .card-body {
+    padding: 1.5rem;
+  }
+
+  .page-header {
+    padding: 1.5rem;
+  }
+
+  .table th {
+    padding: 0.875rem 1rem;
+  }
+
+  .table td {
+    padding: 0.875rem 1rem;
+  }
+}
+
+@media (min-width: 1200px) {
+  .enhanced-content {
+    padding: 1.5rem 2.5rem;
+  }
+
+  body {
+    font-size: 15px;
+  }
+
+  .page-title {
+    font-size: 1.75rem;
+  }
+
+  .dashboard-stat {
+    font-size: 2.25rem;
+  }
+
+  .analytics-card .metric-value {
+    font-size: 2.25rem;
+  }
+}
+
+/* Mobile - Even More Compact */
+@media (max-width: 768px) {
+  html, body {
+    overflow-x: hidden;
+    height: 100%;
+  }
+
+  .enhanced-content {
+    padding: 0.75rem;
+    padding-bottom: 120px;
+    min-height: calc(100vh - 70px);
+  }
+
+  .card-header {
+    padding: 0.75rem 1rem;
+    font-size: 0.95rem;
+  }
+
+  .card-body {
+    padding: 1rem;
+  }
+
+  .page-header {
+    padding: 1rem;
+  }
+
+  .page-title {
+    font-size: 1.25rem;
+  }
+
+  .dashboard-stat {
+    font-size: 1.5rem;
+  }
+
+  .analytics-card .metric-value {
+    font-size: 1.5rem;
+  }
+
+  .analytics-card .analytics-icon {
+    width: 50px;
+    height: 50px;
+    font-size: 1.25rem;
+  }
+
+  .balance-available {
+    font-size: 1.5rem;
+  }
+}
