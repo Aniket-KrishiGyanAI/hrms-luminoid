@@ -9,7 +9,7 @@
     "migrate:profiles": "node scripts/createMissingProfiles.js"
   },
   "dependencies": {
-    "aws-sdk": "^2.1693.0",
+    "@aws-sdk/client-s3": "^3.995.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "csv-parser": "^3.2.0",
