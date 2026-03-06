@@ -249,7 +249,7 @@
 .user-name {
   font-size: 1rem;
   font-weight: 700;
-  color: white;
+  color: white !important;
   margin-bottom: 0.5rem;
   white-space: nowrap;
   overflow: hidden;
