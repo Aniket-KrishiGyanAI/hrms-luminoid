@@ -41,6 +41,22 @@ const TaskManagement = () => {
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [customDepartment, setCustomDepartment] = useState('');
   const [loadingStates, setLoadingStates] = useState({});
+  const [workLogs, setWorkLogs] = useState([]);
+  const [workLogFilters, setWorkLogFilters] = useState({ startDate: '', endDate: '', userId: '', status: '', search: '', dateRange: '' });
+  const [workLogStats, setWorkLogStats] = useState({ totalLogs: 0, totalHours: 0, completed: 0, inProgress: 0 });
+  const [workLogPage, setWorkLogPage] = useState(1);
+  const [workLogTotal, setWorkLogTotal] = useState(0);
+  const [dateRangeDisplay, setDateRangeDisplay] = useState('');
+  const [showWorkLogModal, setShowWorkLogModal] = useState(false);
+  const [showWorkLogHistory, setShowWorkLogHistory] = useState(false);
+  const [showWorkLogDetails, setShowWorkLogDetails] = useState(false);
+  const [showCommentModal, setShowCommentModal] = useState(false);
+  const [selectedWorkLog, setSelectedWorkLog] = useState(null);
+  const [workLogComment, setWorkLogComment] = useState('');
+  const [workLogForm, setWorkLogForm] = useState({
+    date: '', workDone: '', hoursSpent: '', status: 'COMPLETED', 
+    project: '', deliverables: '', location: 'OFFICE', issues: '', category: 'GENERAL'
+  });
   const [taskForm, setTaskForm] = useState({
     title: '', description: '', department: '', taskType: '', category: '',
     assignedTo: [], workLocation: 'OFFICE', requireCheckIn: false,
@@ -113,6 +129,145 @@ const TaskManagement = () => {
       setEmployees([...managersAndAbove, ...allUsers.filter(emp => !['ADMIN', 'HR', 'MANAGER'].includes(emp.role))]);
     } catch (error) {
       console.error('Error fetching employees');
+    }
+  };
+
+  const fetchWorkLogs = async () => {
+    try {
+      const params = new URLSearchParams();
+      params.append('page', workLogPage);
+      params.append('limit', 50);
+      
+      let startDate = workLogFilters.startDate;
+      let endDate = workLogFilters.endDate;
+      let displayText = '';
+      
+      if (workLogFilters.dateRange === 'THIS_WEEK') {
+        const today = new Date();
+        const firstDay = new Date(today.setDate(today.getDate() - today.getDay()));
+        const lastDay = new Date(today.setDate(today.getDate() - today.getDay() + 6));
+        startDate = firstDay.toISOString().split('T')[0];
+        endDate = lastDay.toISOString().split('T')[0];
+        displayText = `${firstDay.toLocaleDateString('en-GB', {day: '2-digit', month: 'short'})} - ${lastDay.toLocaleDateString('en-GB', {day: '2-digit', month: 'short', year: 'numeric'})}`;
+      } else if (workLogFilters.dateRange === 'THIS_MONTH') {
+        const today = new Date();
+        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+        const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        startDate = firstDay.toISOString().split('T')[0];
+        endDate = lastDay.toISOString().split('T')[0];
+        displayText = `${firstDay.toLocaleDateString('en-GB', {month: 'long', year: 'numeric'})}`;
+      } else if (startDate && endDate) {
+        displayText = `${new Date(startDate).toLocaleDateString('en-GB', {day: '2-digit', month: 'short'})} - ${new Date(endDate).toLocaleDateString('en-GB', {day: '2-digit', month: 'short', year: 'numeric'})}`;
+      }
+      
+      setDateRangeDisplay(displayText);
+      
+      if (startDate) params.append('startDate', startDate);
+      if (endDate) params.append('endDate', endDate);
+      if (workLogFilters.userId) params.append('userId', workLogFilters.userId);
+      
+      const response = await api.get(`/api/work-logs/all?${params}`);
+      setWorkLogs(response.data.logs);
+      setWorkLogStats(response.data.stats);
+      setWorkLogTotal(response.data.total);
+    } catch (error) {
+      toast.error('Error fetching work logs');
+    }
+  };
+
+  const exportWorkLogs = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (workLogFilters.startDate) params.append('startDate', workLogFilters.startDate);
+      if (workLogFilters.endDate) params.append('endDate', workLogFilters.endDate);
+      if (workLogFilters.userId) params.append('userId', workLogFilters.userId);
+      const response = await api.get(`/api/work-logs/export?${params}`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `work-logs-${Date.now()}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success('Work logs exported successfully');
+    } catch (error) {
+      toast.error('Error exporting work logs');
+    }
+  };
+
+  const handleDeleteWorkLog = async (logId) => {
+    const result = await Swal.fire({
+      title: 'Delete Work Log?',
+      text: 'This action cannot be undone',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#6c757d',
+      confirmButtonText: 'Yes, delete it'
+    });
+    if (result.isConfirmed) {
+      try {
+        await api.delete(`/api/work-logs/${logId}`);
+        toast.success('Work log deleted successfully');
+        fetchWorkLogs();
+      } catch (error) {
+        toast.error('Error deleting work log');
+      }
+    }
+  };
+
+  const handleEditWorkLog = (log) => {
+    setSelectedWorkLog(log);
+    setWorkLogForm({
+      date: new Date(log.date).toISOString().split('T')[0],
+      workDone: log.workDone,
+      hoursSpent: log.hoursSpent,
+      status: log.status,
+      project: log.project || '',
+      deliverables: log.deliverables || '',
+      location: log.location,
+      issues: log.issues || '',
+      category: log.category
+    });
+    setShowWorkLogModal(true);
+  };
+
+  const handleViewWorkLog = async (log) => {
+    try {
+      const response = await api.get(`/api/work-logs/${log._id}`);
+      setSelectedWorkLog(response.data);
+      setShowWorkLogDetails(true);
+    } catch (error) {
+      toast.error('Error fetching work log details');
+    }
+  };
+
+  const handleWorkLogSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api.put(`/api/work-logs/${selectedWorkLog._id}`, workLogForm);
+      toast.success('Work log updated successfully');
+      setShowWorkLogModal(false);
+      setSelectedWorkLog(null);
+      setWorkLogForm({
+        date: '', workDone: '', hoursSpent: '', status: 'COMPLETED',
+        project: '', deliverables: '', location: 'OFFICE', issues: '', category: 'GENERAL'
+      });
+      fetchWorkLogs();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Error saving work log');
+    }
+  };
+
+  const handleAddWorkLogComment = async () => {
+    if (!workLogComment.trim()) return;
+    try {
+      const response = await api.post(`/api/work-logs/${selectedWorkLog._id}/comments`, { text: workLogComment });
+      setSelectedWorkLog(response.data);
+      setWorkLogComment('');
+      toast.success('Comment added');
+    } catch (error) {
+      toast.error('Error adding comment');
     }
   };
 
@@ -637,6 +792,14 @@ const TaskManagement = () => {
             <Button className="btn-export" onClick={() => setShowDownloadModal(true)}>
               <i className="fas fa-download me-2"></i>Export
             </Button>
+            {['ADMIN', 'HR', 'MANAGER'].includes(user?.role) && (
+              <Button className="btn-export" onClick={() => {
+                fetchWorkLogs();
+                setShowWorkLogHistory(true);
+              }} style={{background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none'}}>
+                <i className="fas fa-clipboard-list me-2"></i>Work Logs
+              </Button>
+            )}
             <Button className="btn-create" onClick={() => {
               fetchDepartments();
               setShowModal(true);
@@ -743,6 +906,7 @@ const TaskManagement = () => {
                 <Tab eventKey="all" title={<span><i className="fas fa-list me-2"></i>All Tasks <span className="tab-count">{allTasksCount}</span></span>}>
                   {filteredTasks.length > 0 ? renderTaskTable(filteredTasks, false) : <div className="text-center py-4"><i className="fas fa-tasks text-muted fs-1 mb-3"></i><p className="text-muted mb-0">No tasks found</p></div>}
                 </Tab>
+
               </Tabs>
           </Card.Body>
         </Card>
@@ -1462,6 +1626,508 @@ const TaskManagement = () => {
         user={user}
         onAddComment={handleAddComment}
       />
+
+      {/* Work Log History Modal */}
+      <Modal show={showWorkLogHistory} onHide={() => setShowWorkLogHistory(false)} size="xl" centered>
+        <Modal.Header closeButton style={{background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)', color: 'white', borderBottom: 'none', padding: '1.5rem 2rem'}}>
+          <Modal.Title style={{fontSize: '1.5rem', fontWeight: '700'}}>
+            <i className="fas fa-chart-bar me-3"></i>Work Log Reports
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body style={{padding: '2rem', background: '#f8fafc', maxHeight: '80vh', overflowY: 'auto'}}>
+            <Row className="g-3 mb-4">
+              <Col md={3}>
+                <div style={{background: 'white', borderLeft: '4px solid #1e40af', borderRadius: '8px', padding: '1.25rem', boxShadow: '0 1px 3px rgba(0,0,0,0.1)'}}>
+                  <div style={{fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Total Logs</div>
+                  <div style={{fontSize: '2rem', fontWeight: '700', color: '#1e293b'}}>{workLogStats.totalLogs}</div>
+                </div>
+              </Col>
+              <Col md={3}>
+                <div style={{background: 'white', borderLeft: '4px solid #7c3aed', borderRadius: '8px', padding: '1.25rem', boxShadow: '0 1px 3px rgba(0,0,0,0.1)'}}>
+                  <div style={{fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Total Hours</div>
+                  <div style={{fontSize: '2rem', fontWeight: '700', color: '#1e293b'}}>{workLogStats.totalHours}</div>
+                </div>
+              </Col>
+              <Col md={3}>
+                <div style={{background: 'white', borderLeft: '4px solid #059669', borderRadius: '8px', padding: '1.25rem', boxShadow: '0 1px 3px rgba(0,0,0,0.1)'}}>
+                  <div style={{fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Completed</div>
+                  <div style={{fontSize: '2rem', fontWeight: '700', color: '#1e293b'}}>{workLogStats.completed}</div>
+                </div>
+              </Col>
+              <Col md={3}>
+                <div style={{background: 'white', borderLeft: '4px solid #ea580c', borderRadius: '8px', padding: '1.25rem', boxShadow: '0 1px 3px rgba(0,0,0,0.1)'}}>
+                  <div style={{fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>In Progress</div>
+                  <div style={{fontSize: '2rem', fontWeight: '700', color: '#1e293b'}}>{workLogStats.inProgress}</div>
+                </div>
+              </Col>
+            </Row>
+
+            {dateRangeDisplay && (
+              <div className="alert alert-info mb-3" style={{borderRadius: '8px', background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e40af'}}>
+                <i className="fas fa-calendar-alt me-2"></i>Showing: {dateRangeDisplay}
+              </div>
+            )}
+
+            <Card style={{border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', marginBottom: '1.5rem', background: 'white'}}>
+              <Card.Body style={{padding: '1.25rem'}}>
+                <h6 style={{fontWeight: '600', marginBottom: '1rem', color: '#334155', fontSize: '0.875rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Filter Options</h6>
+                <Row className="g-3">
+                  <Col md={2}>
+                    <Form.Label style={{fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '0.5rem'}}>Quick Filter</Form.Label>
+                    <Form.Select value={workLogFilters.dateRange} onChange={(e) => setWorkLogFilters({...workLogFilters, dateRange: e.target.value, startDate: '', endDate: ''})} style={{borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.875rem'}}>
+                      <option value="">Custom Range</option>
+                      <option value="THIS_WEEK">This Week</option>
+                      <option value="THIS_MONTH">This Month</option>
+                    </Form.Select>
+                  </Col>
+                  <Col md={2}>
+                    <Form.Label style={{fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '0.5rem'}}>Start Date</Form.Label>
+                    <Form.Control type="date" value={workLogFilters.startDate} onChange={(e) => setWorkLogFilters({...workLogFilters, startDate: e.target.value, dateRange: ''})} disabled={workLogFilters.dateRange !== ''} style={{borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.875rem'}} />
+                  </Col>
+                  <Col md={2}>
+                    <Form.Label style={{fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '0.5rem'}}>End Date</Form.Label>
+                    <Form.Control type="date" value={workLogFilters.endDate} onChange={(e) => setWorkLogFilters({...workLogFilters, endDate: e.target.value, dateRange: ''})} disabled={workLogFilters.dateRange !== ''} style={{borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.875rem'}} />
+                  </Col>
+                  <Col md={2}>
+                    <Form.Label style={{fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '0.5rem'}}>Employee</Form.Label>
+                    <Form.Select value={workLogFilters.userId} onChange={(e) => setWorkLogFilters({...workLogFilters, userId: e.target.value})} style={{borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.875rem'}}>
+                      <option value="">All Employees</option>
+                      {employees.map(emp => <option key={emp._id} value={emp._id}>{emp.firstName} {emp.lastName}</option>)}
+                    </Form.Select>
+                  </Col>
+                  <Col md={2}>
+                    <Form.Label style={{fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '0.5rem'}}>Status</Form.Label>
+                    <Form.Select value={workLogFilters.status} onChange={(e) => setWorkLogFilters({...workLogFilters, status: e.target.value})} style={{borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.875rem'}}>
+                      <option value="">All Status</option>
+                      <option value="COMPLETED">Completed</option>
+                      <option value="IN_PROGRESS">In Progress</option>
+                      <option value="PENDING">Pending</option>
+                      <option value="ON_HOLD">On Hold</option>
+                      <option value="BLOCKED">Blocked</option>
+                    </Form.Select>
+                  </Col>
+                  <Col md={2}>
+                    <Form.Label style={{fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '0.5rem'}}>Search</Form.Label>
+                    <Form.Control type="text" placeholder="Search..." value={workLogFilters.search} onChange={(e) => setWorkLogFilters({...workLogFilters, search: e.target.value})} style={{borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.875rem'}} />
+                  </Col>
+                  <Col md={2} className="d-flex align-items-end gap-2">
+                    <Button variant="primary" onClick={() => { setWorkLogPage(1); fetchWorkLogs(); }} style={{flex: 1, borderRadius: '6px', fontWeight: '500', background: '#3b82f6', border: 'none', fontSize: '0.875rem'}}>
+                      <i className="fas fa-search me-1"></i>Apply
+                    </Button>
+                    <Button variant="success" onClick={exportWorkLogs} style={{borderRadius: '6px', background: '#059669', border: 'none'}}>
+                      <i className="fas fa-file-excel"></i>
+                    </Button>
+                  </Col>
+                </Row>
+              </Card.Body>
+            </Card>
+
+            <div style={{background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)'}}>
+              <div style={{padding: '1rem 1.5rem', borderBottom: '1px solid #e2e8f0', background: '#f8fafc'}}>
+                <h6 style={{margin: 0, fontWeight: '600', color: '#334155', fontSize: '0.875rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Work Log Details</h6>
+              </div>
+              <div style={{maxHeight: '50vh', overflowY: 'auto'}}>
+              {workLogs.filter(log => {
+                if (workLogFilters.status && log.status !== workLogFilters.status) return false;
+                if (workLogFilters.search) {
+                  const search = workLogFilters.search.toLowerCase();
+                  return log.workDone?.toLowerCase().includes(search) || log.project?.toLowerCase().includes(search) || `${log.userId?.firstName} ${log.userId?.lastName}`.toLowerCase().includes(search);
+                }
+                return true;
+              }).length > 0 ? (
+                <Table hover className="mb-0" style={{fontSize: '0.875rem'}}>
+                  <thead style={{background: '#f8fafc', borderBottom: '2px solid #e2e8f0'}}>
+                    <tr>
+                      <th style={{padding: '0.875rem 1rem', fontWeight: '600', color: '#475569', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Date</th>
+                      <th style={{padding: '0.875rem 1rem', fontWeight: '600', color: '#475569', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Employee</th>
+                      <th style={{padding: '0.875rem 1rem', fontWeight: '600', color: '#475569', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Project</th>
+                      <th style={{padding: '0.875rem 1rem', fontWeight: '600', color: '#475569', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center'}}>Hours</th>
+                      <th style={{padding: '0.875rem 1rem', fontWeight: '600', color: '#475569', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center'}}>Status</th>
+                      {user?.role === 'ADMIN' && <th style={{padding: '0.875rem 1rem', fontWeight: '600', color: '#475569', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center'}}>Actions</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {workLogs.filter(log => {
+                      if (workLogFilters.status && log.status !== workLogFilters.status) return false;
+                      if (workLogFilters.search) {
+                        const search = workLogFilters.search.toLowerCase();
+                        return log.workDone?.toLowerCase().includes(search) || log.project?.toLowerCase().includes(search) || `${log.userId?.firstName} ${log.userId?.lastName}`.toLowerCase().includes(search);
+                      }
+                      return true;
+                    }).map((log) => {
+                      const canEdit = user?.role === 'ADMIN' || (log.userId?._id === user?.id && (Date.now() - new Date(log.createdAt)) / (1000 * 60 * 60) <= 24);
+                      return (
+                      <tr key={log._id} style={{borderBottom: '1px solid #f1f5f9', cursor: 'pointer'}} onClick={() => handleViewWorkLog(log)}>
+                        <td style={{padding: '1rem', verticalAlign: 'middle', color: '#334155'}}>
+                          <div style={{fontWeight: '500'}}>{new Date(log.date).toLocaleDateString('en-GB')}</div>
+                          <small style={{color: '#64748b', fontSize: '0.75rem'}}>{new Date(log.date).toLocaleDateString('en-GB', {weekday: 'short'})}</small>
+                        </td>
+                        <td style={{padding: '1rem', verticalAlign: 'middle'}}>
+                          <div style={{fontWeight: '500', color: '#1e293b'}}>{log.userId?.firstName} {log.userId?.lastName}</div>
+                          <small style={{color: '#64748b', fontSize: '0.75rem'}}>{log.userId?.department || 'N/A'}</small>
+                        </td>
+                        <td style={{padding: '1rem', verticalAlign: 'middle', color: '#334155', fontWeight: '500'}}>{log.project || '-'}</td>
+                        <td style={{padding: '1rem', verticalAlign: 'middle', textAlign: 'center'}}>
+                          <span style={{background: '#dcfce7', color: '#166534', padding: '0.25rem 0.75rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '600'}}>{log.hoursSpent}h</span>
+                        </td>
+                        <td style={{padding: '1rem', verticalAlign: 'middle', textAlign: 'center'}}>
+                          <span style={{
+                            background: log.status === 'COMPLETED' ? '#dcfce7' : log.status === 'IN_PROGRESS' ? '#dbeafe' : log.status === 'BLOCKED' ? '#fee2e2' : '#fef3c7',
+                            color: log.status === 'COMPLETED' ? '#166534' : log.status === 'IN_PROGRESS' ? '#1e40af' : log.status === 'BLOCKED' ? '#991b1b' : '#92400e',
+                            padding: '0.25rem 0.75rem',
+                            borderRadius: '6px',
+                            fontSize: '0.75rem',
+                            fontWeight: '600'
+                          }}>
+                            {log.status.replace('_', ' ')}
+                          </span>
+                        </td>
+                        {user?.role === 'ADMIN' && (
+                          <td style={{padding: '1rem', verticalAlign: 'middle', textAlign: 'center'}} onClick={(e) => e.stopPropagation()}>
+                            <div className="d-flex gap-2 justify-content-center">
+                              {canEdit && (
+                                <>
+                                  <Button size="sm" variant="outline-primary" onClick={() => handleEditWorkLog(log)} style={{borderRadius: '6px', border: '1px solid #3b82f6', color: '#3b82f6', padding: '0.25rem 0.5rem'}}>
+                                    <i className="fas fa-edit"></i>
+                                  </Button>
+                                  <Button size="sm" variant="outline-danger" onClick={() => handleDeleteWorkLog(log._id)} style={{borderRadius: '6px', border: '1px solid #ef4444', color: '#ef4444', padding: '0.25rem 0.5rem'}}>
+                                    <i className="fas fa-trash"></i>
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    )})}
+                  </tbody>
+                </Table>
+              ) : (
+                <div className="text-center py-5">
+                  <i className="fas fa-inbox" style={{fontSize: '3rem', color: '#cbd5e1', marginBottom: '1rem'}}></i>
+                  <h6 style={{color: '#64748b', fontWeight: '600'}}>No work logs found</h6>
+                  <p style={{color: '#94a3b8', fontSize: '0.875rem', margin: 0}}>Try adjusting your filters</p>
+                </div>
+              )}
+              </div>
+              {workLogTotal > 50 && (
+                <div className="d-flex justify-content-center align-items-center gap-2 p-3" style={{borderTop: '1px solid #e2e8f0'}}>
+                  <Button size="sm" variant="outline-primary" disabled={workLogPage === 1} onClick={() => { setWorkLogPage(p => p - 1); fetchWorkLogs(); }}>
+                    <i className="fas fa-chevron-left"></i>
+                  </Button>
+                  <span style={{fontSize: '0.875rem', color: '#64748b'}}>Page {workLogPage} of {Math.ceil(workLogTotal / 50)}</span>
+                  <Button size="sm" variant="outline-primary" disabled={workLogPage >= Math.ceil(workLogTotal / 50)} onClick={() => { setWorkLogPage(p => p + 1); fetchWorkLogs(); }}>
+                    <i className="fas fa-chevron-right"></i>
+                  </Button>
+                </div>
+              )}
+            </div>
+        </Modal.Body>
+      </Modal>
+
+      {/* Work Log Details Modal */}
+      <Modal show={showWorkLogDetails} onHide={() => setShowWorkLogDetails(false)} size="lg" centered>
+        <Modal.Header closeButton style={{background: '#f8fafc', borderBottom: '2px solid #e2e8f0'}}>
+          <Modal.Title style={{fontSize: '1.25rem', fontWeight: '600', color: '#1e293b'}}>
+            <i className="fas fa-file-alt me-2" style={{color: '#3b82f6'}}></i>Work Log Details
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body style={{padding: '2rem', background: 'white'}}>
+          {selectedWorkLog && (
+            <>
+              <Row className="mb-4">
+                <Col md={6}>
+                  <div style={{marginBottom: '1.5rem'}}>
+                    <div style={{fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Employee</div>
+                    <div style={{fontSize: '1rem', fontWeight: '500', color: '#1e293b'}}>{selectedWorkLog.userId?.firstName} {selectedWorkLog.userId?.lastName}</div>
+                    <div style={{fontSize: '0.875rem', color: '#64748b'}}>{selectedWorkLog.userId?.department || 'N/A'}</div>
+                  </div>
+                </Col>
+                <Col md={6}>
+                  <div style={{marginBottom: '1.5rem'}}>
+                    <div style={{fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Date</div>
+                    <div style={{fontSize: '1rem', fontWeight: '500', color: '#1e293b'}}>{new Date(selectedWorkLog.date).toLocaleDateString('en-GB', {day: '2-digit', month: 'long', year: 'numeric'})}</div>
+                    <div style={{fontSize: '0.875rem', color: '#64748b'}}>{new Date(selectedWorkLog.date).toLocaleDateString('en-GB', {weekday: 'long'})}</div>
+                  </div>
+                </Col>
+              </Row>
+
+              <Row className="mb-4">
+                <Col md={4}>
+                  <div style={{background: '#f8fafc', padding: '1rem', borderRadius: '8px', border: '1px solid #e2e8f0'}}>
+                    <div style={{fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Hours Spent</div>
+                    <div style={{fontSize: '1.5rem', fontWeight: '700', color: '#059669'}}>{selectedWorkLog.hoursSpent}h</div>
+                  </div>
+                </Col>
+                <Col md={4}>
+                  <div style={{background: '#f8fafc', padding: '1rem', borderRadius: '8px', border: '1px solid #e2e8f0'}}>
+                    <div style={{fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Status</div>
+                    <span style={{
+                      background: selectedWorkLog.status === 'COMPLETED' ? '#dcfce7' : selectedWorkLog.status === 'IN_PROGRESS' ? '#dbeafe' : selectedWorkLog.status === 'BLOCKED' ? '#fee2e2' : '#fef3c7',
+                      color: selectedWorkLog.status === 'COMPLETED' ? '#166534' : selectedWorkLog.status === 'IN_PROGRESS' ? '#1e40af' : selectedWorkLog.status === 'BLOCKED' ? '#991b1b' : '#92400e',
+                      padding: '0.5rem 1rem',
+                      borderRadius: '6px',
+                      fontSize: '0.875rem',
+                      fontWeight: '600',
+                      display: 'inline-block',
+                      marginTop: '0.5rem'
+                    }}>
+                      {selectedWorkLog.status.replace('_', ' ')}
+                    </span>
+                  </div>
+                </Col>
+                <Col md={4}>
+                  <div style={{background: '#f8fafc', padding: '1rem', borderRadius: '8px', border: '1px solid #e2e8f0'}}>
+                    <div style={{fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Location</div>
+                    <span style={{background: '#f1f5f9', color: '#475569', padding: '0.5rem 1rem', borderRadius: '6px', fontSize: '0.875rem', fontWeight: '500', display: 'inline-block', marginTop: '0.5rem'}}>
+                      {selectedWorkLog.location.replace('_', ' ')}
+                    </span>
+                  </div>
+                </Col>
+              </Row>
+
+              {selectedWorkLog.project && (
+                <div style={{marginBottom: '1.5rem'}}>
+                  <div style={{fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Project / Client</div>
+                  <div style={{fontSize: '1rem', fontWeight: '500', color: '#1e293b'}}>{selectedWorkLog.project}</div>
+                </div>
+              )}
+
+              <div style={{marginBottom: '1.5rem'}}>
+                <div style={{fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Work Description</div>
+                <div style={{background: '#f8fafc', padding: '1.25rem', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.95rem', color: '#334155', lineHeight: '1.6'}}>
+                  {selectedWorkLog.workDone}
+                </div>
+              </div>
+
+              {selectedWorkLog.deliverables && (
+                <div style={{marginBottom: '1.5rem'}}>
+                  <div style={{fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Deliverables / Outcomes</div>
+                  <div style={{background: '#eff6ff', padding: '1.25rem', borderRadius: '8px', border: '1px solid #bfdbfe', fontSize: '0.95rem', color: '#1e40af', lineHeight: '1.6'}}>
+                    {selectedWorkLog.deliverables}
+                  </div>
+                </div>
+              )}
+
+              {selectedWorkLog.issues && (
+                <div style={{marginBottom: '1.5rem'}}>
+                  <div style={{fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Issues / Blockers</div>
+                  <div style={{background: '#fef3c7', padding: '1.25rem', borderRadius: '8px', border: '1px solid #fde68a', fontSize: '0.95rem', color: '#92400e', lineHeight: '1.6'}}>
+                    {selectedWorkLog.issues}
+                  </div>
+                </div>
+              )}
+
+              <div style={{background: '#f8fafc', padding: '1rem', borderRadius: '8px', border: '1px solid #e2e8f0', marginTop: '2rem'}}>
+                <Row>
+                  <Col md={6}>
+                    <div style={{fontSize: '0.75rem', color: '#64748b'}}>Category</div>
+                    <div style={{fontSize: '0.875rem', fontWeight: '500', color: '#475569'}}>{selectedWorkLog.category}</div>
+                  </Col>
+                  <Col md={6}>
+                    <div style={{fontSize: '0.75rem', color: '#64748b'}}>Reported At</div>
+                    <div style={{fontSize: '0.875rem', fontWeight: '500', color: '#475569'}}>{new Date(selectedWorkLog.createdAt || selectedWorkLog.date).toLocaleString('en-GB')}</div>
+                  </Col>
+                </Row>
+              </div>
+
+              {selectedWorkLog.comments && selectedWorkLog.comments.length > 0 && (
+                <div style={{marginTop: '2rem'}}>
+                  <div style={{fontSize: '0.95rem', fontWeight: '600', color: '#1e293b', marginBottom: '1rem'}}>
+                    <i className="fas fa-comments me-2" style={{color: '#3b82f6'}}></i>Manager Comments ({selectedWorkLog.comments.length})
+                  </div>
+                  {selectedWorkLog.comments.map((comment, idx) => (
+                    <div key={idx} style={{background: '#f8fafc', padding: '1rem', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '0.75rem'}}>
+                      <div style={{fontSize: '0.85rem', fontWeight: '600', color: '#1e293b', marginBottom: '0.25rem'}}>
+                        {comment.userId?.firstName} {comment.userId?.lastName}
+                      </div>
+                      <div style={{fontSize: '0.875rem', color: '#475569', marginBottom: '0.25rem'}}>{comment.text}</div>
+                      <small style={{fontSize: '0.75rem', color: '#94a3b8'}}>{new Date(comment.createdAt).toLocaleString('en-GB')}</small>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </Modal.Body>
+        <Modal.Footer style={{background: '#f8fafc', borderTop: '2px solid #e2e8f0'}}>
+          <Button variant="secondary" onClick={() => setShowWorkLogDetails(false)} style={{borderRadius: '6px'}}>
+            Close
+          </Button>
+          {['ADMIN', 'HR', 'MANAGER'].includes(user?.role) && (
+            <Button variant="info" onClick={() => setShowCommentModal(true)} style={{borderRadius: '6px', background: '#0ea5e9', border: 'none'}}>
+              <i className="fas fa-comment me-2"></i>Add Comment
+            </Button>
+          )}
+          {(user?.role === 'ADMIN' || (selectedWorkLog?.userId?._id === user?.id && (Date.now() - new Date(selectedWorkLog?.createdAt)) / (1000 * 60 * 60) <= 24)) && (
+            <Button variant="primary" onClick={() => {
+              setShowWorkLogDetails(false);
+              handleEditWorkLog(selectedWorkLog);
+            }} style={{borderRadius: '6px', background: '#1e40af', border: 'none'}}>
+              <i className="fas fa-edit me-2"></i>Edit
+            </Button>
+          )}
+        </Modal.Footer>
+      </Modal>
+
+      {/* Edit Work Log Modal */}
+      <Modal show={showWorkLogModal} onHide={() => {
+        setShowWorkLogModal(false);
+        setSelectedWorkLog(null);
+        setWorkLogForm({
+          date: '', workDone: '', hoursSpent: '', status: 'COMPLETED',
+          project: '', deliverables: '', location: 'OFFICE', issues: '', category: 'GENERAL'
+        });
+      }} size="lg" centered>
+        <Modal.Header closeButton style={{background: '#f8f9fa', borderBottom: '2px solid #dee2e6'}}>
+          <Modal.Title style={{fontSize: '1.25rem', fontWeight: '600'}}>Edit Work Log</Modal.Title>
+        </Modal.Header>
+        <Form onSubmit={handleWorkLogSubmit}>
+          <Modal.Body style={{padding: '1.5rem'}}>
+            <Row>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label style={{fontWeight: '500'}}>Date</Form.Label>
+                  <Form.Control 
+                    type="date" 
+                    value={workLogForm.date} 
+                    onChange={(e) => setWorkLogForm({...workLogForm, date: e.target.value})} 
+                    required 
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label style={{fontWeight: '500'}}>Hours Spent</Form.Label>
+                  <Form.Control 
+                    type="number" 
+                    step="0.5" 
+                    value={workLogForm.hoursSpent} 
+                    onChange={(e) => setWorkLogForm({...workLogForm, hoursSpent: e.target.value})} 
+                    required 
+                  />
+                </Form.Group>
+              </Col>
+            </Row>
+            <Row>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label style={{fontWeight: '500'}}>Status</Form.Label>
+                  <Form.Select 
+                    value={workLogForm.status} 
+                    onChange={(e) => setWorkLogForm({...workLogForm, status: e.target.value})}
+                  >
+                    <option value="COMPLETED">Completed</option>
+                    <option value="IN_PROGRESS">In Progress</option>
+                    <option value="PENDING">Pending</option>
+                    <option value="ON_HOLD">On Hold</option>
+                    <option value="BLOCKED">Blocked</option>
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label style={{fontWeight: '500'}}>Location</Form.Label>
+                  <Form.Select 
+                    value={workLogForm.location} 
+                    onChange={(e) => setWorkLogForm({...workLogForm, location: e.target.value})}
+                  >
+                    <option value="OFFICE">Office</option>
+                    <option value="REMOTE">Remote</option>
+                    <option value="CLIENT_SITE">Client Site</option>
+                    <option value="FIELD">Field</option>
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+            </Row>
+            <Form.Group className="mb-3">
+              <Form.Label style={{fontWeight: '500'}}>Project/Client Name</Form.Label>
+              <Form.Control 
+                type="text" 
+                value={workLogForm.project} 
+                onChange={(e) => setWorkLogForm({...workLogForm, project: e.target.value})} 
+                placeholder="Enter project or client name"
+              />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label style={{fontWeight: '500'}}>Work Done</Form.Label>
+              <Form.Control 
+                as="textarea" 
+                rows={3} 
+                value={workLogForm.workDone} 
+                onChange={(e) => setWorkLogForm({...workLogForm, workDone: e.target.value})} 
+                required 
+                placeholder="Describe the work completed"
+              />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label style={{fontWeight: '500'}}>Deliverables/Outcomes</Form.Label>
+              <Form.Control 
+                as="textarea" 
+                rows={2} 
+                value={workLogForm.deliverables} 
+                onChange={(e) => setWorkLogForm({...workLogForm, deliverables: e.target.value})} 
+                placeholder="What was delivered or achieved?"
+              />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label style={{fontWeight: '500'}}>Blockers/Issues</Form.Label>
+              <Form.Control 
+                as="textarea" 
+                rows={2} 
+                value={workLogForm.issues} 
+                onChange={(e) => setWorkLogForm({...workLogForm, issues: e.target.value})} 
+                placeholder="Any challenges or blockers faced?"
+              />
+            </Form.Group>
+          </Modal.Body>
+          <Modal.Footer style={{background: '#f8f9fa', borderTop: '2px solid #dee2e6'}}>
+            <Button variant="secondary" onClick={() => {
+              setShowWorkLogModal(false);
+              setSelectedWorkLog(null);
+              setWorkLogForm({
+                date: '', workDone: '', hoursSpent: '', status: 'COMPLETED',
+                project: '', deliverables: '', location: 'OFFICE', issues: '', category: 'GENERAL'
+              });
+            }}>
+              Cancel
+            </Button>
+            <Button variant="primary" type="submit">
+              Update Work Log
+            </Button>
+          </Modal.Footer>
+        </Form>
+      </Modal>
+
+      {/* Add Comment Modal */}
+      <Modal show={showCommentModal} onHide={() => setShowCommentModal(false)} centered>
+        <Modal.Header closeButton style={{background: '#f8fafc', borderBottom: '2px solid #e2e8f0'}}>
+          <Modal.Title style={{fontSize: '1.1rem', fontWeight: '600'}}>
+            <i className="fas fa-comment me-2" style={{color: '#3b82f6'}}></i>Add Manager Comment
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body style={{padding: '1.5rem'}}>
+          <Form.Group>
+            <Form.Label style={{fontWeight: '500', color: '#374151'}}>Comment</Form.Label>
+            <Form.Control 
+              as="textarea" 
+              rows={4} 
+              value={workLogComment} 
+              onChange={(e) => setWorkLogComment(e.target.value)} 
+              placeholder="Add feedback or comments for the employee..."
+              style={{borderRadius: '8px', border: '2px solid #e5e7eb'}}
+            />
+          </Form.Group>
+        </Modal.Body>
+        <Modal.Footer style={{background: '#f8fafc', borderTop: '2px solid #e2e8f0'}}>
+          <Button variant="secondary" onClick={() => setShowCommentModal(false)} style={{borderRadius: '6px'}}>
+            Cancel
+          </Button>
+          <Button variant="primary" onClick={() => { handleAddWorkLogComment(); setShowCommentModal(false); }} disabled={!workLogComment.trim()} style={{borderRadius: '6px', background: '#3b82f6', border: 'none'}}>
+            <i className="fas fa-paper-plane me-2"></i>Add Comment
+          </Button>
+        </Modal.Footer>
+      </Modal>
 
       {/* Download Modal */}
       <Modal show={showDownloadModal} onHide={() => setShowDownloadModal(false)} centered>

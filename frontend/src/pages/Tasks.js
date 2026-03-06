@@ -4,10 +4,12 @@ import { useAuth } from '../context/AuthContext';
 import { useLocation } from 'react-router-dom';
 import api from '../utils/api';
 import { toast } from 'react-toastify';
+import Swal from 'sweetalert2';
 import { scheduleTaskReminder, checkDailyReminder, requestNotificationPermission, isWorkingDay } from '../utils/taskReminder';
 import '../styles/TaskResponsive.css';
 import MobileTaskDetails from '../components/MobileTaskDetails';
 import MobileDailyUpdate from '../components/MobileDailyUpdate';
+import WorkLogModal from '../components/WorkLogModal';
 
 const Tasks = () => {
   const { user } = useAuth();
@@ -19,6 +21,28 @@ const Tasks = () => {
   const [showCheckOutModal, setShowCheckOutModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [showWorkLogModal, setShowWorkLogModal] = useState(false);
+  const [showWorkLogHistory, setShowWorkLogHistory] = useState(false);
+  const [workLogs, setWorkLogs] = useState([]);
+  const [filteredWorkLogs, setFilteredWorkLogs] = useState([]);
+  const [workLogFilters, setWorkLogFilters] = useState({ search: '', status: '', dateRange: 'all', startDate: '', endDate: '' });
+  const [workLogPage, setWorkLogPage] = useState(1);
+  const [workLogTotal, setWorkLogTotal] = useState(0);
+  const [selectedWorkLogDetail, setSelectedWorkLogDetail] = useState(null);
+  const [showWorkLogDetailModal, setShowWorkLogDetailModal] = useState(false);
+  const [hasLoggedToday, setHasLoggedToday] = useState(true);
+  const [selectedTemplate, setSelectedTemplate] = useState('GENERAL');
+  const [bulkLogs, setBulkLogs] = useState([{ workDone: '', hoursSpent: '', category: 'GENERAL', status: 'COMPLETED', project: '', deliverables: '', location: 'OFFICE', issues: '', date: new Date().toISOString().split('T')[0], templateData: {}, customCategory: '' }]);
+
+  const TEMPLATES = {
+    GENERAL: { name: 'General Work', fields: ['date', 'workDone', 'hoursSpent', 'status', 'location'] },
+    SALES: { name: 'Sales & Business Development', fields: ['workDone', 'clientName', 'meetingType', 'leadStatus', 'orderValue', 'nextFollowUp', 'hoursSpent', 'status', 'location', 'date', 'issues'] },
+    ENGINEERING: { name: 'Engineering & Development', fields: ['workDone', 'moduleName', 'ticketId', 'repository', 'testingStatus', 'deliverables', 'hoursSpent', 'status', 'location', 'date', 'issues'] },
+    HR: { name: 'Human Resources', fields: ['workDone', 'employeeName', 'activityType', 'candidatesCount', 'deliverables', 'hoursSpent', 'status', 'location', 'date', 'issues'] },
+    OPERATIONS: { name: 'Operations & Field Work', fields: ['workDone', 'siteName', 'assetId', 'maintenanceType', 'travelDistance', 'deliverables', 'hoursSpent', 'status', 'location', 'date', 'issues'] },
+    MARKETING: { name: 'Marketing & Communications', fields: ['workDone', 'campaignName', 'platform', 'reach', 'contentType', 'deliverables', 'hoursSpent', 'status', 'location', 'date', 'issues'] },
+    FINANCE: { name: 'Finance & Accounting', fields: ['workDone', 'transactionType', 'amountProcessed', 'vendorClient', 'invoiceNumbers', 'deliverables', 'hoursSpent', 'status', 'location', 'date', 'issues'] }
+  };
   const [selectedTask, setSelectedTask] = useState(null);
   const [comment, setComment] = useState('');
   const [loadingStates, setLoadingStates] = useState({});
@@ -45,10 +69,16 @@ const Tasks = () => {
     nextFollowUpDate: '',
     actualHours: ''
   });
+  const [workLogForm, setWorkLogForm] = useState({
+    workDone: '',
+    hoursSpent: '',
+    category: 'GENERAL'
+  });
 
   useEffect(() => {
     fetchTasks();
     fetchEmployees();
+    checkTodayLog();
     
     // Request notification permission on load
     requestNotificationPermission();
@@ -297,6 +327,251 @@ const Tasks = () => {
     }
   };
 
+  const checkTodayLog = async () => {
+    try {
+      const response = await api.get('/api/work-logs/check-today');
+      setHasLoggedToday(response.data.hasLoggedToday);
+    } catch (error) {
+      console.error('Error checking today log');
+    }
+  };
+
+  const fetchWorkLogs = async () => {
+    try {
+      const response = await api.get(`/api/work-logs?page=${workLogPage}&limit=20`);
+      setWorkLogs(response.data.logs);
+      setFilteredWorkLogs(response.data.logs);
+      setWorkLogTotal(response.data.total);
+    } catch (error) {
+      toast.error('Error fetching work logs');
+    }
+  };
+
+  const applyWorkLogFilters = () => {
+    let filtered = [...workLogs];
+    
+    if (workLogFilters.search) {
+      const search = workLogFilters.search.toLowerCase();
+      filtered = filtered.filter(log => 
+        log.workDone.toLowerCase().includes(search) || 
+        log.project?.toLowerCase().includes(search) ||
+        log.deliverables?.toLowerCase().includes(search)
+      );
+    }
+    
+    if (workLogFilters.status) {
+      filtered = filtered.filter(log => log.status === workLogFilters.status);
+    }
+    
+    if (workLogFilters.dateRange !== 'all') {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      
+      if (workLogFilters.dateRange === 'today') {
+        filtered = filtered.filter(log => new Date(log.date) >= today);
+      } else if (workLogFilters.dateRange === 'week') {
+        const weekAgo = new Date(today);
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        filtered = filtered.filter(log => new Date(log.date) >= weekAgo);
+      } else if (workLogFilters.dateRange === 'month') {
+        const monthAgo = new Date(today);
+        monthAgo.setMonth(monthAgo.getMonth() - 1);
+        filtered = filtered.filter(log => new Date(log.date) >= monthAgo);
+      } else if (workLogFilters.dateRange === 'custom' && workLogFilters.startDate && workLogFilters.endDate) {
+        filtered = filtered.filter(log => {
+          const logDate = new Date(log.date);
+          return logDate >= new Date(workLogFilters.startDate) && logDate <= new Date(workLogFilters.endDate);
+        });
+      }
+    }
+    
+    setFilteredWorkLogs(filtered);
+  };
+
+  const exportWorkLogReport = () => {
+    const csv = [
+      ['Date', 'Status', 'Location', 'Project', 'Work Done', 'Deliverables', 'Hours', 'Issues'],
+      ...filteredWorkLogs.map(log => [
+        new Date(log.date).toLocaleDateString('en-GB'),
+        log.status,
+        log.location,
+        log.project || '',
+        log.workDone,
+        log.deliverables || '',
+        log.hoursSpent,
+        log.issues || ''
+      ])
+    ].map(row => row.join(',')).join('\n');
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `work-log-report-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    toast.success('Report exported successfully');
+  };
+
+  const handleWorkLogSubmit = async (e) => {
+    e.preventDefault();
+    setLoadingStates(prev => ({ ...prev, worklog: true }));
+    try {
+      await api.post('/api/work-logs/bulk', { logs: bulkLogs });
+      toast.success('Work log submitted');
+      setShowWorkLogModal(false);
+      setBulkLogs([{ workDone: '', hoursSpent: '', category: 'GENERAL', status: 'COMPLETED', project: '', deliverables: '', location: 'OFFICE', issues: '', date: new Date().toISOString().split('T')[0], templateData: {}, customCategory: '' }]);
+      checkTodayLog();
+      fetchWorkLogs();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Error submitting work log');
+    } finally {
+      setLoadingStates(prev => ({ ...prev, worklog: false }));
+    }
+  };
+
+  const handleViewWorkLogDetail = async (log) => {
+    try {
+      const response = await api.get(`/api/work-logs/${log._id}`);
+      setSelectedWorkLogDetail(response.data);
+      setShowWorkLogDetailModal(true);
+    } catch (error) {
+      toast.error('Error fetching work log details');
+    }
+  };
+
+  const handleEditMyWorkLog = async (log) => {
+    const hoursSinceCreation = (Date.now() - new Date(log.createdAt)) / (1000 * 60 * 60);
+    if (hoursSinceCreation > 24) {
+      toast.error('Can only edit work logs within 24 hours');
+      return;
+    }
+    setSelectedWorkLogDetail(log);
+    setBulkLogs([{
+      workDone: log.workDone,
+      hoursSpent: log.hoursSpent,
+      category: log.category,
+      status: log.status,
+      project: log.project || '',
+      deliverables: log.deliverables || '',
+      location: log.location,
+      issues: log.issues || '',
+      date: new Date(log.date).toISOString().split('T')[0],
+      templateData: log.templateData || {},
+      customCategory: ''
+    }]);
+    setShowWorkLogModal(true);
+  };
+
+  const handleUpdateMyWorkLog = async (e) => {
+    e.preventDefault();
+    setLoadingStates(prev => ({ ...prev, worklog: true }));
+    try {
+      await api.put(`/api/work-logs/${selectedWorkLogDetail._id}`, bulkLogs[0]);
+      toast.success('Work log updated');
+      setShowWorkLogModal(false);
+      setSelectedWorkLogDetail(null);
+      setBulkLogs([{ workDone: '', hoursSpent: '', category: 'GENERAL', status: 'COMPLETED', project: '', deliverables: '', location: 'OFFICE', issues: '', date: new Date().toISOString().split('T')[0], templateData: {}, customCategory: '' }]);
+      fetchWorkLogs();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Error updating work log');
+    } finally {
+      setLoadingStates(prev => ({ ...prev, worklog: false }));
+    }
+  };
+
+  const handleDeleteMyWorkLog = async (logId) => {
+    const result = await Swal.fire({
+      title: 'Delete Work Log?',
+      text: 'This action cannot be undone',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#6c757d',
+      confirmButtonText: 'Yes, delete it'
+    });
+    if (result.isConfirmed) {
+      try {
+        await api.delete(`/api/work-logs/${logId}`);
+        toast.success('Work log deleted');
+        fetchWorkLogs();
+      } catch (error) {
+        toast.error(error.response?.data?.message || 'Error deleting work log');
+      }
+    }
+  };
+
+  const addBulkLogEntry = () => {
+    setBulkLogs([...bulkLogs, { workDone: '', hoursSpent: '', category: 'GENERAL', status: 'COMPLETED', project: '', deliverables: '', location: 'OFFICE', issues: '', date: new Date().toISOString().split('T')[0], templateData: {}, customCategory: '' }]);
+  };
+
+  const renderTemplateField = (log, index, fieldName) => {
+    const value = log.templateData?.[fieldName] || '';
+    const updateField = (val) => {
+      const updated = [...bulkLogs];
+      if (!updated[index].templateData) updated[index].templateData = {};
+      updated[index].templateData[fieldName] = val;
+      setBulkLogs(updated);
+    };
+
+    const fieldConfigs = {
+      clientName: { label: 'Client Name', type: 'text', placeholder: 'Enter client name', required: true },
+      meetingType: { label: 'Meeting Type', type: 'select', options: ['Cold Call', 'Follow-up', 'Demo', 'Closing', 'Negotiation'], required: true },
+      leadStatus: { label: 'Lead Status', type: 'select', options: ['Hot', 'Warm', 'Cold', 'Converted', 'Lost'], required: false },
+      orderValue: { label: 'Order Value', type: 'number', placeholder: '0', required: false },
+      nextFollowUp: { label: 'Next Follow-up Date', type: 'date', required: false },
+      moduleName: { label: 'Module/Feature Name', type: 'text', placeholder: 'Enter module name', required: true },
+      ticketId: { label: 'Bug/Ticket ID', type: 'text', placeholder: 'e.g., JIRA-123', required: false },
+      repository: { label: 'Repository/Branch', type: 'text', placeholder: 'e.g., main, feature/xyz', required: false },
+      testingStatus: { label: 'Testing Status', type: 'select', options: ['Not Started', 'In Progress', 'Completed', 'Failed'], required: false },
+      employeeName: { label: 'Employee/Candidate Name', type: 'text', placeholder: 'Enter name', required: true },
+      activityType: { label: 'Activity Type', type: 'select', options: ['Interview', 'Onboarding', 'Training', 'Performance Review', 'Policy Update'], required: true },
+      candidatesCount: { label: 'Candidates Interviewed', type: 'number', placeholder: '0', required: false },
+      siteName: { label: 'Site/Location Name', type: 'text', placeholder: 'Enter site name', required: true },
+      assetId: { label: 'Equipment/Asset ID', type: 'text', placeholder: 'Enter asset ID', required: false },
+      maintenanceType: { label: 'Maintenance Type', type: 'select', options: ['Preventive', 'Corrective', 'Emergency', 'Inspection'], required: false },
+      travelDistance: { label: 'Travel Distance (KM)', type: 'number', placeholder: '0', required: false },
+      campaignName: { label: 'Campaign Name', type: 'text', placeholder: 'Enter campaign name', required: true },
+      platform: { label: 'Platform', type: 'select', options: ['Facebook', 'Instagram', 'LinkedIn', 'Twitter', 'Email', 'Website', 'Other'], required: false },
+      reach: { label: 'Reach/Impressions', type: 'number', placeholder: '0', required: false },
+      contentType: { label: 'Content Type', type: 'select', options: ['Post', 'Video', 'Article', 'Infographic', 'Email', 'Ad'], required: false },
+      transactionType: { label: 'Transaction Type', type: 'select', options: ['Payment', 'Receipt', 'Invoice', 'Expense', 'Reimbursement'], required: true },
+      amountProcessed: { label: 'Amount Processed', type: 'number', placeholder: '0', required: true },
+      vendorClient: { label: 'Vendor/Client Name', type: 'text', placeholder: 'Enter name', required: false },
+      invoiceNumbers: { label: 'Invoice Numbers', type: 'text', placeholder: 'e.g., INV-001, INV-002', required: false }
+    };
+
+    const config = fieldConfigs[fieldName];
+    if (!config) return null;
+
+    return (
+      <Col md={6} key={fieldName}>
+        <Form.Group className="mb-3">
+          <Form.Label style={{fontWeight: '600', color: '#374151', fontSize: '0.9rem'}}>
+            {config.label} {config.required && <span className="text-danger">*</span>}
+          </Form.Label>
+          {config.type === 'select' ? (
+            <Form.Select value={value} onChange={(e) => updateField(e.target.value)} required={config.required} style={{borderRadius: '8px', border: '2px solid #e5e7eb', padding: '0.6rem', fontSize: '0.9rem'}}>
+              <option value="">Select...</option>
+              {config.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+            </Form.Select>
+          ) : (
+            <Form.Control type={config.type} value={value} onChange={(e) => updateField(e.target.value)} placeholder={config.placeholder} required={config.required} style={{borderRadius: '8px', border: '2px solid #e5e7eb', padding: '0.6rem', fontSize: '0.9rem'}} />
+          )}
+        </Form.Group>
+      </Col>
+    );
+  };
+
+  const removeBulkLogEntry = (index) => {
+    setBulkLogs(bulkLogs.filter((_, i) => i !== index));
+  };
+
+  const updateBulkLogEntry = (index, field, value) => {
+    const updated = [...bulkLogs];
+    updated[index][field] = value;
+    setBulkLogs(updated);
+  };
+
   const getLastUpdateTime = (task) => {
     if (!task.dailyUpdates || task.dailyUpdates.length === 0) return 'Never updated';
     const lastUpdate = new Date(task.dailyUpdates[task.dailyUpdates.length - 1].date);
@@ -355,16 +630,33 @@ const Tasks = () => {
   return (
     <div className="fade-in-up">
       <div className="page-header">
-        <h1 className="page-title">
-          <i className="fas fa-tasks me-3 text-primary"></i>
-          My Tasks
-          {pendingUpdatesCount > 0 && (
-            <Badge bg="danger" className="ms-3" style={{fontSize: '0.7rem', verticalAlign: 'middle'}}>
-              {pendingUpdatesCount} Pending Update{pendingUpdatesCount > 1 ? 's' : ''}
-            </Badge>
-          )}
-        </h1>
-        <p className="text-muted">View and manage your assigned tasks</p>
+        <div className="d-flex justify-content-between align-items-center">
+          <div>
+            <h1 className="page-title">
+              <i className="fas fa-tasks me-3 text-primary"></i>
+              My Tasks
+              {pendingUpdatesCount > 0 && (
+                <Badge bg="danger" className="ms-3" style={{fontSize: '0.7rem', verticalAlign: 'middle'}}>
+                  {pendingUpdatesCount} Pending Update{pendingUpdatesCount > 1 ? 's' : ''}
+                </Badge>
+              )}
+            </h1>
+            <p className="text-muted">View and manage your assigned tasks</p>
+          </div>
+          <div className="d-flex gap-2">
+            {!hasLoggedToday && (
+              <Badge bg="warning" text="dark" style={{fontSize: '0.9rem', padding: '0.5rem 1rem', display: 'flex', alignItems: 'center'}}>
+                <i className="fas fa-exclamation-circle me-2"></i>No work logged today
+              </Badge>
+            )}
+            <Button variant="outline-primary" size="sm" onClick={() => { fetchWorkLogs(); setShowWorkLogHistory(true); }}>
+              <i className="fas fa-history me-2"></i>History
+            </Button>
+            <Button variant="success" onClick={() => setShowWorkLogModal(true)}>
+              <i className="fas fa-plus me-2"></i>Log Work
+            </Button>
+          </div>
+        </div>
       </div>
 
       <Row>
@@ -1194,6 +1486,564 @@ const Tasks = () => {
         setUpdateForm={setUpdateForm}
         onSubmit={handleDailyUpdate}
       />
+
+      {/* Work Log Modal */}
+      <Modal show={showWorkLogModal} onHide={() => {
+        setShowWorkLogModal(false);
+        setSelectedWorkLogDetail(null);
+        setBulkLogs([{ workDone: '', hoursSpent: '', category: 'GENERAL', status: 'COMPLETED', project: '', deliverables: '', location: 'OFFICE', issues: '', date: new Date().toISOString().split('T')[0], templateData: {}, customCategory: '' }]);
+      }} size="xl" centered>
+        <Modal.Header closeButton style={{background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', borderBottom: 'none'}}>
+          <Modal.Title style={{fontSize: '1.3rem', fontWeight: '600'}}>
+            <i className="fas fa-clipboard-list me-2"></i>{selectedWorkLogDetail ? 'Edit Work Log' : 'Daily Work Report'}
+          </Modal.Title>
+        </Modal.Header>
+        <Form onSubmit={selectedWorkLogDetail ? handleUpdateMyWorkLog : handleWorkLogSubmit}>
+          <Modal.Body style={{maxHeight: '75vh', overflowY: 'auto', padding: '2rem', background: '#f8f9fa'}}>
+            <div className="alert" style={{background: 'linear-gradient(135deg, #e0e7ff 0%, #e9d5ff 100%)', border: '1px solid #c7d2fe', borderRadius: '12px', padding: '1rem', marginBottom: '1.5rem'}}>
+              <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
+                <div style={{width: '40px', height: '40px', borderRadius: '50%', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                  <i className="fas fa-info-circle" style={{color: 'white', fontSize: '1.2rem'}}></i>
+                </div>
+                <div>
+                  <div style={{fontWeight: '600', color: '#4c1d95', marginBottom: '0.25rem'}}>Daily Work Report</div>
+                  <small style={{color: '#6b21a8'}}>This report will be sent to your manager</small>
+                </div>
+              </div>
+            </div>
+
+            {!selectedWorkLogDetail && (
+            <Card className="mb-4" style={{border: '2px solid #667eea', borderRadius: '12px'}}>
+              <Card.Body style={{padding: '1.5rem'}}>
+                <Form.Group>
+                  <Form.Label style={{fontWeight: '600', color: '#374151', fontSize: '1rem', marginBottom: '1rem'}}>
+                    <i className="fas fa-layer-group me-2" style={{color: '#667eea'}}></i>Select Report Template
+                  </Form.Label>
+                  <Form.Select 
+                    value={selectedTemplate} 
+                    onChange={(e) => setSelectedTemplate(e.target.value)}
+                    style={{borderRadius: '8px', border: '2px solid #e5e7eb', padding: '0.75rem', fontSize: '1rem', fontWeight: '500'}}
+                  >
+                    {Object.keys(TEMPLATES).map(key => (
+                      <option key={key} value={key}>{TEMPLATES[key].name}</option>
+                    ))}
+                  </Form.Select>
+                </Form.Group>
+              </Card.Body>
+            </Card>
+            )}
+
+            {bulkLogs.map((log, index) => (
+              <Card key={index} className="mb-3" style={{border: '1px solid #e5e7eb', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.08)'}}>
+                <Card.Body style={{padding: '1.5rem', background: 'white'}}>
+                  <div className="d-flex justify-content-between align-items-center mb-3">
+                    <h6 className="mb-0" style={{color: '#1f2937', fontWeight: '600', fontSize: '1rem'}}>
+                      <i className="fas fa-tasks me-2" style={{color: '#667eea'}}></i>Task {index + 1}
+                    </h6>
+                    {!selectedWorkLogDetail && bulkLogs.length > 1 && (
+                      <Button variant="outline-danger" size="sm" onClick={() => removeBulkLogEntry(index)} style={{borderRadius: '8px'}}>
+                        <i className="fas fa-trash me-1"></i>Remove
+                      </Button>
+                    )}
+                  </div>
+
+                  <Row className="mb-3">
+                    <Col md={4}>
+                      <Form.Group>
+                        <Form.Label style={{fontWeight: '600', color: '#374151', fontSize: '0.9rem'}}>
+                          <i className="fas fa-calendar me-2" style={{color: '#667eea'}}></i>Date <span className="text-danger">*</span>
+                        </Form.Label>
+                        <Form.Control 
+                          type="date" 
+                          value={log.date} 
+                          onChange={(e) => updateBulkLogEntry(index, 'date', e.target.value)} 
+                          required
+                          style={{borderRadius: '8px', border: '2px solid #e5e7eb', padding: '0.6rem', fontSize: '0.9rem'}}
+                        />
+                      </Form.Group>
+                    </Col>
+                    <Col md={4}>
+                      <Form.Group>
+                        <Form.Label style={{fontWeight: '600', color: '#374151', fontSize: '0.9rem'}}>
+                          <i className="fas fa-check-circle me-2" style={{color: '#667eea'}}></i>Status <span className="text-danger">*</span>
+                        </Form.Label>
+                        <Form.Select 
+                          value={log.status} 
+                          onChange={(e) => updateBulkLogEntry(index, 'status', e.target.value)}
+                          required
+                          style={{borderRadius: '8px', border: '2px solid #e5e7eb', padding: '0.6rem', fontSize: '0.9rem'}}
+                        >
+                          <option value="COMPLETED">Completed</option>
+                          <option value="IN_PROGRESS">In Progress</option>
+                          <option value="PENDING">Pending</option>
+                          <option value="ON_HOLD">On Hold</option>
+                          <option value="BLOCKED">Blocked</option>
+                          <option value="CANCELLED">Cancelled</option>
+                        </Form.Select>
+                      </Form.Group>
+                    </Col>
+                    <Col md={4}>
+                      <Form.Group>
+                        <Form.Label style={{fontWeight: '600', color: '#374151', fontSize: '0.9rem'}}>
+                          <i className="fas fa-map-marker-alt me-2" style={{color: '#667eea'}}></i>Location <span className="text-danger">*</span>
+                        </Form.Label>
+                        <Form.Select 
+                          value={log.location} 
+                          onChange={(e) => updateBulkLogEntry(index, 'location', e.target.value)}
+                          required
+                          style={{borderRadius: '8px', border: '2px solid #e5e7eb', padding: '0.6rem', fontSize: '0.9rem'}}
+                        >
+                          <option value="OFFICE">Office</option>
+                          <option value="REMOTE">Remote</option>
+                          <option value="CLIENT_SITE">Client Site</option>
+                          <option value="FIELD">Field</option>
+                        </Form.Select>
+                      </Form.Group>
+                    </Col>
+                  </Row>
+
+                  <Row className="mb-3">
+                    <Col md={6}>
+                      <Form.Group>
+                        <Form.Label style={{fontWeight: '600', color: '#374151', fontSize: '0.9rem'}}>
+                          <i className="fas fa-project-diagram me-2" style={{color: '#667eea'}}></i>Project/Client Name
+                        </Form.Label>
+                        <Form.Control 
+                          type="text" 
+                          value={log.project} 
+                          onChange={(e) => updateBulkLogEntry(index, 'project', e.target.value)} 
+                          placeholder="e.g., ABC Corp Website"
+                          style={{borderRadius: '8px', border: '2px solid #e5e7eb', padding: '0.6rem', fontSize: '0.9rem'}}
+                        />
+                      </Form.Group>
+                    </Col>
+                    {TEMPLATES[selectedTemplate].fields.filter(f => !['workDone', 'deliverables', 'hoursSpent', 'status', 'location', 'date', 'issues'].includes(f)).map(field => 
+                      renderTemplateField(log, index, field)
+                    )}
+                    <Col md={3}>
+                      <Form.Group>
+                        <Form.Label style={{fontWeight: '600', color: '#374151', fontSize: '0.9rem'}}>
+                          <i className="fas fa-clock me-2" style={{color: '#667eea'}}></i>Hours <span className="text-danger">*</span>
+                        </Form.Label>
+                        <Form.Control 
+                          type="number" 
+                          step="0.5" 
+                          min="0" 
+                          max="12" 
+                          value={log.hoursSpent} 
+                          onChange={(e) => updateBulkLogEntry(index, 'hoursSpent', e.target.value)} 
+                          placeholder="2.5"
+                          required
+                          style={{borderRadius: '8px', border: '2px solid #e5e7eb', padding: '0.6rem', fontSize: '0.9rem'}}
+                        />
+                      </Form.Group>
+                    </Col>
+                    <Col md={3}>
+                      <Form.Group>
+                        <Form.Label style={{fontWeight: '600', color: '#374151', fontSize: '0.9rem'}}>
+                          <i className="fas fa-tag me-2" style={{color: '#667eea'}}></i>Category
+                        </Form.Label>
+                        <Form.Select 
+                          value={log.category} 
+                          onChange={(e) => updateBulkLogEntry(index, 'category', e.target.value)}
+                          style={{borderRadius: '8px', border: '2px solid #e5e7eb', padding: '0.6rem', fontSize: '0.9rem'}}
+                        >
+                          <option value="GENERAL">General</option>
+                          <option value="MEETING">Meeting</option>
+                          <option value="TRAINING">Training</option>
+                          <option value="SUPPORT">Support</option>
+                          <option value="OTHER">Other</option>
+                          <option value="CUSTOM">Custom</option>
+                        </Form.Select>
+                        {log.category === 'CUSTOM' && (
+                          <Form.Control 
+                            type="text" 
+                            value={log.customCategory} 
+                            onChange={(e) => updateBulkLogEntry(index, 'customCategory', e.target.value)} 
+                            placeholder="Enter custom category"
+                            className="mt-2"
+                            required
+                            style={{borderRadius: '8px', border: '2px solid #e5e7eb', padding: '0.6rem', fontSize: '0.9rem'}}
+                          />
+                        )}
+                      </Form.Group>
+                    </Col>
+                  </Row>
+
+                  <Form.Group className="mb-3">
+                    <Form.Label style={{fontWeight: '600', color: '#374151', fontSize: '0.9rem'}}>
+                      <i className="fas fa-file-alt me-2" style={{color: '#667eea'}}></i>Work Description <span className="text-danger">*</span>
+                    </Form.Label>
+                    <Form.Control 
+                      as="textarea" 
+                      rows={2} 
+                      value={log.workDone} 
+                      onChange={(e) => updateBulkLogEntry(index, 'workDone', e.target.value)} 
+                      placeholder="Describe the work completed..."
+                      required
+                      style={{borderRadius: '8px', border: '2px solid #e5e7eb', padding: '0.75rem', fontSize: '0.9rem'}}
+                    />
+                  </Form.Group>
+
+                  <Form.Group className="mb-3">
+                    <Form.Label style={{fontWeight: '600', color: '#374151', fontSize: '0.9rem'}}>
+                      <i className="fas fa-trophy me-2" style={{color: '#10b981'}}></i>Deliverables/Outcomes
+                    </Form.Label>
+                    <Form.Control 
+                      as="textarea" 
+                      rows={2} 
+                      value={log.deliverables} 
+                      onChange={(e) => updateBulkLogEntry(index, 'deliverables', e.target.value)} 
+                      placeholder="What was delivered or achieved? (e.g., Completed 3 modules, Fixed 5 bugs)"
+                      style={{borderRadius: '8px', border: '2px solid #e5e7eb', padding: '0.75rem', fontSize: '0.9rem'}}
+                    />
+                  </Form.Group>
+
+                  {(log.status === 'BLOCKED' || log.status === 'IN_PROGRESS') && (
+                    <Form.Group className="mb-2">
+                      <Form.Label style={{fontWeight: '600', color: '#374151', fontSize: '0.9rem'}}>
+                        <i className="fas fa-exclamation-triangle me-2" style={{color: '#ef4444'}}></i>Blockers/Issues {log.status === 'BLOCKED' && <span className="text-danger">*</span>}
+                      </Form.Label>
+                      <Form.Control 
+                        as="textarea" 
+                        rows={2} 
+                        value={log.issues} 
+                        onChange={(e) => updateBulkLogEntry(index, 'issues', e.target.value)} 
+                        placeholder="Describe any problems or blockers faced..."
+                        required={log.status === 'BLOCKED'}
+                        style={{borderRadius: '8px', border: '2px solid #fee2e2', padding: '0.75rem', fontSize: '0.9rem', background: '#fef2f2'}}
+                      />
+                    </Form.Group>
+                  )}
+                </Card.Body>
+              </Card>
+            ))}
+            {!selectedWorkLogDetail && (
+            <Button 
+              variant="outline-primary" 
+              onClick={addBulkLogEntry} 
+              className="w-100" 
+              style={{borderRadius: '10px', padding: '0.75rem', fontWeight: '600', border: '2px dashed #667eea', color: '#667eea', background: 'white'}}
+            >
+              <i className="fas fa-plus-circle me-2"></i>Add Another Task
+            </Button>
+            )}
+          </Modal.Body>
+          <Modal.Footer style={{background: 'white', borderTop: '2px solid #e5e7eb', padding: '1.25rem 2rem'}}>
+            <Button 
+              variant="light" 
+              onClick={() => setShowWorkLogModal(false)} 
+              style={{padding: '0.75rem 1.5rem', fontSize: '0.95rem', fontWeight: '600', borderRadius: '10px', border: '2px solid #e5e7eb'}}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="primary" 
+              type="submit" 
+              disabled={loadingStates.worklog}
+              style={{padding: '0.75rem 2rem', fontSize: '0.95rem', fontWeight: '600', borderRadius: '10px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)'}}
+            >
+              {loadingStates.worklog ? (
+                <><span className="spinner-border spinner-border-sm me-2"></span>{selectedWorkLogDetail ? 'Updating...' : 'Submitting Report...'}</>
+              ) : (
+                <><i className="fas fa-paper-plane me-2"></i>{selectedWorkLogDetail ? 'Update Log' : 'Submit Report'}</>
+              )}
+            </Button>
+          </Modal.Footer>
+        </Form>
+      </Modal>
+
+      {/* Work Log History Modal */}
+      <Modal show={showWorkLogHistory} onHide={() => setShowWorkLogHistory(false)} size="xl" centered>
+        <Modal.Header closeButton style={{background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', borderBottom: 'none'}}>
+          <Modal.Title style={{fontSize: '1.3rem', fontWeight: '600'}}>
+            <i className="fas fa-history me-2"></i>Work Log History & Reports
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body style={{maxHeight: '75vh', overflowY: 'auto', padding: '2rem', background: '#f8f9fa'}}>
+          {workLogs.length > 0 ? (
+            <div>
+              <Card className="mb-3" style={{border: '1px solid #e5e7eb', borderRadius: '12px'}}>
+                <Card.Body style={{padding: '1.5rem'}}>
+                  <div className="d-flex justify-content-between align-items-center mb-3">
+                    <h6 className="mb-0" style={{fontWeight: '600', color: '#374151'}}>
+                      <i className="fas fa-filter me-2"></i>Filters & Export
+                    </h6>
+                    <Button variant="success" size="sm" onClick={exportWorkLogReport} style={{borderRadius: '8px'}}>
+                      <i className="fas fa-file-export me-2"></i>Export Report
+                    </Button>
+                  </div>
+                  <Row>
+                    <Col md={3}>
+                      <Form.Group>
+                        <Form.Label style={{fontSize: '0.85rem', fontWeight: '600', color: '#6b7280'}}>Search</Form.Label>
+                        <Form.Control 
+                          type="text" 
+                          placeholder="Search work logs..."
+                          value={workLogFilters.search}
+                          onChange={(e) => setWorkLogFilters({...workLogFilters, search: e.target.value})}
+                          style={{borderRadius: '8px', fontSize: '0.9rem'}}
+                        />
+                      </Form.Group>
+                    </Col>
+                    <Col md={2}>
+                      <Form.Group>
+                        <Form.Label style={{fontSize: '0.85rem', fontWeight: '600', color: '#6b7280'}}>Status</Form.Label>
+                        <Form.Select 
+                          value={workLogFilters.status}
+                          onChange={(e) => setWorkLogFilters({...workLogFilters, status: e.target.value})}
+                          style={{borderRadius: '8px', fontSize: '0.9rem'}}
+                        >
+                          <option value="">All Status</option>
+                          <option value="COMPLETED">Completed</option>
+                          <option value="IN_PROGRESS">In Progress</option>
+                          <option value="PENDING">Pending</option>
+                          <option value="ON_HOLD">On Hold</option>
+                          <option value="BLOCKED">Blocked</option>
+                        </Form.Select>
+                      </Form.Group>
+                    </Col>
+                    <Col md={2}>
+                      <Form.Group>
+                        <Form.Label style={{fontSize: '0.85rem', fontWeight: '600', color: '#6b7280'}}>Date Range</Form.Label>
+                        <Form.Select 
+                          value={workLogFilters.dateRange}
+                          onChange={(e) => setWorkLogFilters({...workLogFilters, dateRange: e.target.value})}
+                          style={{borderRadius: '8px', fontSize: '0.9rem'}}
+                        >
+                          <option value="all">All Time</option>
+                          <option value="today">Today</option>
+                          <option value="week">Last 7 Days</option>
+                          <option value="month">Last 30 Days</option>
+                          <option value="custom">Custom Range</option>
+                        </Form.Select>
+                      </Form.Group>
+                    </Col>
+                    {workLogFilters.dateRange === 'custom' && (
+                      <>
+                        <Col md={2}>
+                          <Form.Group>
+                            <Form.Label style={{fontSize: '0.85rem', fontWeight: '600', color: '#6b7280'}}>Start Date</Form.Label>
+                            <Form.Control 
+                              type="date" 
+                              value={workLogFilters.startDate}
+                              onChange={(e) => setWorkLogFilters({...workLogFilters, startDate: e.target.value})}
+                              style={{borderRadius: '8px', fontSize: '0.9rem'}}
+                            />
+                          </Form.Group>
+                        </Col>
+                        <Col md={2}>
+                          <Form.Group>
+                            <Form.Label style={{fontSize: '0.85rem', fontWeight: '600', color: '#6b7280'}}>End Date</Form.Label>
+                            <Form.Control 
+                              type="date" 
+                              value={workLogFilters.endDate}
+                              onChange={(e) => setWorkLogFilters({...workLogFilters, endDate: e.target.value})}
+                              style={{borderRadius: '8px', fontSize: '0.9rem'}}
+                            />
+                          </Form.Group>
+                        </Col>
+                      </>
+                    )}
+                    <Col md={workLogFilters.dateRange === 'custom' ? 1 : 5} className="d-flex align-items-end">
+                      <Button variant="primary" onClick={applyWorkLogFilters} className="w-100" style={{borderRadius: '8px'}}>
+                        <i className="fas fa-search me-2"></i>Apply
+                      </Button>
+                    </Col>
+                  </Row>
+                </Card.Body>
+              </Card>
+
+              {filteredWorkLogs.map((log, index) => {
+                const hoursSinceCreation = (Date.now() - new Date(log.createdAt)) / (1000 * 60 * 60);
+                const canEdit = hoursSinceCreation <= 24;
+                return (
+                <Card key={index} className="mb-3" style={{border: '1px solid #e5e7eb', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', cursor: 'pointer'}} onClick={() => handleViewWorkLogDetail(log)}>
+                  <Card.Body style={{padding: '1.5rem'}}>
+                    <div className="d-flex justify-content-between align-items-start mb-3">
+                      <div style={{flex: 1}}>
+                        <div style={{fontSize: '0.95rem', color: '#6b7280', marginBottom: '0.75rem', lineHeight: '1.8'}}>
+                          <span style={{fontWeight: '600', color: '#374151'}}>Date:</span> {new Date(log.date).toLocaleDateString('en-GB', {day: '2-digit', month: '2-digit', year: '2-digit'})} 
+                          <span style={{margin: '0 0.5rem', color: '#d1d5db'}}>|</span>
+                          <span style={{fontWeight: '600', color: '#374151'}}>Status:</span> <span style={{color: log.status === 'COMPLETED' ? '#10b981' : log.status === 'IN_PROGRESS' ? '#3b82f6' : log.status === 'BLOCKED' ? '#ef4444' : '#6b7280', fontWeight: '500'}}>{log.status.replace('_', ' ')}</span>
+                          <span style={{margin: '0 0.5rem', color: '#d1d5db'}}>|</span>
+                          <span style={{fontWeight: '600', color: '#374151'}}>Location:</span> {log.location.replace('_', ' ')}
+                          {log.project && (
+                            <>
+                              <span style={{margin: '0 0.5rem', color: '#d1d5db'}}>|</span>
+                              <span style={{fontWeight: '600', color: '#374151'}}>Project:</span> {log.project}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="d-flex gap-2 align-items-center">
+                        <Badge bg="success" style={{fontSize: '1rem', padding: '0.5rem 1rem', fontWeight: '600'}}>
+                          <i className="fas fa-clock me-1"></i>{log.hoursSpent}h
+                        </Badge>
+                        {canEdit && (
+                          <>
+                            <Button size="sm" variant="outline-primary" onClick={(e) => { e.stopPropagation(); handleEditMyWorkLog(log); }} style={{borderRadius: '6px'}}>
+                              <i className="fas fa-edit"></i>
+                            </Button>
+                            <Button size="sm" variant="outline-danger" onClick={(e) => { e.stopPropagation(); handleDeleteMyWorkLog(log._id); }} style={{borderRadius: '6px'}}>
+                              <i className="fas fa-trash"></i>
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{background: '#f9fafb', padding: '1rem', borderRadius: '8px', marginBottom: '1rem', border: '1px solid #e5e7eb'}}>
+                      <div style={{fontSize: '0.75rem', fontWeight: '600', color: '#6b7280', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>
+                        <i className="fas fa-file-alt me-2"></i>Work Description
+                      </div>
+                      <p className="mb-0" style={{fontSize: '0.95rem', color: '#1f2937', lineHeight: '1.6'}}>{log.workDone}</p>
+                    </div>
+
+                    {log.deliverables && (
+                      <div style={{background: '#f0fdf4', padding: '1rem', borderRadius: '8px', marginBottom: '1rem', border: '1px solid #bbf7d0'}}>
+                        <div style={{fontSize: '0.75rem', fontWeight: '600', color: '#166534', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>
+                          <i className="fas fa-trophy me-2"></i>Deliverables / Outcomes
+                        </div>
+                        <p className="mb-0" style={{fontSize: '0.95rem', color: '#166534', lineHeight: '1.6'}}>{log.deliverables}</p>
+                      </div>
+                    )}
+
+                    {log.issues && (
+                      <div style={{background: '#fef2f2', padding: '1rem', borderRadius: '8px', border: '1px solid #fecaca'}}>
+                        <div style={{fontSize: '0.75rem', fontWeight: '600', color: '#991b1b', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>
+                          <i className="fas fa-exclamation-triangle me-2"></i>Issues / Blockers
+                        </div>
+                        <p className="mb-0" style={{fontSize: '0.95rem', color: '#991b1b', lineHeight: '1.6'}}>{log.issues}</p>
+                      </div>
+                    )}
+                  </Card.Body>
+                </Card>
+              )})}
+            </div>
+          ) : (
+            <div className="text-center py-5">
+              <div style={{width: '80px', height: '80px', borderRadius: '50%', background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem'}}>
+                <i className="fas fa-clipboard-list" style={{fontSize: '2.5rem', color: '#9ca3af'}}></i>
+              </div>
+              <h5 style={{color: '#6b7280', fontWeight: '600', marginBottom: '0.5rem'}}>No Work Logs Found</h5>
+              <p style={{color: '#9ca3af', margin: 0}}>Start logging your daily work to see history here</p>
+            </div>
+          )}
+        </Modal.Body>
+      </Modal>
+
+      {/* Employee Work Log Detail Modal */}
+      <Modal show={showWorkLogDetailModal} onHide={() => setShowWorkLogDetailModal(false)} size="lg" centered>
+        <Modal.Header closeButton style={{background: '#f8fafc', borderBottom: '2px solid #e2e8f0'}}>
+          <Modal.Title style={{fontSize: '1.25rem', fontWeight: '600', color: '#1e293b'}}>
+            <i className="fas fa-file-alt me-2" style={{color: '#3b82f6'}}></i>Work Log Details
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body style={{padding: '2rem', background: 'white'}}>
+          {selectedWorkLogDetail && (
+            <>
+              <Row className="mb-3">
+                <Col md={6}>
+                  <div style={{marginBottom: '1.5rem'}}>
+                    <div style={{fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Date</div>
+                    <div style={{fontSize: '1rem', fontWeight: '500', color: '#1e293b'}}>{new Date(selectedWorkLogDetail.date).toLocaleDateString('en-GB', {day: '2-digit', month: 'long', year: 'numeric'})}</div>
+                  </div>
+                </Col>
+                <Col md={6}>
+                  <div style={{marginBottom: '1.5rem'}}>
+                    <div style={{fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Hours Spent</div>
+                    <div style={{fontSize: '1.5rem', fontWeight: '700', color: '#059669'}}>{selectedWorkLogDetail.hoursSpent}h</div>
+                  </div>
+                </Col>
+              </Row>
+
+              <Row className="mb-3">
+                <Col md={6}>
+                  <div style={{marginBottom: '1.5rem'}}>
+                    <div style={{fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Status</div>
+                    <span style={{
+                      background: selectedWorkLogDetail.status === 'COMPLETED' ? '#dcfce7' : selectedWorkLogDetail.status === 'IN_PROGRESS' ? '#dbeafe' : '#fef3c7',
+                      color: selectedWorkLogDetail.status === 'COMPLETED' ? '#166534' : selectedWorkLogDetail.status === 'IN_PROGRESS' ? '#1e40af' : '#92400e',
+                      padding: '0.5rem 1rem',
+                      borderRadius: '6px',
+                      fontSize: '0.875rem',
+                      fontWeight: '600',
+                      display: 'inline-block'
+                    }}>
+                      {selectedWorkLogDetail.status.replace('_', ' ')}
+                    </span>
+                  </div>
+                </Col>
+                <Col md={6}>
+                  <div style={{marginBottom: '1.5rem'}}>
+                    <div style={{fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Location</div>
+                    <span style={{background: '#f1f5f9', color: '#475569', padding: '0.5rem 1rem', borderRadius: '6px', fontSize: '0.875rem', fontWeight: '500', display: 'inline-block'}}>
+                      {selectedWorkLogDetail.location.replace('_', ' ')}
+                    </span>
+                  </div>
+                </Col>
+              </Row>
+
+              {selectedWorkLogDetail.project && (
+                <div style={{marginBottom: '1.5rem'}}>
+                  <div style={{fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Project / Client</div>
+                  <div style={{fontSize: '1rem', fontWeight: '500', color: '#1e293b'}}>{selectedWorkLogDetail.project}</div>
+                </div>
+              )}
+
+              <div style={{marginBottom: '1.5rem'}}>
+                <div style={{fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Work Description</div>
+                <div style={{background: '#f8fafc', padding: '1.25rem', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.95rem', color: '#334155', lineHeight: '1.6'}}>
+                  {selectedWorkLogDetail.workDone}
+                </div>
+              </div>
+
+              {selectedWorkLogDetail.deliverables && (
+                <div style={{marginBottom: '1.5rem'}}>
+                  <div style={{fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Deliverables / Outcomes</div>
+                  <div style={{background: '#eff6ff', padding: '1.25rem', borderRadius: '8px', border: '1px solid #bfdbfe', fontSize: '0.95rem', color: '#1e40af', lineHeight: '1.6'}}>
+                    {selectedWorkLogDetail.deliverables}
+                  </div>
+                </div>
+              )}
+
+              {selectedWorkLogDetail.issues && (
+                <div style={{marginBottom: '1.5rem'}}>
+                  <div style={{fontSize: '0.75rem', fontWeight: '600', color: '#64748b', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Issues / Blockers</div>
+                  <div style={{background: '#fef3c7', padding: '1.25rem', borderRadius: '8px', border: '1px solid #fde68a', fontSize: '0.95rem', color: '#92400e', lineHeight: '1.6'}}>
+                    {selectedWorkLogDetail.issues}
+                  </div>
+                </div>
+              )}
+
+              {selectedWorkLogDetail.comments && selectedWorkLogDetail.comments.length > 0 && (
+                <div style={{marginTop: '2rem'}}>
+                  <div style={{fontSize: '0.95rem', fontWeight: '600', color: '#1e293b', marginBottom: '1rem', paddingBottom: '0.5rem', borderBottom: '2px solid #e2e8f0'}}>
+                    <i className="fas fa-comments me-2" style={{color: '#3b82f6'}}></i>Manager Feedback ({selectedWorkLogDetail.comments.length})
+                  </div>
+                  {selectedWorkLogDetail.comments.map((comment, idx) => (
+                    <div key={idx} style={{background: '#f0f9ff', padding: '1rem', borderRadius: '8px', border: '1px solid #bae6fd', marginBottom: '0.75rem'}}>
+                      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem'}}>
+                        <div style={{fontSize: '0.85rem', fontWeight: '600', color: '#0c4a6e'}}>
+                          <i className="fas fa-user-tie me-2"></i>{comment.userId?.firstName} {comment.userId?.lastName}
+                        </div>
+                        <small style={{fontSize: '0.75rem', color: '#0369a1'}}>{new Date(comment.createdAt).toLocaleString('en-GB')}</small>
+                      </div>
+                      <div style={{fontSize: '0.9rem', color: '#075985', lineHeight: '1.6'}}>{comment.text}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </Modal.Body>
+        <Modal.Footer style={{background: '#f8fafc', borderTop: '2px solid #e2e8f0'}}>
+          <Button variant="secondary" onClick={() => setShowWorkLogDetailModal(false)} style={{borderRadius: '6px'}}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 };
