@@ -24,42 +24,43 @@ function getDistanceInMeters(lat1, lon1, lat2, lon2) {
 
 const checkIn = async (req, res) => {
   try {
-    const { location, workMode = 'OFFICE' } = req.body;
+    const { location, workMode = 'OFFICE', officeLocationId } = req.body;
     const userId = req.user.id;
 
     const today = moment.tz("Asia/Kolkata").startOf("day").toDate();
 
     if (!location || !location.latitude || !location.longitude) {
-      return res.status(400).json({
-        message: "Location permission is required to check in",
-      });
+      return res.status(400).json({ message: "Location permission is required to check in" });
     }
 
-    const OFFICE_LAT = Number(process.env.OFFICE_LAT);
-    const OFFICE_LNG = Number(process.env.OFFICE_LNG);
-    const ALLOWED_RADIUS = Number(process.env.ALLOWED_RADIUS_METERS);
+    let officeLocationDoc = null;
 
-    const distance = getDistanceInMeters(
-      OFFICE_LAT,
-      OFFICE_LNG,
-      location.latitude,
-      location.longitude,
-    );
-
-    // Validate based on work mode
     if (workMode === 'OFFICE') {
-      // Strict validation for office mode
-      if (distance > ALLOWED_RADIUS) {
+      if (!officeLocationId) {
+        return res.status(400).json({ message: "Please select an office location to check in" });
+      }
+
+      const OfficeLocation = require('../models/OfficeLocation');
+      officeLocationDoc = await OfficeLocation.findById(officeLocationId);
+      if (!officeLocationDoc || !officeLocationDoc.isActive) {
+        return res.status(404).json({ message: "Selected office location not found or inactive" });
+      }
+
+      const distance = getDistanceInMeters(
+        officeLocationDoc.latitude,
+        officeLocationDoc.longitude,
+        location.latitude,
+        location.longitude,
+      );
+
+      if (distance > officeLocationDoc.radiusMeters) {
         return res.status(403).json({
-          message: "You are not within office premises",
+          message: `You are not within ${officeLocationDoc.name} premises`,
           distance: Math.round(distance),
+          allowed: officeLocationDoc.radiusMeters,
         });
       }
-    } else if (workMode === 'HYBRID') {
-      // Auto-detect: if near office, switch to office mode
-      // This is handled by just storing the mode as-is
     }
-    // For REMOTE mode, no distance validation needed
 
     let attendance = await Attendance.findOne({ userId, date: today });
 
@@ -73,16 +74,16 @@ const checkIn = async (req, res) => {
 
     attendance.checkIn = new Date();
     attendance.workMode = workMode;
-    attendance.location = {
-      checkInLocation: location,
-    };
+    attendance.location = { checkInLocation: location };
+
+    if (officeLocationDoc) {
+      attendance.officeLocation = officeLocationDoc._id;
+      attendance.officeLocationName = officeLocationDoc.name;
+    }
 
     await attendance.save();
 
-    res.json({
-      message: "Checked in successfully",
-      attendance,
-    });
+    res.json({ message: "Checked in successfully", attendance });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -181,9 +182,24 @@ const checkOut = async (req, res) => {
 
     // Validate based on work mode (only for OFFICE mode)
     if (attendance.workMode === 'OFFICE') {
-      const officeLat = Number(process.env.OFFICE_LAT);
-      const officeLng = Number(process.env.OFFICE_LNG);
-      const allowedRadius = Number(process.env.OFFICE_RADIUS_METERS || 100);
+      let officeLat, officeLng, allowedRadius;
+
+      if (attendance.officeLocation) {
+        const OfficeLocation = require('../models/OfficeLocation');
+        const officeDoc = await OfficeLocation.findById(attendance.officeLocation);
+        if (officeDoc) {
+          officeLat = officeDoc.latitude;
+          officeLng = officeDoc.longitude;
+          allowedRadius = officeDoc.radiusMeters;
+        }
+      }
+
+      // Fallback to env vars if no office doc found
+      if (!officeLat) {
+        officeLat = Number(process.env.OFFICE_LAT);
+        officeLng = Number(process.env.OFFICE_LNG);
+        allowedRadius = Number(process.env.OFFICE_RADIUS_METERS || 100);
+      }
 
       const distance = getDistanceInMeters(
         officeLat,
@@ -341,6 +357,8 @@ const getTodayStatus = async (req, res) => {
       checkOutTime: attendance?.checkOut,
       totalHours: attendance?.totalHours || 0,
       status: attendance?.status || "Absent",
+      workMode: attendance?.workMode || null,
+      officeLocationName: attendance?.officeLocationName || null,
     });
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });

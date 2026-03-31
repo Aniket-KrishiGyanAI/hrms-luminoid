@@ -128,7 +128,9 @@ const EnhancedLayout = ({ children }) => {
     }
 
     if (user?.role === 'ADMIN') {
-      items.push({ path: '/departments', label: 'Departments', icon: MdAccountTree, roles: ['ADMIN'] });
+      items.push(
+        { path: '/departments', label: 'Departments', icon: MdAccountTree, roles: ['ADMIN'] }
+      );
     }
 
     items.push(

@@ -27,6 +27,9 @@ const taskRoutes = require('./routes/tasks');
 const notificationRoutes = require('./routes/notifications');
 const dailyUpdateRoutes = require('./routes/dailyUpdates');
 const workLogRoutes = require('./routes/workLogs');
+const officeLocationRoutes = require('./routes/officeLocations');
+
+const seedDefaultOffice = require('./utils/seedOfficeLocation');
 
 // Initialize cron jobs
 require('./utils/cronJobs');
@@ -84,6 +87,7 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/daily-updates', dailyUpdateRoutes);
 app.use('/api/work-logs', workLogRoutes);
+app.use('/api/office-locations', officeLocationRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -98,7 +102,10 @@ app.use('*', (req, res) => {
 
 // Database connection
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('Connected to MongoDB'))
+  .then(async () => {
+    console.log('Connected to MongoDB');
+    await seedDefaultOffice();
+  })
   .catch(err => console.error('MongoDB connection error:', err));
 
 const PORT = process.env.PORT || 5000;

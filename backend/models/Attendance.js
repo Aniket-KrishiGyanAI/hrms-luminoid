@@ -93,6 +93,13 @@ const attendanceSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+
+    officeLocation: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'OfficeLocation',
+      default: null,
+    },
+    officeLocationName: { type: String, default: null },
   },
   { timestamps: true },
 );
@@ -100,7 +107,7 @@ const attendanceSchema = new mongoose.Schema(
 // 🔒 One attendance per user per day
 attendanceSchema.index({ userId: 1, date: 1 }, { unique: true });
 
-attendanceSchema.pre("save", function (next) {
+attendanceSchema.pre("save", async function (next) {
   if (this.isManualEntry) return next();
 
   const {
@@ -111,7 +118,17 @@ attendanceSchema.pre("save", function (next) {
     OFFICE_START_TIME
   } = attendanceConfig;
 
-  const OFFICE_START_HOUR = OFFICE_START_TIME * 60; // in minutes
+  // Use per-office start time if available
+  let officeStartTime = OFFICE_START_TIME;
+  if (this.officeLocation) {
+    try {
+      const OfficeLocation = require('./OfficeLocation');
+      const office = await OfficeLocation.findById(this.officeLocation);
+      if (office) officeStartTime = office.startTime;
+    } catch (e) { /* fallback to default */ }
+  }
+
+  const OFFICE_START_HOUR = officeStartTime * 60; // in minutes
 
   if (this.checkIn && this.checkOut) {
     // Calculate total hours worked
