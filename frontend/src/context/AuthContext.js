@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import axios from 'axios';
 
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+
 const AuthContext = createContext();
 
 const authReducer = (state, action) => {
@@ -38,14 +40,12 @@ export const AuthProvider = ({ children }) => {
     const token = localStorage.getItem('token');
     if (token) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      // Fetch user data to restore session
-      axios.get(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/auth/me`)
+      axios.get(`${API_BASE_URL}/api/auth/me`)
         .then(response => {
           dispatch({ type: 'LOGIN_SUCCESS', payload: { user: response.data.user, accessToken: token } });
           dispatch({ type: 'SET_LOADING', payload: false });
         })
-        .catch(error => {
-          console.error('Token validation failed:', error);
+        .catch(() => {
           localStorage.removeItem('token');
           localStorage.removeItem('refreshToken');
           delete axios.defaults.headers.common['Authorization'];

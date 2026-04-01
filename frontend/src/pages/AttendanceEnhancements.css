@@ -1,515 +1,340 @@
-/* Attendance UI Professional Enhancements */
+/* ── Attendance Page Redesign ── */
 
-/* 1. Gradient backgrounds for check-in/out sections */
-.checkin-section {
-  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
-  border-radius: 12px;
-  padding: 1rem;
+/* Check-in / Check-out panels */
+.checkin-panel {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border: 2px solid #86efac;
+  border-radius: 16px;
+  padding: 1.25rem 1.5rem;
   transition: all 0.3s ease;
 }
 
-.checkout-section {
-  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
-  border-radius: 12px;
-  padding: 1rem;
+.checkout-panel {
+  background: linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%);
+  border: 2px solid #fda4af;
+  border-radius: 16px;
+  padding: 1.25rem 1.5rem;
   transition: all 0.3s ease;
 }
 
-/* 2. Animated buttons */
-.attendance-btn {
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+/* Legacy aliases kept for backward compat */
+.checkin-section { background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); border-radius: 12px; padding: 1rem; transition: all 0.3s ease; }
+.checkout-section { background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); border-radius: 12px; padding: 1rem; transition: all 0.3s ease; }
+
+/* Stat mini-cards */
+.stat-mini {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 1rem 1.25rem;
+  text-align: center;
+  transition: all 0.25s ease;
 }
 
-.attendance-btn:hover {
+.stat-mini:hover {
+  box-shadow: 0 6px 20px rgba(0,0,0,0.08);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.attendance-btn:active {
-  transform: translateY(0);
+.stat-mini .stat-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: #1e293b;
 }
 
-/* 3. Status badges with icons and rounded pills */
-.status-badge-enhanced {
-  border-radius: 20px;
-  padding: 6px 14px;
-  font-weight: 500;
+.stat-mini .stat-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+/* Attendance action buttons */
+.attendance-btn {
+  border-radius: 12px;
+  font-weight: 600;
+  padding: 0.6rem 1.4rem;
+  font-size: 0.9rem;
+  transition: all 0.25s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
 
-/* 4. Table row hover with shadow */
+.attendance-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+}
+
+.attendance-btn:active { transform: translateY(0); }
+
+/* Status badges */
+.status-badge-enhanced {
+  border-radius: 20px;
+  padding: 5px 12px;
+  font-weight: 600;
+  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  letter-spacing: 0.02em;
+}
+
+/* Time display */
+.time-display {
+  font-family: 'Courier New', monospace;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #1e293b;
+  letter-spacing: 0.5px;
+}
+
+/* Live clock widget */
+.live-clock {
+  background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+  border-radius: 12px;
+  padding: 8px 16px;
+  color: white;
+  box-shadow: 0 4px 12px rgba(30,58,138,0.3);
+}
+
+.live-clock .clock-time {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  line-height: 1.2;
+}
+
+.live-clock .clock-date {
+  font-size: 0.68rem;
+  opacity: 0.85;
+  margin-top: 1px;
+}
+
+/* Work mode selector */
+.work-mode-selector {
+  background: linear-gradient(135deg, #f8f9ff 0%, #eef2ff 100%);
+  border: 2px solid #e0e7ff;
+  border-radius: 16px;
+  padding: 1.25rem;
+}
+
+.work-mode-selector .btn-group label {
+  padding: 12px 8px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: all 0.25s ease;
+}
+
+.btn-check:checked + .btn-outline-primary {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  border-color: #4f46e5;
+  color: white;
+  box-shadow: 0 4px 12px rgba(79,70,229,0.35);
+}
+
+.btn-check:checked + .btn-outline-success {
+  background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+  border-color: #059669;
+  color: white;
+  box-shadow: 0 4px 12px rgba(5,150,105,0.35);
+}
+
+.btn-check:checked + .btn-outline-info {
+  background: linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%);
+  border-color: #0284c7;
+  color: white;
+  box-shadow: 0 4px 12px rgba(2,132,199,0.35);
+}
+
+/* Attendance history table */
 .attendance-table tbody tr {
   transition: all 0.2s ease;
   border-left: 3px solid transparent;
 }
 
 .attendance-table tbody tr:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  transform: translateX(2px);
+  background-color: #f8fafc !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 
-/* 5. Status-based row colors */
-.attendance-table tbody tr.status-present {
-  border-left-color: #10b981;
-  background-color: #f0fdf4;
-}
+.attendance-table tbody tr.status-present { border-left-color: #10b981; }
+.attendance-table tbody tr.status-absent  { border-left-color: #ef4444; }
+.attendance-table tbody tr.status-late    { border-left-color: #f59e0b; }
+.attendance-table tbody tr.status-halfday { border-left-color: #f59e0b; }
 
-.attendance-table tbody tr.status-absent {
-  border-left-color: #ef4444;
-  background-color: #fef2f2;
-}
-
-.attendance-table tbody tr.status-late {
-  border-left-color: #f59e0b;
-  background-color: #fffbeb;
-}
-
-.attendance-table tbody tr.status-halfday {
-  border-left-color: #f59e0b;
-  background-color: #fffbeb;
-}
-
-/* 6. Card hover effects */
+/* Attendance card hover */
 .attendance-card {
   transition: all 0.3s ease;
   border: 1px solid #e5e7eb;
 }
 
 .attendance-card:hover {
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+  transform: translateY(-3px);
 }
 
-/* 7. Progress bar colors */
-.progress-bar-success-enhanced {
-  background: linear-gradient(90deg, #10b981 0%, #059669 100%);
-}
+/* Progress bars */
+.progress-bar { transition: width 0.6s ease; }
 
-.progress-bar-warning-enhanced {
-  background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%);
-}
-
-.progress-bar-danger-enhanced {
-  background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
-}
-
-/* 8. Time display enhancement */
-.time-display {
-  font-family: 'Courier New', monospace;
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #1f2937;
-}
-
-/* 9. Loading skeleton */
-.skeleton-loader {
-  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
-  background-size: 200% 100%;
-  animation: loading 1.5s ease-in-out infinite;
-  border-radius: 4px;
-}
-
-@keyframes loading {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
-}
-
-/* 10. Smooth transitions */
-.smooth-transition {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Button ripple effect */
-@keyframes ripple {
-  0% {
-    transform: scale(0);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(4);
-    opacity: 0;
-  }
-}
-
-.btn-ripple {
-  position: relative;
-  overflow: hidden;
-}
-
+/* Ripple button */
+.btn-ripple { position: relative; overflow: hidden; }
 .btn-ripple::after {
   content: '';
   position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 0;
-  height: 0;
+  top: 50%; left: 50%;
+  width: 0; height: 0;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.5);
-  transform: translate(-50%, -50%);
-  transition: width 0.6s, height 0.6s;
+  background: rgba(255,255,255,0.4);
+  transform: translate(-50%,-50%);
+  transition: width 0.5s, height 0.5s;
+}
+.btn-ripple:active::after { width: 250px; height: 250px; }
+
+/* Smooth transitions */
+.smooth-transition { transition: all 0.3s cubic-bezier(0.4,0,0.2,1); }
+
+/* Fade-in animation */
+.fade-in-up { animation: fadeInUp 0.5s ease-out; }
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-.btn-ripple:active::after {
-  width: 300px;
-  height: 300px;
+/* Live pulse dot */
+@keyframes livePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(1.3); }
 }
+.live-dot { animation: livePulse 1.8s ease-in-out infinite; }
 
-/* Work Mode Selector Styles */
-.btn-check:checked + .btn-outline-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-color: #667eea;
-  color: white;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+/* Loading spinner */
+.loading-spinner {
+  display: inline-block;
+  width: 18px; height: 18px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: rgba(255,255,255,0.9);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-.btn-check:checked + .btn-outline-success {
-  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-  border-color: #11998e;
-  color: white;
-  box-shadow: 0 4px 12px rgba(17, 153, 142, 0.4);
-}
-
-.btn-check:checked + .btn-outline-info {
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-  border-color: #4facfe;
-  color: white;
-  box-shadow: 0 4px 12px rgba(79, 172, 254, 0.4);
-}
-
-.btn-outline-primary:hover,
-.btn-outline-success:hover,
-.btn-outline-info:hover {
-  transform: translateY(-2px);
-  transition: all 0.3s ease;
-}
-
-/* Work Mode Badge Styles */
-.badge.bg-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-}
-
-.badge.bg-success {
-  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%) !important;
-}
-
-.badge.bg-info {
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%) !important;
-}
-
-/* Admin Dashboard Enhancements */
-.dashboard-card {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
+/* ── Attendance History Table ── */
+.attendance-history-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
   overflow: hidden;
 }
 
-.dashboard-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-  transition: left 0.5s;
+.attendance-table tbody tr.att-row {
+  border-left: 3px solid transparent;
+  transition: background 0.18s ease, box-shadow 0.18s ease;
 }
 
-.dashboard-card:hover::before {
-  left: 100%;
+.attendance-table tbody tr.att-row:hover {
+  background-color: #f8fafc !important;
+  box-shadow: inset 0 0 0 1px #e2e8f0;
 }
 
-.dashboard-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+.attendance-table tbody tr.att-row.status-present { border-left-color: #10b981; }
+.attendance-table tbody tr.att-row.status-absent  { border-left-color: #ef4444; }
+.attendance-table tbody tr.att-row.status-late    { border-left-color: #f59e0b; }
+.attendance-table tbody tr.att-row.status-halfday { border-left-color: #f59e0b; }
+
+/* Time pills */
+.att-time-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 0.3px;
 }
 
-/* Pulse animation for live stats */
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.7;
-  }
+.att-time-in  { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+.att-time-out { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+
+/* Action buttons */
+.att-action-btn {
+  padding: 4px 9px !important;
+  border-radius: 8px !important;
+  font-size: 0.78rem !important;
+  line-height: 1.4 !important;
 }
 
-.stat-live {
-  animation: pulse 2s ease-in-out infinite;
+/* ── Office Locations Table ── */
+.office-locations-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  overflow: hidden;
 }
 
-/* Progress bar animations */
-.progress-bar {
-  transition: width 0.6s ease;
+.office-table tbody tr.office-row {
+  border-left: 3px solid #3b82f6;
+  transition: background 0.18s ease, box-shadow 0.18s ease;
 }
 
-/* Count up animation */
-@keyframes countUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.office-table tbody tr.office-row:hover {
+  background-color: #f8fafc !important;
+  box-shadow: inset 0 0 0 1px #e2e8f0;
 }
 
-.count-animate {
-  animation: countUp 0.5s ease-out;
+.office-time-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 20px;
+  white-space: nowrap;
 }
 
-/* Gradient text */
-.gradient-text {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
+.office-time-start { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+.office-time-end   { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
 
-/* Live indicator pulse animation */
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
-}
-
-/* Mobile Responsive Styles */
+/* ── Mobile ── */
 @media (max-width: 768px) {
-  .page-header h1 {
-    font-size: 1.5rem;
-  }
+  .page-header h1 { font-size: 1.4rem; }
 
-  .page-header p {
-    font-size: 0.875rem;
-  }
-
-  /* Stack cards vertically */
   .attendance-card .card-header {
     flex-direction: column;
     gap: 0.75rem;
     align-items: flex-start !important;
   }
 
-  .attendance-card .card-header > div {
-    width: 100%;
-  }
+  .attendance-card .card-header .form-select { width: 100% !important; }
 
-  .attendance-card .card-header .form-select {
-    width: 100% !important;
-  }
+  .checkin-panel, .checkout-panel,
+  .checkin-section, .checkout-section { padding: 0.85rem; }
 
-  /* Check-in/out sections */
-  .checkin-section,
-  .checkout-section {
-    padding: 0.75rem;
-    margin-bottom: 0.75rem;
-  }
+  .attendance-btn { width: 100%; justify-content: center; }
 
-  .checkin-section h6,
-  .checkout-section h6 {
-    font-size: 0.875rem;
-  }
+  .status-badge-enhanced { font-size: 0.7rem; padding: 4px 10px; }
 
-  .time-display {
-    font-size: 0.95rem;
-  }
-
-  /* Buttons */
-  .attendance-btn {
-    font-size: 0.875rem;
-    padding: 0.5rem 1rem;
-    width: 100%;
-  }
-
-  /* Status badges */
-  .status-badge-enhanced {
-    font-size: 0.75rem;
-    padding: 4px 10px;
-  }
-
-  /* Work mode selector */
-  .btn-group label {
-    padding: 8px !important;
-    font-size: 0.8rem;
-  }
-
-  .btn-group label i {
-    font-size: 1rem !important;
-  }
-
-  .btn-group label small {
-    font-size: 0.65rem !important;
-  }
-
-  /* Table responsive */
-  .table-responsive {
-    font-size: 0.8rem;
-  }
+  .work-mode-selector .btn-group label { padding: 8px 4px; font-size: 0.75rem; }
 
   .attendance-table th,
-  .attendance-table td {
-    padding: 0.5rem !important;
-    font-size: 0.75rem;
-  }
+  .attendance-table td { padding: 0.5rem !important; font-size: 0.75rem; }
 
-  .attendance-table th {
-    white-space: nowrap;
-  }
+  .time-display { font-size: 0.95rem; }
 
-  /* Hide less important columns on mobile */
-  .attendance-table th:nth-child(3),
-  .attendance-table td:nth-child(3) {
-    display: none;
-  }
-
-  /* Week summary cards */
-  .col-6 > div {
-    padding: 0.75rem !important;
-  }
-
-  /* Modal adjustments */
-  .modal-body {
-    padding: 1rem;
-  }
-
-  .modal-title {
-    font-size: 1.1rem;
-  }
-
-  /* Download modal */
-  .modal-header .rounded-circle {
-    width: 36px !important;
-    height: 36px !important;
-  }
-
-  .modal-header h5 {
-    font-size: 1rem;
-  }
-
-  /* Stats cards */
-  .text-center.p-3 h2,
-  .text-center.p-3 h3,
-  .text-center.p-3 h4 {
-    font-size: 1.5rem;
-  }
-
-  /* Progress bars */
-  .progress {
-    height: 6px !important;
-  }
-
-  /* Aggregated view cards */
-  .col-md-3,
-  .col-md-4,
-  .col-md-6 {
-    margin-bottom: 0.75rem;
-  }
-
-  /* Action buttons in table */
-  .d-flex.gap-2 {
-    flex-direction: column;
-    gap: 0.25rem !important;
-  }
-
-  .d-flex.gap-2 .btn {
-    width: 100%;
-  }
+  .stat-mini .stat-value { font-size: 1.3rem; }
 }
 
 @media (max-width: 576px) {
-  /* Extra small devices */
-  .page-header {
-    padding: 0.5rem;
-  }
+  .card-body { padding: 0.85rem; }
+  .card-header { padding: 0.85rem 1rem; font-size: 0.9rem; }
 
-  .page-header h1 {
-    font-size: 1.25rem;
-  }
+  .attendance-table th:nth-child(3),
+  .attendance-table td:nth-child(3) { display: none; }
 
-  .page-header i {
-    font-size: 1.25rem;
-  }
-
-  /* Card padding */
-  .card-body {
-    padding: 0.75rem;
-  }
-
-  .card-header {
-    padding: 0.75rem;
-    font-size: 0.9rem;
-  }
-
-  /* Hide employee column on very small screens */
-  .attendance-table th:nth-child(2),
-  .attendance-table td:nth-child(2) {
-    display: none;
-  }
-
-  /* Stack all columns */
-  .row.g-3 {
-    gap: 0.5rem !important;
-  }
-
-  /* Smaller icons */
-  .fa-2x {
-    font-size: 1.5rem !important;
-  }
-
-  /* Compact stats */
-  .text-center.p-3,
-  .text-center.p-2 {
-    padding: 0.5rem !important;
-  }
-
-  /* Modal full width */
-  .modal-dialog {
-    margin: 0.5rem;
-  }
-
-  /* Form controls */
-  .form-control,
-  .form-select {
-    font-size: 0.875rem;
-  }
-
-  /* Badge adjustments */
-  .badge {
-    font-size: 0.7rem;
-  }
-
-  /* Location modal */
-  .modal-body .rounded-circle {
-    width: 32px !important;
-    height: 32px !important;
-  }
-
-  /* Download button in header */
-  .card-header .btn-sm {
-    font-size: 0.75rem;
-    padding: 0.25rem 0.5rem;
-  }
-
-  /* Time display in header */
-  .card-header .px-3 {
-    padding: 0.5rem !important;
-  }
-
-  .card-header .px-3 div {
-    font-size: 0.8rem !important;
-  }
-
-  .card-header .px-3 small {
-    font-size: 0.6rem !important;
-  }
+  .modal-dialog { margin: 0.5rem; }
+  .badge { font-size: 0.68rem; }
 }

@@ -14,6 +14,14 @@ const Attendance = () => {
   const [loading, setLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [workMode, setWorkMode] = useState('OFFICE');
+  const [officeLocations, setOfficeLocations] = useState([]);
+  const [selectedOfficeId, setSelectedOfficeId] = useState('');
+  const [showOfficeModal, setShowOfficeModal] = useState(false);
+  const [editingOffice, setEditingOffice] = useState(null);
+  const [officeSaving, setOfficeSaving] = useState(false);
+  const [officeForm, setOfficeForm] = useState({ name: '', latitude: '', longitude: '', radiusMeters: 100, startTime: 9, endTime: 18, isActive: true });
+  const [fetchingGPS, setFetchingGPS] = useState(false);
+  const [mapAddress, setMapAddress] = useState('');
   const [weekSummary, setWeekSummary] = useState({
     presentDays: 0,
     totalHours: 0,
@@ -83,6 +91,7 @@ const Attendance = () => {
     if (user?.role && ["MANAGER", "HR", "ADMIN"].includes(user.role) && employees.length === 0) {
       fetchEmployees();
     }
+    fetchOfficeLocations();
 
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
@@ -122,6 +131,8 @@ const Attendance = () => {
           hasCheckedOut: Boolean(data.checkOutTime || data.checkOut),
           checkInTime: data.checkInTime || data.checkIn,
           checkOutTime: data.checkOutTime || data.checkOut,
+          workMode: data.workMode || null,
+          officeLocationName: data.officeLocationName || null,
         });
       }
     } catch (error) {
@@ -180,6 +191,93 @@ const Attendance = () => {
     }
   };
 
+  const fetchOfficeLocations = async () => {
+    try {
+      const res = await api.get('/api/office-locations');
+      setOfficeLocations(res.data);
+      if (res.data.length === 1) setSelectedOfficeId(res.data[0]._id);
+    } catch (e) {
+      console.error('Error fetching office locations:', e);
+    }
+  };
+
+  const openAddOffice = () => {
+    setEditingOffice(null);
+    setOfficeForm({ name: '', latitude: '', longitude: '', radiusMeters: 100, startTime: 9, endTime: 18, isActive: true });
+    setMapAddress('');
+    setShowOfficeModal(true);
+  };
+
+  const openEditOffice = (loc) => {
+    setEditingOffice(loc);
+    setOfficeForm({ name: loc.name, latitude: loc.latitude, longitude: loc.longitude, radiusMeters: loc.radiusMeters, startTime: loc.startTime, endTime: loc.endTime, isActive: loc.isActive });
+    setMapAddress('');
+    setShowOfficeModal(true);
+  };
+
+  const useCurrentLocationForOffice = () => {
+    if (!navigator.geolocation) return toast.error('Geolocation not supported');
+    setFetchingGPS(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = parseFloat(pos.coords.latitude.toFixed(6));
+        const lng = parseFloat(pos.coords.longitude.toFixed(6));
+        setOfficeForm(f => ({ ...f, latitude: lat, longitude: lng }));
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`, { headers: { 'User-Agent': 'HRMS-App' } });
+          const data = await res.json();
+          setMapAddress(data.display_name || '');
+        } catch { setMapAddress(''); }
+        setFetchingGPS(false);
+        toast.success('Current location captured!');
+      },
+      () => { toast.error('Could not get location. Allow location access.'); setFetchingGPS(false); },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  const handleSaveOffice = async () => {
+    if (!officeForm.name || !officeForm.latitude || !officeForm.longitude) {
+      return toast.error('Name, latitude and longitude are required');
+    }
+    if (officeForm.endTime <= officeForm.startTime) {
+      return toast.error('End time must be after start time');
+    }
+    setOfficeSaving(true);
+    try {
+      if (editingOffice) {
+        await api.put(`/api/office-locations/${editingOffice._id}`, officeForm);
+        toast.success('Office location updated');
+      } else {
+        await api.post('/api/office-locations', officeForm);
+        toast.success('Office location added');
+      }
+      setShowOfficeModal(false);
+      fetchOfficeLocations();
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Failed to save');
+    } finally {
+      setOfficeSaving(false);
+    }
+  };
+
+  const handleDeleteOffice = async (id) => {
+    if (!window.confirm('Delete this office location?')) return;
+    try {
+      await api.delete(`/api/office-locations/${id}`);
+      toast.success('Office location deleted');
+      fetchOfficeLocations();
+    } catch (e) {
+      toast.error('Failed to delete');
+    }
+  };
+
+  const formatHour = (h) => {
+    const suffix = h >= 12 ? 'PM' : 'AM';
+    const hour = h % 12 || 12;
+    return `${hour}:00 ${suffix}`;
+  };
+
   const fetchEmployees = async () => {
     try {
       const response = await api.get("/api/employees/directory");
@@ -218,7 +316,7 @@ const Attendance = () => {
         accuracy: position.coords.accuracy,
       };
 
-      await api.post("/api/attendance/checkin", { location, workMode });
+      await api.post("/api/attendance/checkin", { location, workMode, officeLocationId: workMode === 'OFFICE' ? selectedOfficeId : undefined });
 
       toast.success(`Checked in successfully (${workMode === 'OFFICE' ? '🏢 Office' : workMode === 'REMOTE' ? '🏠 Remote' : '🔄 Hybrid/Field'})`);
       
@@ -788,6 +886,35 @@ const Attendance = () => {
                             <small className="d-block text-muted" style={{ fontSize: '0.75rem' }}>Flexible / On-site</small>
                           </label>
                         </div>
+
+                        {/* Office location selector */}
+                        {workMode === 'OFFICE' && officeLocations.length > 0 && (
+                          <div className="mt-3">
+                            <label className="form-label fw-semibold mb-2 d-flex align-items-center">
+                              <i className="fas fa-building me-2" style={{ color: '#667eea' }}></i>
+                              Select Office Location
+                            </label>
+                            <Form.Select
+                              value={selectedOfficeId}
+                              onChange={(e) => setSelectedOfficeId(e.target.value)}
+                              style={{ borderRadius: '8px', border: '2px solid #e0e7ff' }}
+                            >
+                              <option value="">-- Choose your office --</option>
+                              {officeLocations.filter(o => o.isActive).map(o => (
+                                <option key={o._id} value={o._id}>
+                                  {o.name} &nbsp;({o.startTime}:00 – {o.endTime}:00)
+                                </option>
+                              ))}
+                            </Form.Select>
+                          </div>
+                        )}
+
+                        {workMode === 'OFFICE' && officeLocations.length === 0 && (
+                          <div className="mt-3 alert alert-warning py-2 mb-0">
+                            <i className="fas fa-exclamation-triangle me-2"></i>
+                            No office locations configured. Contact admin.
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -909,6 +1036,39 @@ const Attendance = () => {
                       </div>
                     </Col>
                   </Row>
+
+                  {/* Current Office Banner */}
+                  {todayStatus.hasCheckedIn && (
+                    <div className="mt-3 p-3 d-flex align-items-center justify-content-between" style={{ background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)', borderRadius: '12px', border: '2px solid #bfdbfe' }}>
+                      <div className="d-flex align-items-center">
+                        <div className="rounded-circle d-flex align-items-center justify-content-center me-3" style={{ width: '38px', height: '38px', background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)', flexShrink: 0 }}>
+                          <i className={`fas fa-${
+                            todayStatus.workMode === 'REMOTE' ? 'home' :
+                            todayStatus.workMode === 'HYBRID' ? 'sync-alt' : 'building'
+                          } text-white`} style={{ fontSize: '0.9rem' }}></i>
+                        </div>
+                        <div>
+                          <div className="fw-bold" style={{ color: '#1e3a8a', fontSize: '0.9rem' }}>
+                            {todayStatus.workMode === 'REMOTE' ? 'Working Remotely' :
+                             todayStatus.workMode === 'HYBRID' ? 'Hybrid / Field Work' :
+                             todayStatus.officeLocationName || 'Office'}
+                          </div>
+                          <small className="text-muted">Today's work location</small>
+                        </div>
+                      </div>
+                      <Badge
+                        style={{
+                          background: todayStatus.workMode === 'REMOTE' ? 'linear-gradient(135deg,#065f46,#10b981)' :
+                                      todayStatus.workMode === 'HYBRID' ? 'linear-gradient(135deg,#0369a1,#0ea5e9)' :
+                                      'linear-gradient(135deg,#1e3a8a,#3b82f6)',
+                          fontSize: '0.75rem', padding: '5px 10px', borderRadius: '8px'
+                        }}
+                      >
+                        {todayStatus.workMode === 'REMOTE' ? '🏠 Remote' :
+                         todayStatus.workMode === 'HYBRID' ? '🔄 Hybrid' : '🏢 Office'}
+                      </Badge>
+                    </div>
+                  )}
                   </>
                 )
               ) : (
@@ -1103,14 +1263,24 @@ const Attendance = () => {
       </Row>
 
       {/* Attendance History */}
-      <Card className="shadow-sm">
-        <Card.Header className="d-flex align-items-center justify-content-between bg-light flex-wrap">
-          <i className="fas fa-history me-2 text-info d-none d-sm-inline"></i>
-          <div className="mb-2 mb-md-0">Recent Attendance History</div>
+      <Card className="shadow-sm attendance-history-card">
+        <Card.Header className="d-flex align-items-center justify-content-between bg-white flex-wrap" style={{ borderBottom: '2px solid #e2e8f0', padding: '1rem 1.25rem' }}>
+          <div className="d-flex align-items-center gap-2 mb-2 mb-md-0">
+            <div className="rounded-circle d-flex align-items-center justify-content-center" style={{ width: '36px', height: '36px', background: 'linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%)' }}>
+              <i className="fas fa-history text-white" style={{ fontSize: '0.85rem' }}></i>
+            </div>
+            <div>
+              <span className="fw-semibold" style={{ fontSize: '0.95rem', color: '#1e293b' }}>Recent Attendance History</span>
+              {attendanceHistory.length > 0 && (
+                <Badge className="ms-2" style={{ background: 'linear-gradient(135deg, #0ea5e9, #6366f1)', fontSize: '0.7rem', borderRadius: '20px', padding: '3px 8px' }}>
+                  {attendanceHistory.length} records
+                </Badge>
+              )}
+            </div>
+          </div>
           <div className="d-flex align-items-center gap-2 flex-wrap">
             {user?.role && ["MANAGER", "HR", "ADMIN"].includes(user.role) && (
               <>
-                {/* Toggle for deleted records */}
                 {["ADMIN", "HR"].includes(user?.role) && (
                   <Form.Check
                     type="switch"
@@ -1124,27 +1294,22 @@ const Attendance = () => {
                 <Form.Select
                   size="sm"
                   value={selectedUser}
-                  onChange={(e) => {
-                    setSelectedUser(e.target.value);
-                    fetchAttendanceHistory(e.target.value);
-                  }}
-                  style={{ width: "220px", minWidth: "150px" }}
+                  onChange={(e) => { setSelectedUser(e.target.value); fetchAttendanceHistory(e.target.value); }}
+                  style={{ width: '200px', minWidth: '150px', borderRadius: '8px', border: '1.5px solid #e2e8f0' }}
                   className="mb-2 mb-md-0"
                 >
                   <option value="">All Employees</option>
                   {employees.map((emp) => (
-                    <option key={emp._id} value={emp._id}>
-                      {emp.firstName} {emp.lastName}
-                    </option>
+                    <option key={emp._id} value={emp._id}>{emp.firstName} {emp.lastName}</option>
                   ))}
                 </Form.Select>
                 <Button
                   size="sm"
-                  variant="outline-primary"
                   onClick={() => setShowDownloadModal(true)}
                   className="mb-2 mb-md-0"
+                  style={{ background: 'linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)', border: 'none', borderRadius: '8px', fontWeight: 600, padding: '6px 14px' }}
                 >
-                  <i className="fas fa-download me-1"></i>Download
+                  <i className="fas fa-download me-1"></i>Export
                 </Button>
               </>
             )}
@@ -1152,253 +1317,175 @@ const Attendance = () => {
         </Card.Header>
         <Card.Body style={{ padding: 0 }}>
           {attendanceHistory.length > 0 ? (
-            <div
-              className="table-responsive"
-              style={{ maxHeight: "400px", overflowY: "auto" }}
-            >
-              <Table hover className="mb-0 attendance-table">
-                <thead
-                  style={{
-                    position: "sticky",
-                    top: 0,
-                    zIndex: 10,
-                    background:
-                      "linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)",
-                    borderBottom: "2px solid #e2e8f0",
-                  }}
-                >
-                  <tr>
-                    <th
-                      style={{
-                        color: "#475569",
-                        fontWeight: "600",
-                        fontSize: "0.875rem",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.025em",
-                        padding: "1rem",
-                      }}
-                    >
-                      Date
-                    </th>
-                    {user?.role &&
-                      ["MANAGER", "HR", "ADMIN"].includes(user.role) && (
-                        <th
-                          style={{
-                            color: "#475569",
-                            fontWeight: "600",
-                            fontSize: "0.875rem",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.025em",
-                            padding: "1rem",
-                          }}
-                        >
-                          Employee
-                        </th>
-                      )}
-                    <th
-                      style={{
-                        color: "#475569",
-                        fontWeight: "600",
-                        fontSize: "0.875rem",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.025em",
-                        padding: "1rem",
-                      }}
-                    >
-                      Check In
-                    </th>
-                    <th
-                      style={{
-                        color: "#475569",
-                        fontWeight: "600",
-                        fontSize: "0.875rem",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.025em",
-                        padding: "1rem",
-                      }}
-                    >
-                      Check Out
-                    </th>
-                    <th
-                      style={{
-                        color: "#475569",
-                        fontWeight: "600",
-                        fontSize: "0.875rem",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.025em",
-                        padding: "1rem",
-                      }}
-                    >
-                      Total Hours
-                    </th>
-                    <th
-                      style={{
-                        color: "#475569",
-                        fontWeight: "600",
-                        fontSize: "0.875rem",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.025em",
-                        padding: "1rem",
-                      }}
-                    >
-                      Status
-                    </th>
-                    <th
-                      style={{
-                        color: "#475569",
-                        fontWeight: "600",
-                        fontSize: "0.875rem",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.025em",
-                        padding: "1rem",
-                      }}
-                    >
-                      Work Mode
-                    </th>
-                    <th
-                      style={{
-                        color: "#475569",
-                        fontWeight: "600",
-                        fontSize: "0.875rem",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.025em",
-                        padding: "1rem",
-                      }}
-                    >
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
+            <div className="table-responsive" style={{ maxHeight: '480px', overflowY: 'auto' }}>
+              <Table className="mb-0 attendance-table">
+                {(() => {
+                  const thStyle = { color: '#64748b', fontWeight: '600', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '0.85rem 1rem', whiteSpace: 'nowrap', background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', borderBottom: '2px solid #e2e8f0' };
+                  return (
+                    <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+                      <tr>
+                        <th style={thStyle}>Date</th>
+                        {user?.role && ["MANAGER", "HR", "ADMIN"].includes(user.role) && <th style={thStyle}>Employee</th>}
+                        <th style={thStyle}>Check In</th>
+                        <th style={thStyle}>Check Out</th>
+                        <th style={thStyle}>Duration</th>
+                        <th style={thStyle}>Status</th>
+                        <th style={thStyle}>Work Mode</th>
+                        <th style={thStyle}>Actions</th>
+                      </tr>
+                    </thead>
+                  );
+                })()}
                 <tbody>
                   {attendanceHistory.map((record) => {
-                    const statusClass = record.status === 'Present' ? 'status-present' : 
-                                       record.status === 'Absent' ? 'status-absent' : 
-                                       record.status === 'Late' ? 'status-late' : 
+                    const statusClass = record.status === 'Present' ? 'status-present' :
+                                       record.status === 'Absent' ? 'status-absent' :
+                                       record.status === 'Late' ? 'status-late' :
                                        record.status === 'Half Day' ? 'status-halfday' : '';
+                    const hours = record.totalHours || 0;
+                    const hoursColor = hours >= 8 ? '#059669' : hours >= 4 ? '#d97706' : '#dc2626';
+                    const hoursBarColor = hours >= 8 ? 'linear-gradient(90deg,#059669,#10b981)' : hours >= 4 ? 'linear-gradient(90deg,#d97706,#f59e0b)' : 'linear-gradient(90deg,#dc2626,#ef4444)';
+                    const dateObj = record.date ? new Date(record.date) : null;
+                    const dayName = dateObj ? dateObj.toLocaleDateString('en-IN', { weekday: 'short', timeZone: 'Asia/Kolkata' }) : '';
                     return (
-                    <tr key={record._id} className={`smooth-transition ${statusClass}`} style={record.isDeleted ? { backgroundColor: '#ffe6e6' } : {}}>
-                      <td>{formatDate(record.date)}</td>
-                      {user?.role &&
-                        ["MANAGER", "HR", "ADMIN"].includes(user.role) && (
-                          <td>
-                            {record.userId
-                              ? `${record.userId.firstName} ${record.userId.lastName}`
-                              : ""}
+                      <tr key={record._id} className={`smooth-transition att-row ${statusClass}`} style={record.isDeleted ? { backgroundColor: '#fff1f2' } : {}}>
+                        {/* Date */}
+                        <td style={{ padding: '0.85rem 1rem', verticalAlign: 'middle' }}>
+                          <div className="fw-semibold" style={{ fontSize: '0.875rem', color: '#1e293b' }}>{formatDate(record.date)}</div>
+                          <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{dayName}</div>
+                        </td>
+
+                        {/* Employee (admin/hr/manager only) */}
+                        {user?.role && ["MANAGER", "HR", "ADMIN"].includes(user.role) && (
+                          <td style={{ padding: '0.85rem 1rem', verticalAlign: 'middle' }}>
+                            {record.userId ? (
+                              <div className="d-flex align-items-center gap-2">
+                                <div className="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: '30px', height: '30px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', fontSize: '0.7rem', color: 'white', fontWeight: 700 }}>
+                                  {record.userId.firstName?.[0]}{record.userId.lastName?.[0]}
+                                </div>
+                                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#334155' }}>
+                                  {record.userId.firstName} {record.userId.lastName}
+                                </span>
+                              </div>
+                            ) : '—'}
                           </td>
                         )}
-                      <td>{formatTime(record.checkIn)}</td>
-                      <td>
-                        {formatTime(record.checkOut)}
-                        {record.isAutoCheckout && (
-                          <Badge 
-                            className="ms-2" 
-                            title="Automatically checked out at 6:00 PM"
-                            style={{
-                              backgroundColor: '#6366f1',
-                              color: '#ffffff',
-                              fontSize: '0.7rem',
-                              fontWeight: '600',
-                              padding: '4px 8px',
-                              borderRadius: '6px',
-                              border: '1px solid #4f46e5'
-                            }}
-                          >
-                            <i className="fas fa-robot me-1"></i>
-                            AUTO
-                          </Badge>
-                        )}
-                      </td>
-                      <td>{formatDuration(record.totalHours)}</td>
-                      <td>
-                        {getStatusBadge(record.status)}
-                        {record.isDeleted && (
-                          <Badge bg="danger" className="ms-2">
-                            <i className="fas fa-trash me-1"></i>
-                            Deleted
-                          </Badge>
-                        )}
-                      </td>
-                      <td>
-                        {getWorkModeBadge(record.workMode || 'OFFICE')}
-                        <Button
-                          variant="link"
-                          size="sm"
-                          className="p-0 ms-2"
-                          onClick={() => showLocationDetails(record)}
-                          title="View location details"
-                        >
-                          <i className="fas fa-map-marker-alt text-primary"></i>
-                        </Button>
-                      </td>
-                      <td>
-                        {/* Show deleted info for Admin/HR */}
-                        {record.isDeleted && ["ADMIN", "HR"].includes(user?.role) ? (
-                          <div className="text-muted small">
-                            <div>Deleted by: {record.deletedBy?.firstName} {record.deletedBy?.lastName}</div>
-                            <div>Reason: {record.deletionReason}</div>
+
+                        {/* Check In */}
+                        <td style={{ padding: '0.85rem 1rem', verticalAlign: 'middle' }}>
+                          {record.checkIn ? (
+                            <span className="att-time-pill att-time-in">
+                              <i className="fas fa-sign-in-alt me-1"></i>
+                              {formatTime(record.checkIn)}
+                            </span>
+                          ) : <span className="text-muted">—</span>}
+                        </td>
+
+                        {/* Check Out */}
+                        <td style={{ padding: '0.85rem 1rem', verticalAlign: 'middle' }}>
+                          <div className="d-flex align-items-center gap-1 flex-wrap">
+                            {record.checkOut ? (
+                              <span className="att-time-pill att-time-out">
+                                <i className="fas fa-sign-out-alt me-1"></i>
+                                {formatTime(record.checkOut)}
+                              </span>
+                            ) : <span className="text-muted">—</span>}
+                            {record.isAutoCheckout && (
+                              <span title="Auto checked-out" style={{ background: '#ede9fe', color: '#6d28d9', fontSize: '0.65rem', fontWeight: 700, padding: '2px 7px', borderRadius: '20px', border: '1px solid #c4b5fd', letterSpacing: '0.03em' }}>
+                                <i className="fas fa-robot me-1"></i>AUTO
+                              </span>
+                            )}
                           </div>
-                        ) : (
-                          <>
-                            {/* Admin/HR: Show Edit/Delete buttons */}
-                            {["ADMIN", "HR"].includes(user?.role) && !record.isDeleted && (
-                              <div className="d-flex gap-2">
-                                <Button
-                                  variant="outline-primary"
-                                  size="sm"
-                                  onClick={() => handleEditClick(record)}
-                                  title="Edit attendance"
-                                  style={{ padding: '4px 12px' }}
-                                >
-                                  <i className="fas fa-edit"></i>
-                                </Button>
-                                <Button
-                                  variant="outline-danger"
-                                  size="sm"
-                                  onClick={() => handleDeleteClick(record)}
-                                  title="Delete attendance"
-                                  style={{ padding: '4px 12px' }}
-                                >
-                                  <i className="fas fa-trash"></i>
-                                </Button>
-                              </div>
-                            )}
+                        </td>
 
-                            {/* Employee: Show edited badge and view icon */}
-                            {user?.role === "EMPLOYEE" && record.lastEditedBy && (
-                              <div className="d-flex align-items-center gap-2">
-                                <Badge bg="info" className="me-1">
-                                  <i className="fas fa-pencil-alt me-1"></i>
-                                  Edited
-                                </Badge>
-                                <Button
-                                  variant="link"
-                                  size="sm"
-                                  className="p-0"
-                                  onClick={() => handleViewDetails(record)}
-                                  title="View edit details"
-                                >
-                                  <i className="fas fa-eye text-info"></i>
-                                </Button>
+                        {/* Duration */}
+                        <td style={{ padding: '0.85rem 1rem', verticalAlign: 'middle', minWidth: '110px' }}>
+                          {hours > 0 ? (
+                            <div>
+                              <div className="fw-bold mb-1" style={{ fontSize: '0.85rem', color: hoursColor }}>{formatDuration(hours)}</div>
+                              <div className="progress" style={{ height: '4px', borderRadius: '4px', background: '#e2e8f0' }}>
+                                <div style={{ width: `${Math.min((hours / 9) * 100, 100)}%`, background: hoursBarColor, height: '100%', borderRadius: '4px', transition: 'width 0.6s ease' }}></div>
                               </div>
-                            )}
+                            </div>
+                          ) : <span className="text-muted">—</span>}
+                        </td>
 
-                            {/* Employee: No edit - show nothing */}
-                            {user?.role === "EMPLOYEE" && !record.lastEditedBy && (
-                              <span className="text-muted">-</span>
+                        {/* Status */}
+                        <td style={{ padding: '0.85rem 1rem', verticalAlign: 'middle' }}>
+                          <div className="d-flex flex-column gap-1">
+                            {getStatusBadge(record.status)}
+                            {record.isDeleted && (
+                              <Badge bg="danger" style={{ fontSize: '0.65rem', borderRadius: '20px' }}>
+                                <i className="fas fa-trash me-1"></i>Deleted
+                              </Badge>
                             )}
-                          </>
-                        )}
-                      </td>
-                    </tr>
+                          </div>
+                        </td>
+
+                        {/* Work Mode (merged with Office) */}
+                        <td style={{ padding: '0.85rem 1rem', verticalAlign: 'middle' }}>
+                          <div className="d-flex flex-column gap-1">
+                            <div className="d-flex align-items-center gap-1">
+                              {getWorkModeBadge(record.workMode || 'OFFICE')}
+                              <Button variant="link" size="sm" className="p-0" onClick={() => showLocationDetails(record)} title="View location">
+                                <i className="fas fa-map-marker-alt" style={{ color: '#94a3b8', fontSize: '0.8rem' }}></i>
+                              </Button>
+                            </div>
+                            {record.officeLocationName && (
+                              <span style={{ fontSize: '0.7rem', color: '#64748b', background: '#f1f5f9', borderRadius: '6px', padding: '1px 6px', display: 'inline-block' }}>
+                                <i className="fas fa-building me-1" style={{ fontSize: '0.6rem' }}></i>
+                                {record.officeLocationName}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Actions */}
+                        <td style={{ padding: '0.85rem 1rem', verticalAlign: 'middle' }}>
+                          {record.isDeleted && ["ADMIN", "HR"].includes(user?.role) ? (
+                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', maxWidth: '160px' }}>
+                              <div><i className="fas fa-user me-1"></i>{record.deletedBy?.firstName} {record.deletedBy?.lastName}</div>
+                              <div className="text-truncate" title={record.deletionReason}><i className="fas fa-comment me-1"></i>{record.deletionReason}</div>
+                            </div>
+                          ) : (
+                            <div className="d-flex align-items-center gap-1">
+                              {["ADMIN", "HR"].includes(user?.role) && !record.isDeleted && (
+                                <>
+                                  <Button variant="outline-primary" size="sm" onClick={() => handleEditClick(record)} title="Edit" className="att-action-btn">
+                                    <i className="fas fa-edit"></i>
+                                  </Button>
+                                  <Button variant="outline-danger" size="sm" onClick={() => handleDeleteClick(record)} title="Delete" className="att-action-btn">
+                                    <i className="fas fa-trash"></i>
+                                  </Button>
+                                </>
+                              )}
+                              {user?.role === "EMPLOYEE" && record.lastEditedBy && (
+                                <>
+                                  <Badge bg="info" style={{ fontSize: '0.65rem', borderRadius: '20px' }}>
+                                    <i className="fas fa-pencil-alt me-1"></i>Edited
+                                  </Badge>
+                                  <Button variant="link" size="sm" className="p-0" onClick={() => handleViewDetails(record)} title="View details">
+                                    <i className="fas fa-eye text-info"></i>
+                                  </Button>
+                                </>
+                              )}
+                              {user?.role === "EMPLOYEE" && !record.lastEditedBy && <span className="text-muted">—</span>}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
                     );
                   })}
                 </tbody>
               </Table>
             </div>
           ) : (
-            <div className="text-center py-4">
-              <i className="fas fa-calendar-times text-muted fs-1 mb-3"></i>
-              <p className="text-muted mb-0">No attendance records found</p>
+            <div className="text-center py-5">
+              <div className="mb-3" style={{ width: '64px', height: '64px', background: 'linear-gradient(135deg, #e0f2fe, #dbeafe)', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                <i className="fas fa-calendar-times" style={{ fontSize: '1.5rem', color: '#93c5fd' }}></i>
+              </div>
+              <p className="fw-semibold mb-1" style={{ color: '#475569' }}>No attendance records found</p>
+              <small className="text-muted">Records will appear here once attendance is marked</small>
             </div>
           )}
         </Card.Body>
@@ -1750,6 +1837,428 @@ const Attendance = () => {
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowDetailsModal(false)}>
             Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* ── Office Locations Management (Admin / HR only) ── */}
+      {['ADMIN', 'HR'].includes(user?.role) && (
+        <Card className="shadow-sm mt-4 office-locations-card">
+          <Card.Header className="d-flex align-items-center justify-content-between bg-white flex-wrap" style={{ borderBottom: '2px solid #e2e8f0', padding: '1rem 1.25rem' }}>
+            <div className="d-flex align-items-center gap-2">
+              <div className="rounded-circle d-flex align-items-center justify-content-center" style={{ width: '36px', height: '36px', background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)' }}>
+                <i className="fas fa-building text-white" style={{ fontSize: '0.85rem' }}></i>
+              </div>
+              <div>
+                <span className="fw-semibold" style={{ fontSize: '0.95rem', color: '#1e293b' }}>Office Locations</span>
+                {officeLocations.length > 0 && (
+                  <Badge className="ms-2" style={{ background: 'linear-gradient(135deg, #1e3a8a, #3b82f6)', fontSize: '0.7rem', borderRadius: '20px', padding: '3px 8px' }}>
+                    {officeLocations.length} {officeLocations.length === 1 ? 'location' : 'locations'}
+                  </Badge>
+                )}
+              </div>
+            </div>
+            <Button
+              size="sm"
+              onClick={openAddOffice}
+              style={{ background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)', border: 'none', borderRadius: '8px', fontWeight: 600, padding: '6px 14px', boxShadow: '0 2px 8px rgba(16,185,129,0.35)' }}
+            >
+              <i className="fas fa-plus me-1"></i>Add Location
+            </Button>
+          </Card.Header>
+          <Card.Body style={{ padding: 0 }}>
+            {officeLocations.length === 0 ? (
+              <div className="text-center py-5">
+                <div className="mb-3" style={{ width: '64px', height: '64px', background: 'linear-gradient(135deg, #eff6ff, #dbeafe)', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <i className="fas fa-map-marker-alt" style={{ fontSize: '1.5rem', color: '#93c5fd' }}></i>
+                </div>
+                <p className="fw-semibold mb-1" style={{ color: '#475569' }}>No office locations added yet</p>
+                <small className="text-muted d-block mb-3">Add your first office to enable GPS-based check-in</small>
+                <Button
+                  size="sm"
+                  onClick={openAddOffice}
+                  style={{ background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)', border: 'none', borderRadius: '8px', fontWeight: 600, padding: '7px 18px', boxShadow: '0 2px 8px rgba(16,185,129,0.35)' }}
+                >
+                  <i className="fas fa-plus me-1"></i>Add First Location
+                </Button>
+              </div>
+            ) : (
+              <div className="table-responsive">
+                <Table className="mb-0 office-table">
+                  <thead>
+                    <tr>
+                      {['Location', 'Coordinates', 'GPS Radius', 'Working Hours', 'Status', 'Actions'].map(h => (
+                        <th key={h} style={{ color: '#64748b', fontWeight: '600', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '0.85rem 1rem', whiteSpace: 'nowrap', background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', borderBottom: '2px solid #e2e8f0' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {officeLocations.map((loc, idx) => (
+                      <tr key={loc._id} className="office-row smooth-transition">
+                        {/* Location Name */}
+                        <td style={{ padding: '0.9rem 1rem', verticalAlign: 'middle' }}>
+                          <div className="d-flex align-items-center gap-2">
+                            <div className="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: '34px', height: '34px', background: loc.isActive ? 'linear-gradient(135deg, #1e3a8a, #3b82f6)' : '#e2e8f0' }}>
+                              <i className="fas fa-building" style={{ fontSize: '0.75rem', color: loc.isActive ? 'white' : '#94a3b8' }}></i>
+                            </div>
+                            <div>
+                              <div className="fw-semibold" style={{ fontSize: '0.875rem', color: '#1e293b' }}>{loc.name}</div>
+                              <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>ID #{idx + 1}</div>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Coordinates */}
+                        <td style={{ padding: '0.9rem 1rem', verticalAlign: 'middle' }}>
+                          <div className="d-flex align-items-center gap-2">
+                            <div>
+                              <div style={{ fontSize: '0.78rem', color: '#475569', fontFamily: 'monospace', fontWeight: 600 }}>
+                                {Number(loc.latitude).toFixed(5)}, {Number(loc.longitude).toFixed(5)}
+                              </div>
+                              <a
+                                href={`https://www.google.com/maps?q=${loc.latitude},${loc.longitude}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ fontSize: '0.7rem', color: '#3b82f6', textDecoration: 'none', fontWeight: 600 }}
+                              >
+                                <i className="fas fa-map-marked-alt me-1"></i>View on Maps
+                              </a>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Radius */}
+                        <td style={{ padding: '0.9rem 1rem', verticalAlign: 'middle' }}>
+                          <div className="d-flex align-items-center gap-1">
+                            <div className="rounded-circle d-flex align-items-center justify-content-center" style={{ width: '28px', height: '28px', background: '#eff6ff', flexShrink: 0 }}>
+                              <i className="fas fa-circle-notch" style={{ fontSize: '0.65rem', color: '#3b82f6' }}></i>
+                            </div>
+                            <div>
+                              <span className="fw-bold" style={{ fontSize: '0.875rem', color: '#1e3a8a' }}>{loc.radiusMeters}</span>
+                              <span style={{ fontSize: '0.75rem', color: '#64748b' }}> m</span>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Working Hours */}
+                        <td style={{ padding: '0.9rem 1rem', verticalAlign: 'middle' }}>
+                          <div className="d-flex align-items-center gap-1">
+                            <span className="office-time-pill office-time-start">
+                              <i className="fas fa-sign-in-alt me-1"></i>{formatHour(loc.startTime)}
+                            </span>
+                            <i className="fas fa-arrow-right" style={{ color: '#cbd5e1', fontSize: '0.65rem' }}></i>
+                            <span className="office-time-pill office-time-end">
+                              <i className="fas fa-sign-out-alt me-1"></i>{formatHour(loc.endTime)}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '3px' }}>
+                            {loc.endTime - loc.startTime > 0 ? `${loc.endTime - loc.startTime}h shift` : ''}
+                          </div>
+                        </td>
+
+                        {/* Status */}
+                        <td style={{ padding: '0.9rem 1rem', verticalAlign: 'middle' }}>
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '5px',
+                            fontSize: '0.75rem', fontWeight: 700, padding: '4px 10px', borderRadius: '20px',
+                            background: loc.isActive ? '#dcfce7' : '#fee2e2',
+                            color: loc.isActive ? '#166534' : '#991b1b',
+                            border: `1px solid ${loc.isActive ? '#bbf7d0' : '#fecaca'}`
+                          }}>
+                            <i className={`fas fa-${loc.isActive ? 'check-circle' : 'times-circle'}`}></i>
+                            {loc.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+
+                        {/* Actions */}
+                        <td style={{ padding: '0.9rem 1rem', verticalAlign: 'middle' }}>
+                          <div className="d-flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => openEditOffice(loc)}
+                              title="Edit location"
+                              className="att-action-btn"
+                              variant="outline-primary"
+                            >
+                              <i className="fas fa-edit"></i>
+                            </Button>
+                            {user?.role === 'ADMIN' && (
+                              <Button
+                                size="sm"
+                                onClick={() => handleDeleteOffice(loc._id)}
+                                title="Delete location"
+                                className="att-action-btn"
+                                variant="outline-danger"
+                              >
+                                <i className="fas fa-trash"></i>
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              </div>
+            )}
+          </Card.Body>
+        </Card>
+      )}
+
+      {/* Office Location Add/Edit Modal */}
+      <Modal show={showOfficeModal} onHide={() => setShowOfficeModal(false)} size="lg" centered>
+        <Modal.Header closeButton style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)', border: 'none', padding: '1.25rem 1.5rem' }}>
+          <Modal.Title className="d-flex align-items-center text-white">
+            <div className="rounded-circle d-flex align-items-center justify-content-center me-3" style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.2)' }}>
+              <i className={`fas fa-${editingOffice ? 'edit' : 'building'}`}></i>
+            </div>
+            <div>
+              <div style={{ fontSize: '1rem', fontWeight: 700 }}>{editingOffice ? 'Edit Office Location' : 'Add Office Location'}</div>
+              <div style={{ fontSize: '0.75rem', opacity: 0.85, fontWeight: 400 }}>{editingOffice ? 'Update location details and working hours' : 'Configure a new office with GPS boundary and timings'}</div>
+            </div>
+          </Modal.Title>
+        </Modal.Header>
+
+        <Modal.Body style={{ padding: '1.5rem', background: '#f8fafc' }}>
+          <Form>
+            {/* Office Name */}
+            <div className="mb-4 p-3" style={{ background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+              <div className="d-flex align-items-center mb-3">
+                <div className="rounded-circle d-flex align-items-center justify-content-center me-2" style={{ width: '28px', height: '28px', background: '#eff6ff' }}>
+                  <i className="fas fa-tag" style={{ color: '#3b82f6', fontSize: '0.75rem' }}></i>
+                </div>
+                <span className="fw-semibold" style={{ color: '#1e3a8a', fontSize: '0.875rem' }}>Office Details</span>
+              </div>
+              <Form.Group>
+                <Form.Label className="fw-semibold text-secondary" style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Office Name <span className="text-danger">*</span>
+                </Form.Label>
+                <Form.Control
+                  placeholder="e.g. Pune HQ, Mumbai Branch, Delhi Office"
+                  value={officeForm.name}
+                  onChange={e => setOfficeForm({ ...officeForm, name: e.target.value })}
+                  style={{ borderRadius: '8px', border: '2px solid #e2e8f0', padding: '10px 14px', fontSize: '0.95rem' }}
+                />
+              </Form.Group>
+            </div>
+
+            {/* GPS Coordinates */}
+            <div className="mb-4 p-3" style={{ background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+              <div className="d-flex align-items-center justify-content-between mb-3">
+                <div className="d-flex align-items-center">
+                  <div className="rounded-circle d-flex align-items-center justify-content-center me-2" style={{ width: '28px', height: '28px', background: '#f0fdf4' }}>
+                    <i className="fas fa-map-marker-alt" style={{ color: '#10b981', fontSize: '0.75rem' }}></i>
+                  </div>
+                  <span className="fw-semibold" style={{ color: '#065f46', fontSize: '0.875rem' }}>Office Location on Map</span>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={useCurrentLocationForOffice}
+                  disabled={fetchingGPS}
+                  style={{ background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)', border: 'none', borderRadius: '8px', fontWeight: 600, fontSize: '0.8rem', padding: '6px 14px' }}
+                >
+                  {fetchingGPS
+                    ? <><span className="spinner-border spinner-border-sm me-1"></span>Locating...</>
+                    : <><i className="fas fa-crosshairs me-1"></i>Use My Current Location</>}
+                </Button>
+              </div>
+
+              {/* Map iframe — shows pin at selected coords, click opens Google Maps */}
+              {officeForm.latitude && officeForm.longitude ? (
+                <>
+                  <div style={{ borderRadius: '10px', overflow: 'hidden', border: '2px solid #bbf7d0', marginBottom: '12px', position: 'relative' }}>
+                    <iframe
+                      title="office-map"
+                      width="100%"
+                      height="220"
+                      frameBorder="0"
+                      style={{ display: 'block' }}
+                      src={`https://www.openstreetmap.org/export/embed.html?bbox=${Number(officeForm.longitude)-0.003}%2C${Number(officeForm.latitude)-0.003}%2C${Number(officeForm.longitude)+0.003}%2C${Number(officeForm.latitude)+0.003}&layer=mapnik&marker=${officeForm.latitude}%2C${officeForm.longitude}`}
+                    />
+                    <div style={{ position: 'absolute', top: 8, right: 8 }}>
+                      <a
+                        href={`https://www.google.com/maps?q=${officeForm.latitude},${officeForm.longitude}`}
+                        target="_blank" rel="noopener noreferrer"
+                        style={{ background: 'white', borderRadius: '6px', padding: '4px 10px', fontSize: '0.75rem', color: '#3b82f6', fontWeight: 600, textDecoration: 'none', boxShadow: '0 1px 4px rgba(0,0,0,0.15)', display: 'flex', alignItems: 'center', gap: 4 }}
+                      >
+                        <i className="fas fa-external-link-alt"></i> Google Maps
+                      </a>
+                    </div>
+                  </div>
+                  {mapAddress && (
+                    <div className="mb-3 p-2 d-flex align-items-start" style={{ background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+                      <i className="fas fa-map-marker-alt me-2 mt-1" style={{ color: '#10b981', fontSize: '0.8rem' }}></i>
+                      <small style={{ color: '#065f46', fontSize: '0.8rem' }}>{mapAddress}</small>
+                    </div>
+                  )}
+                  <Row className="g-2">
+                    <Col md={6}>
+                      <Form.Label className="fw-semibold text-secondary" style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Latitude</Form.Label>
+                      <Form.Control
+                        type="number" step="any"
+                        value={officeForm.latitude}
+                        onChange={async e => {
+                          const lat = e.target.value;
+                          setOfficeForm(f => ({ ...f, latitude: lat }));
+                          if (lat && officeForm.longitude) {
+                            try {
+                              const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${officeForm.longitude}`, { headers: { 'User-Agent': 'HRMS-App' } });
+                              const data = await res.json();
+                              setMapAddress(data.display_name || '');
+                            } catch { setMapAddress(''); }
+                          }
+                        }}
+                        style={{ borderRadius: '8px', border: '2px solid #e2e8f0', padding: '8px 12px', fontSize: '0.85rem' }}
+                      />
+                    </Col>
+                    <Col md={6}>
+                      <Form.Label className="fw-semibold text-secondary" style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Longitude</Form.Label>
+                      <Form.Control
+                        type="number" step="any"
+                        value={officeForm.longitude}
+                        onChange={async e => {
+                          const lng = e.target.value;
+                          setOfficeForm(f => ({ ...f, longitude: lng }));
+                          if (officeForm.latitude && lng) {
+                            try {
+                              const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${officeForm.latitude}&lon=${lng}`, { headers: { 'User-Agent': 'HRMS-App' } });
+                              const data = await res.json();
+                              setMapAddress(data.display_name || '');
+                            } catch { setMapAddress(''); }
+                          }
+                        }}
+                        style={{ borderRadius: '8px', border: '2px solid #e2e8f0', padding: '8px 12px', fontSize: '0.85rem' }}
+                      />
+                    </Col>
+                  </Row>
+                  <Form.Text className="text-muted" style={{ fontSize: '0.75rem' }}>You can fine-tune the coordinates manually if needed.</Form.Text>
+                </>
+              ) : (
+                <div className="text-center py-4" style={{ background: '#f8fafc', borderRadius: '10px', border: '2px dashed #cbd5e1' }}>
+                  <i className="fas fa-map-marked-alt fa-2x mb-3" style={{ color: '#94a3b8' }}></i>
+                  <p className="text-muted mb-3" style={{ fontSize: '0.875rem' }}>No location selected yet</p>
+                  <Button
+                    onClick={useCurrentLocationForOffice}
+                    disabled={fetchingGPS}
+                    style={{ background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)', border: 'none', borderRadius: '8px', fontWeight: 600, padding: '10px 20px' }}
+                  >
+                    {fetchingGPS
+                      ? <><span className="spinner-border spinner-border-sm me-2"></span>Getting Location...</>
+                      : <><i className="fas fa-crosshairs me-2"></i>Use My Current Location</>}
+                  </Button>
+                  <p className="text-muted mt-3 mb-0" style={{ fontSize: '0.78rem' }}>
+                    <i className="fas fa-info-circle me-1"></i>
+                    Stand at the office entrance and tap the button above
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Radius + Working Hours */}
+            <div className="mb-4 p-3" style={{ background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+              <div className="d-flex align-items-center mb-3">
+                <div className="rounded-circle d-flex align-items-center justify-content-center me-2" style={{ width: '28px', height: '28px', background: '#fef3c7' }}>
+                  <i className="fas fa-clock" style={{ color: '#d97706', fontSize: '0.75rem' }}></i>
+                </div>
+                <span className="fw-semibold" style={{ color: '#92400e', fontSize: '0.875rem' }}>Boundary & Working Hours</span>
+              </div>
+              <Row className="g-3">
+                <Col md={4}>
+                  <Form.Label className="fw-semibold text-secondary" style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Allowed Radius</Form.Label>
+                  <div className="position-relative">
+                    <Form.Control
+                      type="number" min="10" max="1000"
+                      value={officeForm.radiusMeters}
+                      onChange={e => setOfficeForm({ ...officeForm, radiusMeters: Number(e.target.value) })}
+                      style={{ borderRadius: '8px', border: '2px solid #e2e8f0', padding: '10px 48px 10px 14px' }}
+                    />
+                    <span className="position-absolute" style={{ right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '0.8rem', fontWeight: 600 }}>m</span>
+                  </div>
+                  <Form.Text className="text-muted" style={{ fontSize: '0.75rem' }}>GPS check-in boundary</Form.Text>
+                </Col>
+                <Col md={4}>
+                  <Form.Label className="fw-semibold text-secondary" style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Start Time</Form.Label>
+                  <div className="position-relative">
+                    <Form.Select
+                      value={officeForm.startTime}
+                      onChange={e => setOfficeForm({ ...officeForm, startTime: Number(e.target.value) })}
+                      style={{ borderRadius: '8px', border: '2px solid #e2e8f0', padding: '10px 14px 10px 38px' }}
+                    >
+                      {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{formatHour(i)}</option>)}
+                    </Form.Select>
+                    <i className="fas fa-sign-in-alt position-absolute" style={{ left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#10b981', fontSize: '0.8rem', pointerEvents: 'none' }}></i>
+                  </div>
+                  <Form.Text className="text-muted" style={{ fontSize: '0.75rem' }}>On-time check-in before this</Form.Text>
+                </Col>
+                <Col md={4}>
+                  <Form.Label className="fw-semibold text-secondary" style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>End Time</Form.Label>
+                  <div className="position-relative">
+                    <Form.Select
+                      value={officeForm.endTime}
+                      onChange={e => setOfficeForm({ ...officeForm, endTime: Number(e.target.value) })}
+                      style={{ borderRadius: '8px', border: '2px solid #e2e8f0', padding: '10px 14px 10px 38px' }}
+                    >
+                      {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{formatHour(i)}</option>)}
+                    </Form.Select>
+                    <i className="fas fa-sign-out-alt position-absolute" style={{ left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#ef4444', fontSize: '0.8rem', pointerEvents: 'none' }}></i>
+                  </div>
+                  <Form.Text className="text-muted" style={{ fontSize: '0.75rem' }}>Auto checkout reference time</Form.Text>
+                </Col>
+              </Row>
+              {/* Working hours preview */}
+              {(() => {
+                const shiftHours = officeForm.endTime - officeForm.startTime;
+                const isValid = shiftHours > 0;
+                return (
+                  <div className="mt-3 p-2 d-flex align-items-center justify-content-between" style={{ background: isValid ? '#fef9f0' : '#fef2f2', borderRadius: '8px', border: `1px solid ${isValid ? '#fde68a' : '#fecaca'}` }}>
+                    <div className="d-flex align-items-center">
+                      <i className={`fas fa-${isValid ? 'info-circle' : 'exclamation-triangle'} me-2`} style={{ color: isValid ? '#d97706' : '#dc2626' }}></i>
+                      <small style={{ color: isValid ? '#92400e' : '#991b1b', fontWeight: 600 }}>
+                        {isValid ? 'Working Hours Preview' : 'End time must be after start time'}
+                      </small>
+                    </div>
+                    <div className="d-flex align-items-center gap-2">
+                      <Badge bg="success" style={{ fontSize: '0.75rem' }}>{formatHour(officeForm.startTime)}</Badge>
+                      <i className="fas fa-arrow-right" style={{ color: isValid ? '#d97706' : '#dc2626', fontSize: '0.7rem' }}></i>
+                      <Badge bg={isValid ? 'danger' : 'secondary'} style={{ fontSize: '0.75rem' }}>{formatHour(officeForm.endTime)}</Badge>
+                      {isValid && (
+                        <span style={{ color: '#92400e', fontSize: '0.78rem', fontWeight: 600 }}>({shiftHours}h shift)</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Active toggle */}
+            <div className="p-3 d-flex align-items-center justify-content-between" style={{ background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+              <div className="d-flex align-items-center">
+                <div className="rounded-circle d-flex align-items-center justify-content-center me-3" style={{ width: '36px', height: '36px', background: officeForm.isActive ? '#f0fdf4' : '#fef2f2' }}>
+                  <i className={`fas fa-${officeForm.isActive ? 'check-circle' : 'times-circle'}`} style={{ color: officeForm.isActive ? '#10b981' : '#ef4444' }}></i>
+                </div>
+                <div>
+                  <div className="fw-semibold" style={{ fontSize: '0.9rem' }}>Location Status</div>
+                  <small className="text-muted">{officeForm.isActive ? 'Visible to employees for check-in' : 'Hidden from employees'}</small>
+                </div>
+              </div>
+              <Form.Check
+                type="switch"
+                checked={officeForm.isActive}
+                onChange={e => setOfficeForm({ ...officeForm, isActive: e.target.checked })}
+                style={{ transform: 'scale(1.3)' }}
+              />
+            </div>
+          </Form>
+        </Modal.Body>
+
+        <Modal.Footer style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '1rem 1.5rem' }}>
+          <Button variant="light" onClick={() => setShowOfficeModal(false)} disabled={officeSaving} style={{ borderRadius: '8px', border: '2px solid #e2e8f0', fontWeight: 600, padding: '8px 20px' }}>
+            Cancel
+          </Button>
+          <Button onClick={handleSaveOffice} disabled={officeSaving} style={{ borderRadius: '8px', background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)', border: 'none', fontWeight: 600, padding: '8px 24px', boxShadow: '0 4px 12px rgba(59,130,246,0.35)' }}>
+            {officeSaving
+              ? <><span className="spinner-border spinner-border-sm me-2"></span>Saving...</>
+              : <><i className="fas fa-save me-2"></i>{editingOffice ? 'Update Location' : 'Add Location'}</>}
           </Button>
         </Modal.Footer>
       </Modal>
