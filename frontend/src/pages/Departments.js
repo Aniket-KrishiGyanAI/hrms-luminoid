@@ -327,14 +327,14 @@ const Departments = () => {
   const uniqueLocations = [...new Set(departments.map(d => d.location).filter(Boolean))].sort();
 
   return (
-    <Container fluid className="p-4" style={{ background: '#f8f9fa', minHeight: '100vh' }}>
+    <Container fluid className="p-4" style={{ background: '#f0fdf4', minHeight: '100vh' }}>
       <style>{`
         .dept-header {
-          background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+          background: linear-gradient(135deg, #064e3b 0%, #065f46 40%, #10b981 100%);
           border-radius: 16px;
           padding: 32px;
           margin-bottom: 24px;
-          box-shadow: 0 10px 30px rgba(30, 58, 138, 0.3);
+          box-shadow: 0 10px 30px rgba(16,185,129,0.3);
         }
         .dept-card {
           border: none;
@@ -344,7 +344,7 @@ const Departments = () => {
           background: white;
         }
         .dept-table thead {
-          background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+          background: linear-gradient(135deg, #064e3b 0%, #10b981 100%);
           color: white;
         }
         .dept-table thead th {
@@ -357,30 +357,30 @@ const Departments = () => {
         }
         .dept-table tbody tr {
           transition: all 0.3s ease;
-          border-bottom: 1px solid #f0f0f0;
+          border-bottom: 1px solid #f0fdf4;
         }
         .dept-table tbody tr:hover {
-          background: linear-gradient(to right, #f8f9ff 0%, #fff 100%);
+          background: linear-gradient(to right, #f0fdf4 0%, #fff 100%);
           transform: translateX(4px);
-          box-shadow: -4px 0 0 #667eea;
+          box-shadow: -4px 0 0 #10b981;
         }
         .dept-table tbody td {
           padding: 18px 16px;
           vertical-align: middle;
         }
         .btn-primary-custom {
-          background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+          background: linear-gradient(135deg, #064e3b 0%, #10b981 100%);
           border: none;
           padding: 10px 24px;
           border-radius: 10px;
           font-weight: 600;
           color: white;
           transition: all 0.3s ease;
-          box-shadow: 0 4px 15px rgba(30, 58, 138, 0.3);
+          box-shadow: 0 4px 15px rgba(16,185,129,0.3);
         }
         .btn-primary-custom:hover {
           transform: translateY(-2px);
-          box-shadow: 0 6px 25px rgba(30, 58, 138, 0.5);
+          box-shadow: 0 6px 25px rgba(16,185,129,0.5);
         }
         .btn-success-custom {
           background: linear-gradient(135deg, #059669 0%, #10b981 100%);
@@ -439,28 +439,28 @@ const Departments = () => {
           box-shadow: 0 6px 25px rgba(71, 85, 105, 0.5);
         }
         .btn-export-custom {
-          background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+          background: linear-gradient(135deg, #065f46 0%, #34d399 100%);
           border: none;
           padding: 10px 24px;
           border-radius: 10px;
           font-weight: 600;
           color: white;
           transition: all 0.3s ease;
-          box-shadow: 0 4px 15px rgba(124, 58, 237, 0.3);
+          box-shadow: 0 4px 15px rgba(16,185,129,0.3);
         }
         .btn-export-custom:hover {
           transform: translateY(-2px);
-          box-shadow: 0 6px 25px rgba(124, 58, 237, 0.5);
+          box-shadow: 0 6px 25px rgba(16,185,129,0.5);
         }
         .badge-code {
-          background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+          background: linear-gradient(135deg, #064e3b 0%, #10b981 100%);
           padding: 8px 14px;
           border-radius: 8px;
           font-weight: 600;
           font-size: 0.85rem;
         }
         .badge-count {
-          background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+          background: linear-gradient(135deg, #059669 0%, #34d399 100%);
           padding: 8px 14px;
           border-radius: 8px;
           font-weight: 600;
@@ -503,8 +503,8 @@ const Departments = () => {
           box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4);
         }
         .filter-card {
-          background: linear-gradient(to right, #fafafa 0%, #ffffff 100%);
-          border: 1px solid #e8e8e8;
+          background: linear-gradient(to right, #f0fdf4 0%, #ffffff 100%);
+          border: 1px solid #d1fae5;
           border-radius: 12px;
         }
       `}</style>
@@ -643,11 +643,11 @@ const Departments = () => {
                     />
                   </td>
                   <td><Badge className="badge-code">{dept.code}</Badge></td>
-                  <td><strong style={{ color: '#1e3c72' }}>{dept.name}</strong></td>
+                  <td><strong style={{ color: '#065f46' }}>{dept.name}</strong></td>
                   <td>
                     {dept.departmentHead ? (
                       <div style={{ color: '#555' }}>
-                        <i className="fas fa-user-tie me-2" style={{ color: '#1e3c72' }}></i>
+                        <i className="fas fa-user-tie me-2" style={{ color: '#059669' }}></i>
                         {dept.departmentHead.firstName} {dept.departmentHead.lastName}
                       </div>
                     ) : <span className="text-muted">Not Assigned</span>}
@@ -655,7 +655,7 @@ const Departments = () => {
                   <td>
                     {dept.location ? (
                       <span>
-                        <i className="fas fa-map-marker-alt me-2" style={{ color: '#1e3c72' }}></i>
+                        <i className="fas fa-map-marker-alt me-2" style={{ color: '#059669' }}></i>
                         {dept.location}
                       </span>
                     ) : <span className="text-muted">-</span>}
@@ -684,7 +684,7 @@ const Departments = () => {
               {filteredDepartments.length === 0 && (
                 <tr>
                   <td colSpan="8" className="text-center py-5">
-                    <i className="fas fa-inbox fa-3x mb-3" style={{ color: '#1e3c72', opacity: 0.3 }}></i>
+                    <i className="fas fa-inbox fa-3x mb-3" style={{ color: '#10b981', opacity: 0.3 }}></i>
                     <h5 className="text-muted">No departments found</h5>
                     <p className="text-muted">Try adjusting your filters</p>
                   </td>
@@ -714,18 +714,18 @@ const Departments = () => {
 
       {/* Add/Edit Modal */}
       <Modal show={showModal} onHide={resetForm} centered size="lg">
-        <Modal.Header closeButton style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', border: 'none' }}>
+        <Modal.Header closeButton style={{ background: 'linear-gradient(135deg, #064e3b 0%, #10b981 100%)', color: 'white', border: 'none' }}>
           <Modal.Title className="fw-bold">
             <i className="fas fa-building me-2"></i>
             {selectedDept ? 'Edit Department' : 'Add New Department'}
           </Modal.Title>
         </Modal.Header>
-        <Modal.Body style={{ padding: '40px', background: '#f8f9fa' }}>
+        <Modal.Body style={{ padding: '40px', background: '#f0fdf4' }}>
           <Form onSubmit={handleSubmit}>
             <Row>
               <Col md={6}>
                 <Form.Group className="mb-4">
-                  <Form.Label className="fw-bold" style={{color: '#667eea'}}>
+                  <Form.Label className="fw-bold" style={{color: '#059669'}}>
                     <i className="fas fa-tag me-2"></i>Department Name *
                   </Form.Label>
                   <Form.Control
@@ -740,7 +740,7 @@ const Departments = () => {
               </Col>
               <Col md={6}>
                 <Form.Group className="mb-4">
-                  <Form.Label className="fw-bold" style={{color: '#667eea'}}>
+                  <Form.Label className="fw-bold" style={{color: '#059669'}}>
                     <i className="fas fa-code me-2"></i>Department Code *
                   </Form.Label>
                   <Form.Control
@@ -755,7 +755,7 @@ const Departments = () => {
               </Col>
             </Row>
             <Form.Group className="mb-4">
-              <Form.Label className="fw-bold" style={{color: '#667eea'}}>
+              <Form.Label className="fw-bold" style={{color: '#059669'}}>
                 <i className="fas fa-align-left me-2"></i>Description
               </Form.Label>
               <Form.Control
@@ -770,7 +770,7 @@ const Departments = () => {
             <Row>
               <Col md={6}>
                 <Form.Group className="mb-4">
-                  <Form.Label className="fw-bold" style={{color: '#667eea'}}>
+                  <Form.Label className="fw-bold" style={{color: '#059669'}}>
                     <i className="fas fa-user-tie me-2"></i>Department Head
                   </Form.Label>
                   <Form.Select
@@ -789,7 +789,7 @@ const Departments = () => {
               </Col>
               <Col md={6}>
                 <Form.Group className="mb-4">
-                  <Form.Label className="fw-bold" style={{color: '#667eea'}}>
+                  <Form.Label className="fw-bold" style={{color: '#059669'}}>
                     <i className="fas fa-sitemap me-2"></i>Parent Department
                   </Form.Label>
                   <Form.Select
@@ -806,7 +806,7 @@ const Departments = () => {
               </Col>
             </Row>
             <Form.Group className="mb-4">
-              <Form.Label className="fw-bold" style={{color: '#667eea'}}>
+              <Form.Label className="fw-bold" style={{color: '#059669'}}>
                 <i className="fas fa-map-marker-alt me-2"></i>Location
               </Form.Label>
               <Form.Select
@@ -823,7 +823,7 @@ const Departments = () => {
               <Button onClick={resetForm} style={{ background: 'linear-gradient(135deg, #868f96 0%, #596164 100%)', border: 'none', borderRadius: '10px', padding: '12px 30px', fontWeight: '600', color: 'white' }}>
                 <i className="fas fa-times me-2"></i>Cancel
               </Button>
-              <Button type="submit" disabled={submitting} style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', borderRadius: '10px', padding: '12px 30px', fontWeight: '600', color: 'white', boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)' }}>
+              <Button type="submit" disabled={submitting} style={{ background: 'linear-gradient(135deg, #064e3b 0%, #10b981 100%)', border: 'none', borderRadius: '10px', padding: '12px 30px', fontWeight: '600', color: 'white', boxShadow: '0 4px 15px rgba(16,185,129,0.4)' }}>
                 {submitting ? <><span className="spinner-border spinner-border-sm me-2"></span>Saving...</> : <><i className="fas fa-save me-2"></i>Save Department</>}
               </Button>
             </div>
@@ -833,7 +833,7 @@ const Departments = () => {
 
       {/* Assign Employee Modal */}
       <Modal show={showAssignModal} onHide={() => setShowAssignModal(false)} centered>
-        <Modal.Header closeButton style={{ background: 'linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%)', color: 'white', border: 'none' }}>
+        <Modal.Header closeButton style={{ background: 'linear-gradient(135deg, #064e3b 0%, #10b981 100%)', color: 'white', border: 'none' }}>
           <Modal.Title>
             <i className="fas fa-user-plus me-2"></i>
             Assign Employee to Department
@@ -877,7 +877,7 @@ const Departments = () => {
               <Button variant="secondary" onClick={() => setShowAssignModal(false)} style={{ borderRadius: '8px', padding: '10px 24px' }}>
                 <i className="fas fa-times me-2"></i>Cancel
               </Button>
-              <Button type="submit" disabled={submitting} style={{ background: 'linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%)', border: 'none', borderRadius: '8px', padding: '10px 24px' }}>
+              <Button type="submit" disabled={submitting} style={{ background: 'linear-gradient(135deg, #064e3b 0%, #10b981 100%)', border: 'none', borderRadius: '8px', padding: '10px 24px' }}>
                 {submitting ? <><span className="spinner-border spinner-border-sm me-2"></span>Assigning...</> : <><i className="fas fa-check me-2"></i>Assign</>}
               </Button>
             </div>
@@ -887,20 +887,20 @@ const Departments = () => {
 
       {/* Bulk Assign Modal */}
       <Modal show={showBulkModal} onHide={() => setShowBulkModal(false)} centered size="lg">
-        <Modal.Header closeButton style={{ background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)', color: 'white', border: 'none' }}>
+        <Modal.Header closeButton style={{ background: 'linear-gradient(135deg, #064e3b 0%, #10b981 100%)', color: 'white', border: 'none' }}>
           <Modal.Title className="fw-bold">
             <i className="fas fa-users me-2"></i>Bulk Assign Employees
           </Modal.Title>
         </Modal.Header>
-        <Modal.Body style={{ padding: '40px', background: '#f8f9fa' }}>
+        <Modal.Body style={{ padding: '40px', background: '#f0fdf4' }}>
           <Form onSubmit={handleBulkAssign}>
             <Form.Group className="mb-4">
-              <Form.Label className="fw-bold" style={{color: '#4facfe'}}>
+              <Form.Label className="fw-bold" style={{color: '#059669'}}>
                 <i className="fas fa-user-check me-2"></i>Select Employees *
               </Form.Label>
               <div style={{ 
                 background: 'white',
-                border: '2px solid #4facfe',
+                border: '2px solid #10b981',
                 borderRadius: '12px',
                 padding: '8px',
                 maxHeight: '280px',
@@ -936,7 +936,7 @@ const Departments = () => {
               </Form.Text>
             </Form.Group>
             <Form.Group className="mb-4">
-              <Form.Label className="fw-bold" style={{color: '#4facfe'}}>
+              <Form.Label className="fw-bold" style={{color: '#059669'}}>
                 <i className="fas fa-building me-2"></i>Select Department *
               </Form.Label>
               <Form.Select 
@@ -953,7 +953,7 @@ const Departments = () => {
               <Button onClick={() => setShowBulkModal(false)} style={{ background: 'linear-gradient(135deg, #868f96 0%, #596164 100%)', border: 'none', borderRadius: '10px', padding: '12px 30px', fontWeight: '600', color: 'white' }}>
                 <i className="fas fa-times me-2"></i>Cancel
               </Button>
-              <Button type="submit" disabled={submitting} style={{ background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)', border: 'none', borderRadius: '10px', padding: '12px 30px', fontWeight: '600', color: 'white', boxShadow: '0 4px 15px rgba(79, 172, 254, 0.4)' }}>
+              <Button type="submit" disabled={submitting} style={{ background: 'linear-gradient(135deg, #064e3b 0%, #10b981 100%)', border: 'none', borderRadius: '10px', padding: '12px 30px', fontWeight: '600', color: 'white', boxShadow: '0 4px 15px rgba(16,185,129,0.4)' }}>
                 {submitting ? <><span className="spinner-border spinner-border-sm me-2"></span>Assigning...</> : <><i className="fas fa-check me-2"></i>Assign Employees</>}
               </Button>
             </div>
@@ -971,7 +971,7 @@ const Departments = () => {
           background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%) !important;
         }
         .custom-multi-select option:checked {
-          background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%) !important;
+          background: linear-gradient(135deg, #064e3b 0%, #10b981 100%) !important;
           color: white !important;
           font-weight: 600 !important;
         }
@@ -982,15 +982,15 @@ const Departments = () => {
         setShowTransferModal(false);
         setTransferData({ employeeIds: [], fromDepartmentId: '', toDepartmentId: '' });
       }} centered size="lg">
-        <Modal.Header closeButton style={{ background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', color: 'white', border: 'none' }}>
+        <Modal.Header closeButton style={{ background: 'linear-gradient(135deg, #064e3b 0%, #10b981 100%)', color: 'white', border: 'none' }}>
           <Modal.Title className="fw-bold">
             <i className="fas fa-exchange-alt me-2"></i>Transfer Employees Between Departments
           </Modal.Title>
         </Modal.Header>
-        <Modal.Body style={{ padding: '40px', background: '#f8f9fa' }}>
+        <Modal.Body style={{ padding: '40px', background: '#f0fdf4' }}>
           <Form onSubmit={handleTransfer}>
             <Form.Group className="mb-4">
-              <Form.Label className="fw-bold" style={{color: '#f5576c'}}>
+              <Form.Label className="fw-bold" style={{color: '#059669'}}>
                 <i className="fas fa-building me-2"></i>From Department *
               </Form.Label>
               <Form.Select 
@@ -1016,7 +1016,7 @@ const Departments = () => {
               
               return (
                 <Form.Group className="mb-4">
-                  <Form.Label className="fw-bold" style={{color: '#f5576c'}}>
+                  <Form.Label className="fw-bold" style={{color: '#059669'}}>
                     <i className="fas fa-user-check me-2"></i>Select Employees to Transfer * ({filteredEmployees.length} available)
                   </Form.Label>
                   {filteredEmployees.length === 0 ? (
@@ -1028,7 +1028,7 @@ const Departments = () => {
                     <>
                       <div style={{ 
                         background: 'white',
-                        border: '2px solid #f5576c',
+                        border: '2px solid #10b981',
                         borderRadius: '12px',
                         padding: '8px',
                         maxHeight: '280px',
@@ -1069,7 +1069,7 @@ const Departments = () => {
             })()}
             
             <Form.Group className="mb-4">
-              <Form.Label className="fw-bold" style={{color: '#f5576c'}}>
+              <Form.Label className="fw-bold" style={{color: '#059669'}}>
                 <i className="fas fa-building me-2"></i>To Department *
               </Form.Label>
               <Form.Select 
@@ -1112,13 +1112,13 @@ const Departments = () => {
                 type="submit" 
                 disabled={submitting || !transferData.fromDepartmentId || !transferData.toDepartmentId || transferData.employeeIds.length === 0}
                 style={{ 
-                  background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', 
+                  background: 'linear-gradient(135deg, #064e3b 0%, #10b981 100%)', 
                   border: 'none', 
                   borderRadius: '10px', 
                   padding: '12px 30px', 
                   fontWeight: '600', 
                   color: 'white', 
-                  boxShadow: '0 4px 15px rgba(240, 147, 251, 0.4)',
+                  boxShadow: '0 4px 15px rgba(16,185,129,0.4)',
                   opacity: (submitting || !transferData.fromDepartmentId || !transferData.toDepartmentId || transferData.employeeIds.length === 0) ? 0.6 : 1
                 }}
               >

@@ -1,13 +1,13 @@
 /* Professional LMS Styling */
 :root {
-  --primary-color: #2563eb;
-  --primary-dark: #1d4ed8;
+  --primary-color: #10b981;
+  --primary-dark: #059669;
   --secondary-color: #64748b;
   --success-color: #059669;
-  --warning-color: #d97706;
+  --warning-color: #f59e0b;
   --danger-color: #dc2626;
   --info-color: #0891b2;
-  --light-bg: #f8fafc;
+  --light-bg: #f0fdf4;
   --dark-bg: #1e293b;
   --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   --card-shadow-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
@@ -218,7 +218,6 @@ body {
   
   .main-content {
     margin-left: 0;
-    padding-top: 70px;
   }
   
   .stats-grid {
@@ -231,6 +230,7 @@ body {
   
   .content-wrapper {
     padding: 0.75rem;
+    padding-bottom: calc(70px + 0.75rem);
   }
   
   .theme-toggle {
@@ -254,6 +254,7 @@ body {
 @media (max-width: 576px) {
   .content-wrapper {
     padding: 0.5rem;
+    padding-bottom: calc(70px + 0.5rem);
   }
   
   .dashboard-grid {
@@ -767,17 +768,17 @@ body {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
-  color: #3730a3;
-  border: 1px solid #c7d2fe;
-  box-shadow: 0 2px 4px rgba(99, 102, 241, 0.15);
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border: none;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
 }
 
 .btn-primary:hover {
-  background: linear-gradient(135deg, #c7d2fe 0%, #a5b4fc 100%);
-  color: #312e81;
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  color: white;
   transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(99, 102, 241, 0.25);
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
 }
 
 .btn-success {
@@ -809,14 +810,14 @@ body {
 }
 
 .btn-outline-primary {
-  border: 2px solid #c7d2fe;
-  color: #3730a3;
+  border: 2px solid #10b981;
+  color: #059669;
   background: transparent;
 }
 
 .btn-outline-primary:hover {
-  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
-  color: #312e81;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
   transform: translateY(-1px);
 }
 
@@ -1212,7 +1213,7 @@ body {
 
 /* Modal / Form consistency to match Expense form */
 .modal-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
   color: white;
   border-bottom: none;
 }
@@ -1347,7 +1348,7 @@ body {
 
 /* Dashboard Cards */
 .dashboard-card {
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%);
   border-left: 4px solid var(--primary-color);
   transition: var(--transition);
 }
@@ -1384,7 +1385,7 @@ body {
   left: 0;
   right: 0;
   height: 4px;
-  background: linear-gradient(90deg, var(--primary-color), var(--success-color));
+  background: linear-gradient(90deg, #10b981, #059669);
 }
 
 .balance-card:hover {
@@ -1408,7 +1409,7 @@ body {
 
 /* Login Page */
 .login-container {
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
   min-height: 100vh;
   padding: 1rem 0;
 }
@@ -1722,10 +1723,10 @@ body {
 }
 
 .action-icon:hover {
-  background: #667eea;
+  background: #10b981;
   color: white;
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
 
 .user-profile-mini {
@@ -1733,7 +1734,7 @@ body {
   align-items: center;
   gap: 0.75rem;
   padding: 0.5rem 1rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -1741,7 +1742,7 @@ body {
 
 .user-profile-mini:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
 
 .profile-avatar-mini {
@@ -1811,7 +1812,7 @@ body {
 }
 
 .breadcrumb-modern .breadcrumb-item.active {
-  color: #667eea;
+  color: #10b981;
   font-weight: 600;
 }
 

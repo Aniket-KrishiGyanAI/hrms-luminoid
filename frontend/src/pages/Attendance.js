@@ -73,6 +73,8 @@ const Attendance = () => {
   const [showDeleted, setShowDeleted] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 10;
   const [dateRange, setDateRange] = useState({
     startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0]
@@ -145,11 +147,12 @@ const Attendance = () => {
 
   const fetchAttendanceHistory = async (userId = "") => {
     try {
-      let url = "/api/attendance?limit=50";
+      let url = "/api/attendance?limit=200";
       if (userId) url += `&userId=${userId}`;
       if (showDeleted) url += `&includeDeleted=true`;
       const response = await api.get(url);
       setAttendanceHistory(response.data.attendance || response.data);
+      setCurrentPage(1);
     } catch (error) {
       console.error("Error fetching attendance history:", error);
     }
@@ -157,25 +160,31 @@ const Attendance = () => {
 
   const fetchWeekSummary = async (userId = "") => {
     try {
-      const startOfWeek = new Date();
-      startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
-      const endOfWeek = new Date(startOfWeek);
-      endOfWeek.setDate(startOfWeek.getDate() + 6);
+      // Mon–Fri of current week
+      const today = new Date();
+      const day = today.getDay(); // 0=Sun, 1=Mon ... 6=Sat
+      const diffToMon = day === 0 ? -6 : 1 - day;
+      const monday = new Date(today);
+      monday.setDate(today.getDate() + diffToMon);
+      const friday = new Date(monday);
+      friday.setDate(monday.getDate() + 4);
 
-      let url = `/api/attendance?startDate=${startOfWeek.toISOString().split("T")[0]}&endDate=${endOfWeek.toISOString().split("T")[0]}&limit=1000`;
-      
-      // Only add userId filter if it's not empty (for specific user selection)
+      let url = `/api/attendance?startDate=${monday.toISOString().split('T')[0]}&endDate=${friday.toISOString().split('T')[0]}&limit=1000`;
+
       if (userId && userId.trim() !== "") {
         url += `&userId=${userId}`;
       }
-      // If userId is empty, it will fetch all employees' data for admin/hr/manager
 
       const response = await api.get(url);
-      const records = response.data.attendance || [];
+      const records = (response.data.attendance || []).filter(r => {
+        // exclude weekends just in case backend returns them
+        const d = new Date(r.date).getDay();
+        return d !== 0 && d !== 6;
+      });
 
       const summary = records.reduce(
         (acc, record) => {
-          if (record.status === "Present") acc.presentDays++;
+          if (record.status === "Present" || record.status === "Late") acc.presentDays++;
           if (record.status === "Late") acc.lateDays++;
           if (record.status === "Absent") acc.absentDays++;
           acc.totalHours += record.totalHours || 0;
@@ -659,15 +668,6 @@ const Attendance = () => {
 
   return (
     <div className="fade-in-up">
-      <div className="page-header">
-        <h1 className="page-title">
-          <i className="fas fa-clock me-3 text-primary"></i>
-          Attendance Tracking
-        </h1>
-        <p className="text-muted mb-0">
-          Track your daily attendance and working hours
-        </p>
-      </div>
 
       <Row className="mb-4">
         {/* Today's Status */}
@@ -1098,13 +1098,13 @@ const Attendance = () => {
                       <i className="fas fa-trophy fa-2x" style={{ color: '#1e3a8a' }}></i>
                     </div>
                     <h2 className="fw-bold mb-1" style={{ color: '#1e3a8a' }}>
-                      {Math.round((weekSummary.presentDays / 7) * 100)}%
+                      {Math.round((weekSummary.presentDays / 5) * 100)}%
                     </h2>
                     <small className="text-muted fw-semibold">Weekly Attendance Score</small>
                     <div className="mt-2">
                       <small style={{ color: '#1e3a8a' }}>
-                        {weekSummary.presentDays === 7 ? '🌟 Perfect Week!' : 
-                         weekSummary.presentDays >= 5 ? '✅ Great Job!' : 
+                        {weekSummary.presentDays === 5 ? '🌟 Perfect Week!' : 
+                         weekSummary.presentDays >= 4 ? '✅ Great Job!' : 
                          weekSummary.presentDays >= 3 ? '👍 Keep Going!' : '⚠️ Needs Improvement'}
                       </small>
                     </div>
@@ -1115,16 +1115,16 @@ const Attendance = () => {
                     <div className="d-flex justify-content-between align-items-center mb-2">
                       <small className="text-muted fw-semibold">Present Days</small>
                       <span className="fw-bold" style={{ color: '#065f46' }}>
-                        {weekSummary.presentDays}/7
+                        {weekSummary.presentDays}/5
                       </span>
                     </div>
                     <div className="progress" style={{ height: '10px', borderRadius: '10px' }}>
                       <div
                         className="progress-bar"
                         style={{ 
-                          width: `${(weekSummary.presentDays / 7) * 100}%`,
-                          background: weekSummary.presentDays === 7 ? 'linear-gradient(90deg, #065f46 0%, #10b981 100%)' :
-                                     weekSummary.presentDays >= 5 ? 'linear-gradient(90deg, #0891b2 0%, #06b6d4 100%)' :
+                          width: `${(weekSummary.presentDays / 5) * 100}%`,
+                          background: weekSummary.presentDays === 5 ? 'linear-gradient(90deg, #065f46 0%, #10b981 100%)' :
+                                     weekSummary.presentDays >= 4 ? 'linear-gradient(90deg, #0891b2 0%, #06b6d4 100%)' :
                                      'linear-gradient(90deg, #d97706 0%, #f59e0b 100%)'
                         }}
                       ></div>
@@ -1137,14 +1137,14 @@ const Attendance = () => {
                       <small className="text-muted fw-semibold">Total Hours</small>
                       <span className="fw-bold" style={{ color: '#1e3a8a' }}>
                         {formatDuration(weekSummary.totalHours)}
-                        <span className="text-muted" style={{ fontSize: '0.8rem' }}> / 45h</span>
+                        <span className="text-muted" style={{ fontSize: '0.8rem' }}> / 40h</span>
                       </span>
                     </div>
                     <div className="progress" style={{ height: '10px', borderRadius: '10px' }}>
                       <div
                         className="progress-bar"
                         style={{ 
-                          width: `${Math.min((weekSummary.totalHours / 45) * 100, 100)}%`,
+                          width: `${Math.min((weekSummary.totalHours / 40) * 100, 100)}%`,
                           background: 'linear-gradient(90deg, #1e3a8a 0%, #3b82f6 100%)'
                         }}
                       ></div>
@@ -1204,14 +1204,14 @@ const Attendance = () => {
                     <div className="d-flex justify-content-between align-items-center mb-2">
                       <small className="text-muted fw-semibold">Avg Daily Attendance</small>
                       <span className="fw-bold" style={{ color: '#065f46' }}>
-                        {employees.length > 0 ? Math.round((weekSummary.presentDays / 7) / employees.length * 100) : 0}%
+                        {employees.length > 0 ? Math.round((weekSummary.presentDays / 5) / employees.length * 100) : 0}%
                       </span>
                     </div>
                     <div className="progress" style={{ height: '8px' }}>
                       <div
                         className="progress-bar"
                         style={{ 
-                          width: `${employees.length > 0 ? Math.min((weekSummary.presentDays / 7) / employees.length * 100, 100) : 0}%`,
+                          width: `${employees.length > 0 ? Math.min((weekSummary.presentDays / 5) / employees.length * 100, 100) : 0}%`,
                           background: 'linear-gradient(90deg, #065f46 0%, #10b981 100%)'
                         }}
                       ></div>
@@ -1230,7 +1230,7 @@ const Attendance = () => {
                       <div
                         className="progress-bar"
                         style={{ 
-                          width: `${employees.length > 0 ? Math.min((weekSummary.totalHours / (employees.length * 45)) * 100, 100) : 0}%`,
+                          width: `${employees.length > 0 ? Math.min((weekSummary.totalHours / (employees.length * 40)) * 100, 100) : 0}%`,
                           background: 'linear-gradient(90deg, #1e3a8a 0%, #3b82f6 100%)'
                         }}
                       ></div>
@@ -1317,7 +1317,61 @@ const Attendance = () => {
         </Card.Header>
         <Card.Body style={{ padding: 0 }}>
           {attendanceHistory.length > 0 ? (
-            <div className="table-responsive" style={{ maxHeight: '480px', overflowY: 'auto' }}>
+            <>
+              {/* Mobile card view */}
+              <div className="d-block d-md-none">
+                {attendanceHistory.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE).map((record) => {
+                  const hours = record.totalHours || 0;
+                  const hoursColor = hours >= 8 ? '#059669' : hours >= 4 ? '#d97706' : '#dc2626';
+                  const dateObj = record.date ? new Date(record.date) : null;
+                  const dayName = dateObj ? dateObj.toLocaleDateString('en-IN', { weekday: 'short', timeZone: 'Asia/Kolkata' }) : '';
+                  return (
+                    <div key={record._id} style={{ padding: '0.875rem 1rem', borderBottom: '1px solid #f1f5f9', background: record.isDeleted ? '#fff1f2' : 'white' }}>
+                      {/* Row 1: Date + Status */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        <div>
+                          <span style={{ fontWeight: 700, fontSize: '0.88rem', color: '#1e293b' }}>{formatDate(record.date)}</span>
+                          <span style={{ marginLeft: '0.4rem', fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>{dayName}</span>
+                        </div>
+                        {getStatusBadge(record.status)}
+                      </div>
+                      {/* Row 2: Check In / Check Out / Hours */}
+                      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.4rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                          <i className="fas fa-sign-in-alt" style={{ color: '#10b981', fontSize: '0.75rem' }}></i>
+                          <span style={{ fontSize: '0.8rem', color: '#334155', fontWeight: 600 }}>{record.checkIn ? formatTime(record.checkIn) : '—'}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                          <i className="fas fa-sign-out-alt" style={{ color: '#ef4444', fontSize: '0.75rem' }}></i>
+                          <span style={{ fontSize: '0.8rem', color: '#334155', fontWeight: 600 }}>{record.checkOut ? formatTime(record.checkOut) : '—'}</span>
+                        </div>
+                        {hours > 0 && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <i className="fas fa-clock" style={{ color: hoursColor, fontSize: '0.75rem' }}></i>
+                            <span style={{ fontSize: '0.8rem', color: hoursColor, fontWeight: 700 }}>{formatDuration(hours)}</span>
+                          </div>
+                        )}
+                      </div>
+                      {/* Row 3: Work mode + employee (admin) */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          {getWorkModeBadge(record.workMode || 'OFFICE')}
+                          {record.isAutoCheckout && (
+                            <span style={{ background: '#ede9fe', color: '#6d28d9', fontSize: '0.62rem', fontWeight: 700, padding: '2px 6px', borderRadius: '20px' }}>AUTO</span>
+                          )}
+                        </div>
+                        {user?.role && ['MANAGER','HR','ADMIN'].includes(user.role) && record.userId && (
+                          <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>{record.userId.firstName} {record.userId.lastName}</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop table view */}
+              <div className="d-none d-md-block">
+                <div className="table-responsive">
               <Table className="mb-0 attendance-table">
                 {(() => {
                   const thStyle = { color: '#64748b', fontWeight: '600', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '0.85rem 1rem', whiteSpace: 'nowrap', background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', borderBottom: '2px solid #e2e8f0' };
@@ -1337,7 +1391,7 @@ const Attendance = () => {
                   );
                 })()}
                 <tbody>
-                  {attendanceHistory.map((record) => {
+                  {attendanceHistory.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE).map((record) => {
                     const statusClass = record.status === 'Present' ? 'status-present' :
                                        record.status === 'Absent' ? 'status-absent' :
                                        record.status === 'Late' ? 'status-late' :
@@ -1479,6 +1533,48 @@ const Attendance = () => {
                 </tbody>
               </Table>
             </div>
+              </div>
+              {/* Pagination */}
+              {(() => {
+                const totalPages = Math.ceil(attendanceHistory.length / PAGE_SIZE);
+                if (totalPages <= 1) return null;
+                const pages = [];
+                for (let i = 1; i <= totalPages; i++) pages.push(i);
+                const btnBase = { border: 'none', borderRadius: '8px', padding: '5px 11px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s' };
+                return (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 1rem', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                    <small style={{ color: '#64748b', fontSize: '0.78rem' }}>
+                      Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, attendanceHistory.length)} of {attendanceHistory.length} records
+                    </small>
+                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                      <button
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        style={{ ...btnBase, background: currentPage === 1 ? '#f1f5f9' : '#e2e8f0', color: currentPage === 1 ? '#cbd5e1' : '#475569' }}
+                      >
+                        <i className="fas fa-chevron-left"></i>
+                      </button>
+                      {pages.map(p => (
+                        <button
+                          key={p}
+                          onClick={() => setCurrentPage(p)}
+                          style={{ ...btnBase, background: p === currentPage ? 'linear-gradient(135deg,#0ea5e9,#6366f1)' : '#f1f5f9', color: p === currentPage ? 'white' : '#475569', minWidth: '32px' }}
+                        >
+                          {p}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                        style={{ ...btnBase, background: currentPage === totalPages ? '#f1f5f9' : '#e2e8f0', color: currentPage === totalPages ? '#cbd5e1' : '#475569' }}
+                      >
+                        <i className="fas fa-chevron-right"></i>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+            </>
           ) : (
             <div className="text-center py-5">
               <div className="mb-3" style={{ width: '64px', height: '64px', background: 'linear-gradient(135deg, #e0f2fe, #dbeafe)', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>

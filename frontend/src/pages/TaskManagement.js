@@ -924,8 +924,8 @@ const TaskManagement = () => {
           scheduledDate: '', dueDate: '', estimatedHours: '', priority: 'MEDIUM', tags: ''
         });
       }} size="lg" centered>
-        <Modal.Header closeButton style={{background: '#f8f9fa', borderBottom: '2px solid #dee2e6'}}>
-          <Modal.Title style={{fontSize: '1.25rem', fontWeight: '600', color: '#212529'}}>
+        <Modal.Header closeButton style={{background: 'linear-gradient(135deg, #064e3b 0%, #10b981 100%)', borderBottom: '2px solid #059669'}}>
+          <Modal.Title style={{fontSize: '1.25rem', fontWeight: '700', color: 'white'}}>
             {selectedTask ? 'Edit Task' : 'Create New Task'}
           </Modal.Title>
         </Modal.Header>
@@ -1238,7 +1238,7 @@ const TaskManagement = () => {
               </Col>
             </Row>
           </Modal.Body>
-          <Modal.Footer style={{background: '#f8f9fa', borderTop: '2px solid #dee2e6'}}>
+          <Modal.Footer style={{background: '#f8fffe', borderTop: '2px solid #d1fae5'}}>
             <Button variant="secondary" onClick={() => {
               setShowModal(false);
               setSelectedTask(null);
@@ -1266,8 +1266,8 @@ const TaskManagement = () => {
 
       {/* Task Details Modal */}
       <Modal show={showDetailsModal} onHide={() => setShowDetailsModal(false)} size="xl" centered className="d-none d-md-block">
-        <Modal.Header closeButton style={{background: '#2c3e50', color: 'white', borderBottom: '1px solid #1a252f'}}>
-          <Modal.Title style={{fontSize: '1.1rem', fontWeight: '600'}}>Task Details</Modal.Title>
+        <Modal.Header closeButton style={{background: 'linear-gradient(135deg, #064e3b 0%, #065f46 50%, #10b981 100%)', color: 'white', borderBottom: '1px solid #059669'}}>
+          <Modal.Title style={{fontSize: '1.1rem', fontWeight: '700', color: 'white'}}>Task Details</Modal.Title>
         </Modal.Header>
         <Modal.Body style={{padding: 0}}>
           {selectedTask && (
@@ -1629,8 +1629,8 @@ const TaskManagement = () => {
 
       {/* Work Log History Modal */}
       <Modal show={showWorkLogHistory} onHide={() => setShowWorkLogHistory(false)} size="xl" centered>
-        <Modal.Header closeButton style={{background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)', color: 'white', borderBottom: 'none', padding: '1.5rem 2rem'}}>
-          <Modal.Title style={{fontSize: '1.5rem', fontWeight: '700'}}>
+        <Modal.Header closeButton style={{background: 'linear-gradient(135deg, #064e3b 0%, #10b981 100%)', color: 'white', borderBottom: 'none', padding: '1.5rem 2rem'}}>
+          <Modal.Title style={{fontSize: '1.4rem', fontWeight: '700', color: 'white'}}>
             <i className="fas fa-chart-bar me-3"></i>Work Log Reports
           </Modal.Title>
         </Modal.Header>
@@ -1979,8 +1979,8 @@ const TaskManagement = () => {
           project: '', deliverables: '', location: 'OFFICE', issues: '', category: 'GENERAL'
         });
       }} size="lg" centered>
-        <Modal.Header closeButton style={{background: '#f8f9fa', borderBottom: '2px solid #dee2e6'}}>
-          <Modal.Title style={{fontSize: '1.25rem', fontWeight: '600'}}>Edit Work Log</Modal.Title>
+        <Modal.Header closeButton style={{background: 'linear-gradient(135deg, #064e3b 0%, #10b981 100%)', borderBottom: '2px solid #059669'}}>
+          <Modal.Title style={{fontSize: '1.25rem', fontWeight: '700', color: 'white'}}>Edit Work Log</Modal.Title>
         </Modal.Header>
         <Form onSubmit={handleWorkLogSubmit}>
           <Modal.Body style={{padding: '1.5rem'}}>
@@ -2081,7 +2081,7 @@ const TaskManagement = () => {
               />
             </Form.Group>
           </Modal.Body>
-          <Modal.Footer style={{background: '#f8f9fa', borderTop: '2px solid #dee2e6'}}>
+          <Modal.Footer style={{background: '#f8fffe', borderTop: '2px solid #d1fae5'}}>
             <Button variant="secondary" onClick={() => {
               setShowWorkLogModal(false);
               setSelectedWorkLog(null);

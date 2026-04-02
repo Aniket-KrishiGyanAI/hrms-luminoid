@@ -326,6 +326,7 @@
   .time-display { font-size: 0.95rem; }
 
   .stat-mini .stat-value { font-size: 1.3rem; }
+
 }
 
 @media (max-width: 576px) {
@@ -337,4 +338,5 @@
 
   .modal-dialog { margin: 0.5rem; }
   .badge { font-size: 0.68rem; }
+
 }

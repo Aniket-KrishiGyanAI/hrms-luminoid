@@ -1,13 +1,13 @@
 /* Modern Professional Styles */
 :root {
-  --primary-color: #6366f1;
+  --primary-color: #10b981;
   --secondary-color: #64748b;
-  --success-color: #22c55e;
+  --success-color: #059669;
   --warning-color: #f59e0b;
   --danger-color: #ef4444;
   --info-color: #06b6d4;
-  --light-color: #f8fafc;
-  --dark-color: #334155;
+  --light-color: #f0fdf4;
+  --dark-color: #1e293b;
   --border-radius: 12px;
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
@@ -94,7 +94,7 @@
   left: 0;
   right: 0;
   height: 4px;
-  background: linear-gradient(90deg, #6366f1, #06b6d4);
+  background: linear-gradient(90deg, #10b981, #059669);
 }
 
 .stats-card:hover {
@@ -145,7 +145,7 @@
 }
 
 .btn-primary.btn-modern {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  background: linear-gradient(135deg, #10b981, #059669);
   border: none;
   color: white;
 }
@@ -221,8 +221,8 @@
 }
 
 .modern-form .form-control:focus {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  border-color: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.12);
 }
 
 .modern-form .form-label {
@@ -280,7 +280,7 @@
 .progress-modern .progress-bar {
   border-radius: 4px;
   transition: var(--transition);
-  background: linear-gradient(90deg, #6366f1, #06b6d4);
+  background: linear-gradient(90deg, #10b981, #059669);
 }
 
 /* Mobile Responsive */

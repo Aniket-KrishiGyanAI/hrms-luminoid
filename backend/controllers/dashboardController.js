@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const LeaveRequest = require('../models/LeaveRequest');
 const LeaveBalance = require('../models/LeaveBalance');
 const User = require('../models/User');
@@ -50,13 +51,9 @@ const getEmployeeDashboard = async (req, res) => {
 
     const announcements = await Announcement.find({
       isActive: true,
-      $or: [
-        { targetRoles: { $in: [req.user.role] } },
-        { targetRoles: { $size: 0 } }
-      ],
-      $or: [
-        { expiryDate: { $exists: false } },
-        { expiryDate: { $gte: new Date() } }
+      $and: [
+        { $or: [{ targetRoles: { $in: [req.user.role] } }, { targetRoles: { $size: 0 } }] },
+        { $or: [{ expiryDate: { $exists: false } }, { expiryDate: { $gte: new Date() } }] }
       ]
     }).populate('createdBy', 'firstName lastName').sort({ priority: -1, createdAt: -1 }).limit(5);
 
@@ -300,7 +297,6 @@ const getHRDashboard = async (req, res) => {
       return aBirthday - bBirthday;
     });
 
-    const mongoose = require('mongoose');
     const formattedBirthdays = await Promise.all(birthdaysInRange.map(async (user) => {
       const userObj = user.toObject();
       if (userObj.department && mongoose.Types.ObjectId.isValid(userObj.department)) {
@@ -369,7 +365,6 @@ const exportLeaveReport = async (req, res) => {
       .populate('leaveTypeId', 'name')
       .sort({ startDate: -1 });
 
-    const mongoose = require('mongoose');
     const csvData = await Promise.all(leaves.map(async (leave) => {
       let deptName = leave.userId.department || '';
       if (deptName && mongoose.Types.ObjectId.isValid(deptName)) {
@@ -414,7 +409,6 @@ const getTeamMembers = async (req, res) => {
       isActive: true
     }).select('_id firstName lastName department role').sort({ firstName: 1 });
     
-    const mongoose = require('mongoose');
     const formattedMembers = await Promise.all(teamMembers.map(async (member) => {
       const memberObj = member.toObject();
       if (memberObj.department && mongoose.Types.ObjectId.isValid(memberObj.department)) {

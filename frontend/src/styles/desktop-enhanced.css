@@ -2,10 +2,9 @@
 
 /* Large Screens (1200px+) */
 @media (min-width: 1200px) {
-  .enhanced-content {
-    max-width: 1400px;
-    margin: 70px auto 0;
+  .desktop-content {
     padding: 2rem 3rem;
+    padding-top: calc(64px + 2rem);
   }
 
   .card {
@@ -201,10 +200,9 @@
 
 /* Medium-Large Screens (992px - 1199px) */
 @media (min-width: 992px) and (max-width: 1199px) {
-  .enhanced-content {
-    max-width: 1140px;
-    margin: 70px auto 0;
+  .desktop-content {
     padding: 1.5rem 2rem;
+    padding-top: calc(64px + 1.5rem);
   }
 
   .stats-grid {
@@ -260,31 +258,6 @@
 
   ::-webkit-scrollbar-thumb:hover {
     background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
-  }
-
-  /* Enhanced Navbar Desktop */
-  .enhanced-navbar {
-    padding: 0.75rem 0;
-  }
-
-  .navbar-container {
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 0 3rem;
-  }
-
-  .brand {
-    font-size: 1.5rem;
-  }
-
-  .search-input {
-    padding: 0.75rem 1rem 0.75rem 3rem;
-    font-size: 1rem;
-  }
-
-  .profile-avatar {
-    width: 45px;
-    height: 45px;
   }
 
   /* Sidebar Desktop */
@@ -570,8 +543,7 @@
 
 /* Ultra Wide Screens (1600px+) */
 @media (min-width: 1600px) {
-  .enhanced-content {
-    max-width: 1600px;
+  .desktop-content {
     padding: 2.5rem 4rem;
   }
 
