@@ -473,11 +473,11 @@
   background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
   z-index: 1040;
   box-shadow: 4px 0 24px rgba(0, 0, 0, 0.25);
   border-right: 1px solid rgba(16, 185, 129, 0.15);
+  isolation: isolate;
 }
 
 .desktop-sidebar .sidebar-user-info {
@@ -492,10 +492,13 @@
 
 .desktop-sidebar .sidebar-body {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   padding: 0.75rem 0;
   overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
 }
 
 .desktop-sidebar .sidebar-body::-webkit-scrollbar { width: 4px; }

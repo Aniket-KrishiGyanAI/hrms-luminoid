@@ -5,7 +5,7 @@ const LeaveRequest = require('../models/LeaveRequest');
 const User = require('../models/User');
 const Attendance = require('../models/Attendance');
 const DailyUpdate = require('../models/DailyUpdate');
-const { sendHolidayNotification, sendLeaveReminderNotification } = require('./emailService');
+const { sendHolidayNotification, sendLeaveReminderNotification, sendExpenseDeadlineReminder } = require('./emailService');
 const moment = require('moment-timezone');
 
 // Monthly accrual on 1st of every month at 00:00
@@ -126,6 +126,28 @@ cron.schedule('0 0 * * *', async () => {
     console.log(`Deleted ${result.deletedCount} daily updates`);
   } catch (error) {
     console.error('Error clearing daily updates:', error);
+  }
+});
+
+// Expense deadline reminder — runs daily at 9:00 AM
+// Sends reminder on the last 3 days of every month to all active employees
+cron.schedule('0 9 * * *', async () => {
+  const now = new Date();
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const today = now.getDate();
+  const daysLeft = lastDay - today;
+
+  // Only send on last 2 days (daysLeft = 0, 1 means today is lastDay or lastDay-1)
+  if (daysLeft > 1) return;
+
+  const billingMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  try {
+    const employees = await User.find({ role: 'EMPLOYEE', isActive: { $ne: false } }, 'firstName lastName email');
+    if (employees.length === 0) return;
+    await sendExpenseDeadlineReminder(employees, daysLeft === 0 ? 1 : daysLeft, lastDay, billingMonth);
+  } catch (error) {
+    console.error('Error in expense deadline reminder job:', error);
   }
 });
 

@@ -17,7 +17,13 @@ const createEmployee = async (req, res) => {
       return res.status(400).json({ message: 'Employee with this email already exists' });
     }
 
-    // Generate temporary password
+    // Resolve department to ObjectId if it's a name string
+    let resolvedDepartment = department;
+    if (department && !mongoose.Types.ObjectId.isValid(department)) {
+      const Department = require('../models/Department');
+      const dept = await Department.findOne({ name: { $regex: `^${department}$`, $options: 'i' } }).select('_id').lean();
+      if (dept) resolvedDepartment = dept._id;
+    }
     const tempPassword = `${firstName}@123`;
 
     // Create user
@@ -27,7 +33,7 @@ const createEmployee = async (req, res) => {
       firstName,
       lastName,
       role: role || 'EMPLOYEE',
-      department,
+      department: resolvedDepartment,
       designation,
       joinDate: joinDate || new Date(),
       managerId,
