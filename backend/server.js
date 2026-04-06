@@ -29,6 +29,7 @@ const dailyUpdateRoutes = require('./routes/dailyUpdates');
 const workLogRoutes = require('./routes/workLogs');
 const officeLocationRoutes = require('./routes/officeLocations');
 const folderRoutes = require('./routes/folders');
+const trainingRoutes = require('./routes/training');
 
 const seedDefaultOffice = require('./utils/seedOfficeLocation');
 
@@ -171,6 +172,7 @@ app.use('/api/daily-updates', dailyUpdateRoutes);
 app.use('/api/work-logs', workLogRoutes);
 app.use('/api/office-locations', officeLocationRoutes);
 app.use('/api/folders', folderRoutes);
+app.use('/api/training', trainingRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

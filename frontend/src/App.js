@@ -38,6 +38,7 @@ import Departments from './pages/Departments';
 import DepartmentDetails from './pages/DepartmentDetails';
 import Tasks from './pages/Tasks';
 import TaskManagement from './pages/TaskManagement';
+import TrainingMaterials from './pages/TrainingMaterials';
 
 function App() {
   return (
@@ -196,6 +197,14 @@ function App() {
               <ProtectedRoute roles={['MANAGER', 'HR', 'ADMIN']}>
                 <EnhancedLayout>
                   <TaskManagement />
+                </EnhancedLayout>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/training" element={
+              <ProtectedRoute>
+                <EnhancedLayout>
+                  <TrainingMaterials />
                 </EnhancedLayout>
               </ProtectedRoute>
             } />
