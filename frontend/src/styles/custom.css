@@ -1838,3 +1838,55 @@ body {
 .widget-card .card-body::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* Field Visits Tab Bar - Scrolls with page */
+.fv-tab-bar {
+  position: relative;
+  background: #ffffff;
+  padding: 0.75rem 0;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.fv-tab-bar > div {
+  display: flex;
+  gap: 0.4rem;
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+  min-width: min-content;
+}
+
+.fv-tab-bar::-webkit-scrollbar {
+  height: 4px;
+}
+
+.fv-tab-bar::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 2px;
+}
+
+.fv-tab-bar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 2px;
+}
+
+.fv-tab-bar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+@media (max-width: 768px) {
+  .fv-tab-bar {
+    margin-bottom: 1rem;
+    padding: 0.5rem 0;
+  }
+}
+
+@media (max-width: 576px) {
+  .fv-tab-bar {
+    margin-bottom: 0.75rem;
+    padding: 0.5rem 0;
+  }
+}

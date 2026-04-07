@@ -132,7 +132,7 @@ const login = async (req, res) => {
 
     res.json({
       message: 'Login successful',
-      user: { id: user._id, email: user.email, role: user.role, firstName: user.firstName, lastName: user.lastName },
+      user: { id: user._id, email: user.email, role: user.role, firstName: user.firstName, lastName: user.lastName, isFieldEmployee: user.isFieldEmployee },
       accessToken,
       refreshToken
     });
@@ -181,7 +181,7 @@ const getCurrentUser = async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-    res.json({ user: { id: user._id, email: user.email, role: user.role, firstName: user.firstName, lastName: user.lastName } });
+    res.json({ user: { id: user._id, email: user.email, role: user.role, firstName: user.firstName, lastName: user.lastName, isFieldEmployee: user.isFieldEmployee } });
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
   }

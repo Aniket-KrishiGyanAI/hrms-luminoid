@@ -502,8 +502,9 @@
 
 /* ── View Profile Modal ── */
 .view-profile-modal .modal-content { border: none; border-radius: var(--ed-radius); overflow: hidden; }
+.view-profile-modal .modal-body { padding: 0; overflow-y: auto; }
 
-.profile-view-header { position: relative; padding-bottom: 1.5rem; }
+.profile-view-header { position: relative; padding-bottom: 1.5rem; flex-shrink: 0; }
 
 .profile-view-cover {
   height: 110px;
@@ -547,9 +548,115 @@
 .profile-view-info h3 { font-size: 1.5rem; font-weight: 700; color: var(--ed-text); margin: 0 0 0.4rem 0; }
 .profile-view-info p { color: var(--ed-text3); font-size: 0.9rem; margin: 0 0 0.875rem 0; }
 
-.profile-badges { display: flex; gap: 0.5rem; justify-content: center; }
+.profile-badges { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; }
 
-.profile-view-content { padding: 1.5rem; }
+.profile-view-content { padding: 1.5rem; flex: 1; }
+
+.profile-view-actions {
+  margin-top: 1.5rem;
+  padding: 1.25rem 1.5rem 1.5rem;
+  background: #f8fafc;
+  border-top: 1.5px solid var(--ed-border-s);
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  box-shadow: 0 -4px 16px rgba(0,0,0,0.06);
+}
+
+/* Field Toggle Row */
+.field-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: white;
+  border: 1.5px solid var(--ed-border-s);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  transition: var(--ed-transition);
+}
+
+.field-toggle-row:has(input:checked) {
+  background: var(--ed-green-bg);
+  border-color: var(--ed-border);
+}
+
+.field-toggle-info { display: flex; flex-direction: column; gap: 2px; }
+
+.field-toggle-title {
+  font-weight: 700;
+  font-size: 0.875rem;
+  color: var(--ed-text);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.field-toggle-title i { color: var(--ed-green); }
+.field-toggle-desc { font-size: 0.75rem; color: var(--ed-text3); }
+
+/* Action Button Grid */
+.action-btn-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.625rem;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.75rem 0.875rem;
+  border-radius: 10px;
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  transition: var(--ed-transition);
+  background: white;
+  text-align: left;
+  width: 100%;
+}
+
+.action-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(0,0,0,0.1); }
+
+.action-btn-icon {
+  width: 36px; height: 36px; border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.95rem; flex-shrink: 0;
+}
+
+.action-btn-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.action-btn-label { font-size: 0.82rem; font-weight: 700; color: var(--ed-text); white-space: nowrap; }
+.action-btn-desc { font-size: 0.7rem; color: var(--ed-text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Edit */
+.action-btn-edit { border-color: #bfdbfe; }
+.action-btn-edit .action-btn-icon { background: #eff6ff; color: #2563eb; }
+.action-btn-edit:hover { background: #eff6ff; border-color: #93c5fd; }
+
+/* Change Role */
+.action-btn-role { border-color: #c7d2fe; }
+.action-btn-role .action-btn-icon { background: #eef2ff; color: #4f46e5; }
+.action-btn-role:hover { background: #eef2ff; border-color: #a5b4fc; }
+
+/* Reset Password */
+.action-btn-password { border-color: #fde68a; }
+.action-btn-password .action-btn-icon { background: #fffbeb; color: #d97706; }
+.action-btn-password:hover { background: #fffbeb; border-color: #fcd34d; }
+
+/* Deactivate */
+.action-btn-deactivate { border-color: #fecaca; }
+.action-btn-deactivate .action-btn-icon { background: #fef2f2; color: #dc2626; }
+.action-btn-deactivate:hover { background: #fef2f2; border-color: #f87171; }
+
+/* Reactivate */
+.action-btn-reactivate { border-color: #bbf7d0; }
+.action-btn-reactivate .action-btn-icon { background: var(--ed-green-bg); color: var(--ed-green-dk); }
+.action-btn-reactivate:hover { background: var(--ed-green-bg); border-color: var(--ed-green); }
+
+/* Delete */
+.action-btn-delete { border-color: #fecaca; }
+.action-btn-delete .action-btn-icon { background: #fff1f2; color: #be123c; }
+.action-btn-delete:hover { background: #fff1f2; border-color: #fda4af; }
 
 .profile-info-card {
   background: var(--ed-surface);

@@ -151,5 +151,72 @@ cron.schedule('0 9 * * *', async () => {
   }
 });
 
+// Auto generate field visit daily reports — runs at 11:55 PM every day
+cron.schedule('55 23 * * *', async () => {
+  console.log('Generating field visit daily reports...');
+  try {
+    const { generateDailyReport } = require('../controllers/fieldReportController');
+    const FieldVisit = require('../models/FieldVisit');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Find all employees who had visits today
+    const employeesWithVisits = await FieldVisit.distinct('employeeId', {
+      visitDate: { $gte: today }
+    });
+
+    for (const empId of employeesWithVisits) {
+      await generateDailyReport(empId, new Date());
+    }
+    console.log(`Field reports generated for ${employeesWithVisits.length} employees`);
+  } catch (error) {
+    console.error('Error generating field reports:', error);
+  }
+});
+
+// Auto-end active journeys at midnight
+cron.schedule('59 23 * * *', async () => {
+  console.log('Auto-ending active journeys at midnight...');
+  try {
+    const { autoEndJourneys } = require('../controllers/journeyController');
+    await autoEndJourneys();
+  } catch (error) {
+    console.error('Error in auto-end journeys job:', error);
+  }
+});
+
+// Journey start reminder - runs every 30 minutes during work hours (9 AM - 6 PM)
+cron.schedule('*/30 9-18 * * *', async () => {
+  console.log('Checking for journey start reminders...');
+  try {
+    const { sendJourneyStartReminders } = require('../services/journeyNotificationService');
+    await sendJourneyStartReminders();
+  } catch (error) {
+    console.error('Error in journey start reminder job:', error);
+  }
+});
+
+// End journey reminder - runs at 6 PM and 7 PM
+cron.schedule('0 18,19 * * *', async () => {
+  console.log('Sending end journey reminders...');
+  try {
+    const { sendEndJourneyReminders } = require('../services/journeyNotificationService');
+    await sendEndJourneyReminders();
+  } catch (error) {
+    console.error('Error in end journey reminder job:', error);
+  }
+});
+
+// Low battery alerts - runs every hour during work hours
+cron.schedule('0 9-18 * * *', async () => {
+  console.log('Checking for low battery alerts...');
+  try {
+    const { sendLowBatteryAlerts } = require('../services/journeyNotificationService');
+    await sendLowBatteryAlerts();
+  } catch (error) {
+    console.error('Error in low battery alert job:', error);
+  }
+});
+
 console.log('Cron jobs scheduled successfully');
 

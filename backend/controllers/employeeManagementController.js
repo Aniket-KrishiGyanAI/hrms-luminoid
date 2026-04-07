@@ -171,7 +171,7 @@ const getAllEmployees = async (req, res) => {
     if (role) filter.role = role;
 
     const employees = await User.find(filter)
-      .select('firstName lastName email role department designation joinDate isActive profileImage')
+      .select('firstName lastName email role department designation joinDate isActive profileImage isFieldEmployee')
       .populate('managerId', 'firstName lastName')
       .sort({ firstName: 1 })
       .lean();
@@ -225,4 +225,25 @@ module.exports = {
   reactivateEmployee,
   getAllEmployees,
   deleteEmployee
+};
+
+const toggleFieldEmployee = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId);
+    if (!user) return res.status(404).json({ message: 'Employee not found' });
+    user.isFieldEmployee = !user.isFieldEmployee;
+    await user.save();
+    res.json({ message: `Field employee ${user.isFieldEmployee ? 'enabled' : 'disabled'}`, isFieldEmployee: user.isFieldEmployee });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+module.exports = {
+  createEmployee,
+  deactivateEmployee,
+  reactivateEmployee,
+  getAllEmployees,
+  deleteEmployee,
+  toggleFieldEmployee
 };

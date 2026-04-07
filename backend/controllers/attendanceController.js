@@ -62,7 +62,7 @@ const checkIn = async (req, res) => {
       }
     }
 
-    let attendance = await Attendance.findOne({ userId, date: today });
+    let attendance = await Attendance.findOne({ userId, date: today, isDeleted: { $ne: true } });
 
     if (attendance?.checkIn) {
       return res.status(400).json({ message: "Already checked in today" });
@@ -166,7 +166,7 @@ const checkOut = async (req, res) => {
     }
 
     // 🗂️ Fetch today's attendance
-    const attendance = await Attendance.findOne({ userId, date: today });
+    const attendance = await Attendance.findOne({ userId, date: today, isDeleted: { $ne: true } });
 
     if (!attendance || !attendance.checkIn) {
       return res.status(400).json({
@@ -347,6 +347,7 @@ const getTodayStatus = async (req, res) => {
     const attendance = await Attendance.findOne({
       userId,
       date: today,
+      isDeleted: { $ne: true }
     }).populate("userId", "firstName lastName email");
 
     res.json({

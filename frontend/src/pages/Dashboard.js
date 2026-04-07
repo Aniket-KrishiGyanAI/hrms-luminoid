@@ -26,6 +26,8 @@ const Dashboard = () => {
   const [holidays, setHolidays] = useState([]);
   const [favorites, setFavorites] = useState([]);
   const [files, setFiles] = useState([]);
+  const [journeyData, setJourneyData] = useState(null);
+  const [journeyLoading, setJourneyLoading] = useState(false);
   const [showFavoriteModal, setShowFavoriteModal] = useState(false);
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
   const [showHolidayModal, setShowHolidayModal] = useState(false);
@@ -64,6 +66,9 @@ const Dashboard = () => {
     fetchHolidays();
     fetchFavorites();
     fetchFiles();
+    if (user?.isFieldEmployee) {
+      api.get('/api/journey/today').then(r => setJourneyData(r.data)).catch(() => {});
+    }
   }, [user?.role]);
 
   const fetchDashboardData = async () => {
@@ -425,6 +430,67 @@ const Dashboard = () => {
                 >
                   <i className="fas fa-file-alt"></i>Documents
                 </button>
+
+                {/* Journey Quick Action — field employees only */}
+                {journeyData !== null && (
+                  <button
+                    onClick={async () => {
+                      if (journeyData?.canStartJourney) {
+                        setJourneyLoading(true);
+                        try {
+                          await api.post('/api/journey/start');
+                          const r = await api.get('/api/journey/today');
+                          setJourneyData(r.data);
+                          toast.success('🚀 Journey started!');
+                        } catch (e) { toast.error(e.response?.data?.message || 'Failed'); }
+                        finally { setJourneyLoading(false); }
+                      } else if (journeyData?.journey?.status === 'ACTIVE') {
+                        setJourneyLoading(true);
+                        try {
+                          await api.post('/api/journey/end');
+                          const r = await api.get('/api/journey/today');
+                          setJourneyData(r.data);
+                          toast.success('🏁 Journey ended!');
+                        } catch (e) { toast.error(e.response?.data?.message || 'Failed'); }
+                        finally { setJourneyLoading(false); }
+                      } else {
+                        navigate('/field-visits');
+                      }
+                    }}
+                    disabled={journeyLoading}
+                    style={{
+                      padding: "0.9rem 1rem",
+                      borderRadius: "0.75rem",
+                      border: "none",
+                      fontWeight: 600,
+                      fontSize: "0.85rem",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "0.55rem",
+                      cursor: "pointer",
+                      background: journeyData?.journey?.status === 'ACTIVE'
+                        ? "linear-gradient(135deg,#ef4444 0%,#dc2626 100%)"
+                        : "linear-gradient(135deg,#10b981 0%,#059669 100%)",
+                      color: "#fff",
+                      position: 'relative'
+                    }}
+                  >
+                    {journeyLoading
+                      ? <span className="spinner-border spinner-border-sm" />
+                      : <i className={`fas fa-${journeyData?.journey?.status === 'ACTIVE' ? 'stop-circle' : 'route'}`}></i>}
+                    {journeyData?.journey?.status === 'ACTIVE'
+                      ? `End Journey · ${journeyData.journey.totalDistanceKm}km`
+                      : journeyData?.canStartJourney
+                        ? 'Start Journey'
+                        : journeyData?.journey?.status === 'COMPLETED'
+                          ? `Journey Done · ${journeyData.journey.totalDistanceKm}km`
+                          : 'My Journey'}
+                    {journeyData?.journey?.status === 'ACTIVE' && (
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#fff', position: 'absolute', top: 8, right: 8, animation: 'pulse 1.5s infinite' }} />
+                    )}
+                  </button>
+                )}
               </div>
             </Card.Body>
           </Card>

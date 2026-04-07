@@ -30,6 +30,11 @@ const workLogRoutes = require('./routes/workLogs');
 const officeLocationRoutes = require('./routes/officeLocations');
 const folderRoutes = require('./routes/folders');
 const trainingRoutes = require('./routes/training');
+const fieldClientRoutes = require('./routes/fieldClients');
+const fieldVisitRoutes = require('./routes/fieldVisits');
+const visitPlanRoutes = require('./routes/visitPlans');
+const fieldReportRoutes = require('./routes/fieldReports');
+const journeyRoutes = require('./routes/journey');
 
 const seedDefaultOffice = require('./utils/seedOfficeLocation');
 
@@ -173,6 +178,12 @@ app.use('/api/work-logs', workLogRoutes);
 app.use('/api/office-locations', officeLocationRoutes);
 app.use('/api/folders', folderRoutes);
 app.use('/api/training', trainingRoutes);
+app.use('/api/field-clients', fieldClientRoutes);
+app.use('/api/field-visits', fieldVisitRoutes);
+app.use('/api/visit-plans', visitPlanRoutes);
+app.use('/api/field-reports', fieldReportRoutes);
+app.use('/api/journey', journeyRoutes);
+app.use('/uploads/visit-photos', express.static(require('path').join(__dirname, 'uploads/visit-photos')));
 
 // Error handling middleware
 app.use((err, req, res, next) => {

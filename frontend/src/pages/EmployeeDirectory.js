@@ -317,6 +317,24 @@ const EmployeeDirectory = () => {
     }
   };
 
+  const handleToggleFieldEmployee = async (empId, currentValue) => {
+    try {
+      await api.put(`/api/employee-management/${empId}/toggle-field-employee`);
+      toast.success(`Field tracking ${!currentValue ? 'enabled' : 'disabled'}`);
+      fetchEmployees();
+      // refresh selected employee if profile modal is open
+      if (selectedEmployee) {
+        const uid = selectedEmployee.userId?._id || selectedEmployee.userId;
+        const res = await api.get(`/api/employees/profile/${uid}`);
+        const userRes = await api.get(`/api/users/${uid}`);
+        res.data.userId = userRes.data;
+        setSelectedEmployee(res.data);
+      }
+    } catch {
+      toast.error('Failed to update field employee status');
+    }
+  };
+
   const handleReactivate = async (userId) => {
     setShowProfileModal(false);
     await new Promise(resolve => setTimeout(resolve, 300));
@@ -1818,7 +1836,7 @@ const EmployeeDirectory = () => {
       </Modal>
 
       {/* Employee Profile Modal (View Only) */}
-      <Modal show={showProfileModal} onHide={() => setShowProfileModal(false)} size="lg" centered className="view-profile-modal">
+      <Modal show={showProfileModal} onHide={() => setShowProfileModal(false)} size="lg" centered scrollable className="view-profile-modal">
         <Modal.Body className="p-0">
           {selectedEmployee && (
             <>
@@ -1847,6 +1865,11 @@ const EmployeeDirectory = () => {
                       <Badge bg={(selectedEmployee.userId?.isActive !== false) ? 'success' : 'danger'}>
                         {(selectedEmployee.userId?.isActive !== false) ? 'Active' : 'Inactive'}
                       </Badge>
+                      {selectedEmployee.userId?.isFieldEmployee && (
+                        <Badge bg="success" style={{ background: '#10b981' }}>
+                          <i className="fas fa-route me-1" />Field Employee
+                        </Badge>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1968,32 +1991,84 @@ const EmployeeDirectory = () => {
                 </Row>
                 
                 {['ADMIN', 'HR'].includes(user?.role) && (
-                  <div className="profile-view-actions" style={{ display: 'flex', gap: '0.75rem', padding: '1.5rem', borderTop: '1px solid #e9ecef', background: '#f8f9fa' }}>
-                    {(selectedEmployee.userId?.isActive !== false) ? (
-                      <Button variant="danger" onClick={handleConfirmDelete} style={{ flex: 1 }}>
-                        <i className="fas fa-user-slash me-2"></i>Deactivate
-                      </Button>
-                    ) : (
-                      <Button variant="success" onClick={() => handleReactivate(selectedEmployee.userId?._id)} style={{ flex: 1 }}>
-                        <i className="fas fa-user-check me-2"></i>Reactivate
-                      </Button>
-                    )}
-                    {user?.role === 'ADMIN' && (
-                      <>
-                        <Button variant="info" onClick={handleChangeRole} style={{ flex: 1 }}>
-                          <i className="fas fa-user-tag me-2"></i>Change Role
-                        </Button>
-                        <Button variant="warning" onClick={handleResetPassword} style={{ flex: 1 }}>
-                          <i className="fas fa-key me-2"></i>Reset Password
-                        </Button>
-                        <Button variant="outline-danger" onClick={handleDeletePermanently} style={{ flex: 1 }}>
-                          <i className="fas fa-trash me-2"></i>Delete
-                        </Button>
-                      </>
-                    )}
-                    <Button variant="primary" onClick={handleEditProfile} style={{ flex: 1 }}>
-                      <i className="fas fa-edit me-2"></i>Edit Profile
-                    </Button>
+                  <div className="profile-view-actions">
+                    {/* Field Employee Toggle */}
+                    <div className="field-toggle-row">
+                      <div className="field-toggle-info">
+                        <div className="field-toggle-title">
+                          <i className="fas fa-route" />Field Employee Tracking
+                        </div>
+                        <div className="field-toggle-desc">
+                          {selectedEmployee.userId?.isFieldEmployee ? 'GPS journey tracking enabled' : 'Enable GPS journey tracking'}
+                        </div>
+                      </div>
+                      <div className="form-check form-switch mb-0">
+                        <input className="form-check-input" type="checkbox" role="switch"
+                          checked={!!selectedEmployee.userId?.isFieldEmployee}
+                          onChange={() => handleToggleFieldEmployee(selectedEmployee.userId?._id, selectedEmployee.userId?.isFieldEmployee)}
+                          style={{ cursor: 'pointer', width: 44, height: 24 }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Action Buttons Grid */}
+                    <div className="action-btn-grid">
+                      <button className="action-btn action-btn-edit" onClick={handleEditProfile}>
+                        <div className="action-btn-icon"><i className="fas fa-user-edit" /></div>
+                        <div className="action-btn-text">
+                          <span className="action-btn-label">Edit Profile</span>
+                          <span className="action-btn-desc">Update employee info</span>
+                        </div>
+                      </button>
+
+                      {user?.role === 'ADMIN' && (
+                        <button className="action-btn action-btn-role" onClick={handleChangeRole}>
+                          <div className="action-btn-icon"><i className="fas fa-user-tag" /></div>
+                          <div className="action-btn-text">
+                            <span className="action-btn-label">Change Role</span>
+                            <span className="action-btn-desc">Current: {selectedEmployee.userId?.role}</span>
+                          </div>
+                        </button>
+                      )}
+
+                      {user?.role === 'ADMIN' && (
+                        <button className="action-btn action-btn-password" onClick={handleResetPassword}>
+                          <div className="action-btn-icon"><i className="fas fa-key" /></div>
+                          <div className="action-btn-text">
+                            <span className="action-btn-label">Reset Password</span>
+                            <span className="action-btn-desc">Set new credentials</span>
+                          </div>
+                        </button>
+                      )}
+
+                      {(selectedEmployee.userId?.isActive !== false) ? (
+                        <button className="action-btn action-btn-deactivate" onClick={handleConfirmDelete}>
+                          <div className="action-btn-icon"><i className="fas fa-user-slash" /></div>
+                          <div className="action-btn-text">
+                            <span className="action-btn-label">Deactivate</span>
+                            <span className="action-btn-desc">Revoke system access</span>
+                          </div>
+                        </button>
+                      ) : (
+                        <button className="action-btn action-btn-reactivate" onClick={() => handleReactivate(selectedEmployee.userId?._id)}>
+                          <div className="action-btn-icon"><i className="fas fa-user-check" /></div>
+                          <div className="action-btn-text">
+                            <span className="action-btn-label">Reactivate</span>
+                            <span className="action-btn-desc">Restore system access</span>
+                          </div>
+                        </button>
+                      )}
+
+                      {user?.role === 'ADMIN' && (
+                        <button className="action-btn action-btn-delete" onClick={handleDeletePermanently}>
+                          <div className="action-btn-icon"><i className="fas fa-trash-alt" /></div>
+                          <div className="action-btn-text">
+                            <span className="action-btn-label">Delete</span>
+                            <span className="action-btn-desc">Permanently remove</span>
+                          </div>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

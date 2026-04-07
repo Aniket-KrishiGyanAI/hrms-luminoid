@@ -12,7 +12,8 @@ import {
   MdFolder, MdPerson, MdReceipt, MdLaptop,
   MdMenu, MdLogout, MdHome,
   MdTask, MdCheckCircle, MdAddCircle, MdAssignment, MdSchool,
-  MdAccessTimeFilled, MdCalendarMonth, MdWbSunny, MdNightsStay, MdWbTwilight
+  MdAccessTimeFilled, MdCalendarMonth, MdWbSunny, MdNightsStay, MdWbTwilight,
+  MdLocationOn
 } from 'react-icons/md';
 
 const PAGE_META = {
@@ -34,6 +35,7 @@ const PAGE_META = {
   '/expenses':           { title: 'Expenses',          icon: 'receipt' },
   '/assets':             { title: 'Assets',            icon: 'laptop' },
   '/training':           { title: 'Training Materials', icon: 'graduation-cap' },
+  '/field-visits':      { title: 'Field Visits',       icon: 'map-marker-alt' },
 };
 
 // ── Isolated clock component — re-renders every second but doesn't affect sidebar ──
@@ -240,6 +242,12 @@ const EnhancedLayout = ({ children }) => {
       items.push({ path: '/assets', label: 'Assets', icon: MdLaptop, roles: ['HR','ADMIN'] });
     }
     items.push({ path: '/training', label: 'Training', icon: MdSchool, roles: ['EMPLOYEE','MANAGER','HR','ADMIN'] });
+    
+    // Field Visits - only for field employees or managers/HR/Admin
+    if (user?.isFieldEmployee || ['MANAGER','HR','ADMIN'].includes(user?.role)) {
+      items.push({ path: '/field-visits', label: 'Field Visits', icon: MdLocationOn, roles: ['EMPLOYEE','MANAGER','HR','ADMIN'] });
+    }
+    
     return items.filter(item => item.roles.includes(user?.role));
   }, [user?.role, pendingCount]);
 

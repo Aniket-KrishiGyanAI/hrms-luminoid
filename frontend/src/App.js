@@ -39,6 +39,8 @@ import DepartmentDetails from './pages/DepartmentDetails';
 import Tasks from './pages/Tasks';
 import TaskManagement from './pages/TaskManagement';
 import TrainingMaterials from './pages/TrainingMaterials';
+import FieldVisitsHub from './pages/FieldVisitsHub';
+import JourneyFAB from './components/JourneyFAB';
 
 function App() {
   return (
@@ -208,6 +210,14 @@ function App() {
                 </EnhancedLayout>
               </ProtectedRoute>
             } />
+
+            <Route path="/field-visits" element={
+              <ProtectedRoute requireFieldEmployee={true} roles={['EMPLOYEE', 'MANAGER', 'HR', 'ADMIN']}>
+                <EnhancedLayout>
+                  <FieldVisitsHub />
+                </EnhancedLayout>
+              </ProtectedRoute>
+            } />
           </Routes>
           
           <ToastContainer
@@ -223,6 +233,7 @@ function App() {
             theme="light"
             toastClassName="custom-toast"
           />
+          <JourneyFAB />
         </div>
       </Router>
     </AuthProvider>

@@ -104,12 +104,10 @@ const attendanceSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-// 🔒 One attendance per user per day
-attendanceSchema.index({ userId: 1, date: 1 }, { unique: true });
+// 🔒 One attendance per user per day (excluding deleted records)
+attendanceSchema.index({ userId: 1, date: 1 }, { unique: true, partialFilterExpression: { isDeleted: false } });
 
 attendanceSchema.pre("save", async function (next) {
-  if (this.isManualEntry) return next();
-
   const {
     FULL_DAY_HOURS,
     HALF_DAY_HOURS,
@@ -131,7 +129,7 @@ attendanceSchema.pre("save", async function (next) {
   const OFFICE_START_HOUR = officeStartTime * 60; // in minutes
 
   if (this.checkIn && this.checkOut) {
-    // Calculate total hours worked
+    // Always calculate total hours when both times exist
     const diffMs = this.checkOut - this.checkIn;
     let totalMinutes = diffMs / (1000 * 60);
     
@@ -142,25 +140,28 @@ attendanceSchema.pre("save", async function (next) {
     
     this.totalHours = Math.round((totalMinutes / 60) * 100) / 100;
 
-    // Check if employee arrived late
-    const checkInTime = new Date(this.checkIn);
-    const checkInMinutes = checkInTime.getHours() * 60 + checkInTime.getMinutes();
-    const lateByMinutes = checkInMinutes - OFFICE_START_HOUR;
-    const isLate = lateByMinutes > LATE_GRACE_MINUTES;
+    // Only auto-calculate status if not manual entry
+    if (!this.isManualEntry) {
+      // Check if employee arrived late
+      const checkInTime = new Date(this.checkIn);
+      const checkInMinutes = checkInTime.getHours() * 60 + checkInTime.getMinutes();
+      const lateByMinutes = checkInMinutes - OFFICE_START_HOUR;
+      const isLate = lateByMinutes > LATE_GRACE_MINUTES;
 
-    // Determine status based on hours worked and arrival time
-    if (this.totalHours < LOP_THRESHOLD) {
-      this.status = "LOP";
-    } else if (this.totalHours < HALF_DAY_HOURS) {
-      this.status = "Half Day";
-    } else if (this.totalHours >= FULL_DAY_HOURS) {
-      // Full hours worked, but check if late
-      this.status = isLate ? "Late" : "Present";
-    } else {
-      // Between 4-8 hours
-      this.status = isLate ? "Late" : "Half Day";
+      // Determine status based on hours worked and arrival time
+      if (this.totalHours < LOP_THRESHOLD) {
+        this.status = "LOP";
+      } else if (this.totalHours < HALF_DAY_HOURS) {
+        this.status = "Half Day";
+      } else if (this.totalHours >= FULL_DAY_HOURS) {
+        // Full hours worked, but check if late
+        this.status = isLate ? "Late" : "Present";
+      } else {
+        // Between 4-8 hours
+        this.status = isLate ? "Late" : "Half Day";
+      }
     }
-  } else if (this.checkIn && !this.checkOut) {
+  } else if (this.checkIn && !this.checkOut && !this.isManualEntry) {
     // Only checked in, determine if late
     const checkInTime = new Date(this.checkIn);
     const checkInMinutes = checkInTime.getHours() * 60 + checkInTime.getMinutes();

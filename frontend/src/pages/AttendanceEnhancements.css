@@ -333,8 +333,8 @@
   .card-body { padding: 0.85rem; }
   .card-header { padding: 0.85rem 1rem; font-size: 0.9rem; }
 
-  .attendance-table th:nth-child(3),
-  .attendance-table td:nth-child(3) { display: none; }
+  /* Hide less important columns on very small screens for EMPLOYEE view only */
+  /* Admin/HR/Manager should see all columns */
 
   .modal-dialog { margin: 0.5rem; }
   .badge { font-size: 0.68rem; }

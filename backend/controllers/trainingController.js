@@ -36,26 +36,6 @@ const getMaterials = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-    const materials = await TrainingMaterial.find(query)
-      .populate('uploadedBy', 'firstName lastName')
-      .sort({ createdAt: -1 });
-
-    // Attach progress for current user
-    const ids = materials.map(m => m._id);
-    const progresses = await TrainingProgress.find({ userId: req.user._id, materialId: { $in: ids } });
-    const progressMap = {};
-    progresses.forEach(p => { progressMap[p.materialId.toString()] = p; });
-
-    const result = materials.map(m => ({
-      ...m.toObject(),
-      progress: progressMap[m._id.toString()] || { status: 'NOT_STARTED' }
-    }));
-
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
 
 // POST /api/training — upload new material (HR/ADMIN only)
 const createMaterial = async (req, res) => {
