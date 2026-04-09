@@ -26,18 +26,17 @@ const getMonthLockInfo = () => {
   const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const today = now.getDate();
   const daysLeft = lastDay - today;
-  const isLocked = today >= lastDay; // locked on last day of month
+  const locked = today >= lastDay;
 
   return {
-    isLocked,
-    isWarning: !isLocked && daysLeft <= 5,
+    isLocked: locked,
+    isWarning: !locked && daysLeft <= 5,
     daysLeft,
     lastDay,
   };
 };
 
 // Check if a given billingMonth (YYYY-MM) is locked
-// Locked if: it's a past month OR it's the current month and today >= last day
 const isMonthLocked = (billingMonth) => {
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -68,7 +67,10 @@ const getExpenses = async (req, res) => {
       .limit(parseInt(limit));
 
     const currentBillingMonth = billingMonth || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
-    const lockInfo = { ...getMonthLockInfo(), isLocked: isMonthLocked(currentBillingMonth) };
+    const lockInfo = {
+      ...getMonthLockInfo(),
+      isLocked: isMonthLocked(currentBillingMonth)
+    };
 
     res.json({
       expenses,

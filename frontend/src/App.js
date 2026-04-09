@@ -23,7 +23,6 @@ import { ThemeProvider } from "./context/ThemeContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Layout";
 import EnhancedLayout from "./components/EnhancedLayout";
-import PWAInstallBanner from "./components/PWAInstallBanner";
 
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -55,7 +54,6 @@ function App() {
     <ThemeProvider>
       <AuthProvider>
         <Router>
-          <PWAInstallBanner />
           <div className="App">
             <Routes>
               <Route path="/login" element={<Login />} />
