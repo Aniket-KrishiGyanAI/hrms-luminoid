@@ -4,11 +4,6 @@ import { Download, X, CheckCircle } from "react-feather";
 import { toast } from "react-toastify";
 import "./PWAInstallBanner.css";
 
-/**
- * PWA Install Banner Component
- * Displays an installable app prompt for web and mobile devices
- * Shows only when PWA installation is available
- */
 const PWAInstallBanner = () => {
   const [showBanner, setShowBanner] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
@@ -18,61 +13,20 @@ const PWAInstallBanner = () => {
   const [installSuccess, setInstallSuccess] = useState(false);
 
   useEffect(() => {
-    // Detect iOS
     const ua = window.navigator.userAgent;
     const isAppleDevice = /iPad|iPhone|iPod/.test(ua);
-    const isAndroid = /Android/.test(ua);
-    const isMobile = /Mobile|Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
     const isInStandaloneMode = window.navigator.standalone === true;
 
     setIsIOS(isAppleDevice);
     setIsInstalled(isInStandaloneMode);
 
-    // DEBUG: Force show banner for testing on localhost
-    const isLocalhost =
-      window.location.hostname === "localhost" ||
-      window.location.hostname === "127.0.0.1" ||
-      window.location.hostname === "192.168.1.12";
-    const showDebugBanner = localStorage.getItem("pwa-debug-banner") === "true";
-
-    console.log("[PWA] Device detection:", {
-      isAppleDevice,
-      isAndroid,
-      isMobile,
-      isInStandaloneMode,
-      isLocalhost,
-    });
-
-    // Show banner on:
-    // 1. Localhost/Network testing
-    // 2. Mobile devices (iOS or Android) not already installed
-    // 3. Debug mode enabled
-    if (
-      ((isLocalhost || isMobile) && !isInStandaloneMode) ||
-      showDebugBanner
-    ) {
-      // Check if previously dismissed
-      const dismissed = localStorage.getItem("pwa-install-dismissed");
-      const timestamp = localStorage.getItem("pwa-install-dismissed-time");
-      const daysSinceDismissal = timestamp
-        ? (Date.now() - parseInt(timestamp)) / (1000 * 60 * 60 * 24)
-        : 0;
-
-      // Show if never dismissed or 7 days have passed
-      if (!dismissed || daysSinceDismissal > 7) {
-        setShowBanner(true);
-      }
-    }
-
-    // Listen for beforeinstallprompt event (Android/Desktop)
+    // Listen for beforeinstallprompt event (Android/Desktop Chrome)
     const handleBeforeInstallPrompt = (e) => {
-      console.log("[PWA] beforeinstallprompt event fired");
       e.preventDefault();
       setDeferredPrompt(e);
-      
-      // Always show if event fires
-      const dismissed = localStorage.getItem("pwa-install-dismissed");
-      const timestamp = localStorage.getItem("pwa-install-dismissed-time");
+
+      const dismissed = localStorage.getItem('pwa-install-dismissed');
+      const timestamp = localStorage.getItem('pwa-install-dismissed-time');
       const daysSinceDismissal = timestamp
         ? (Date.now() - parseInt(timestamp)) / (1000 * 60 * 60 * 24)
         : 0;
@@ -82,39 +36,15 @@ const PWAInstallBanner = () => {
       }
     };
 
-    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-    window.addEventListener("appinstalled", () => {
-      console.log("[PWA] App installed");
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', () => {
       setShowBanner(false);
       setIsInstalled(true);
-      localStorage.removeItem("pwa-install-dismissed");
+      localStorage.removeItem('pwa-install-dismissed');
     });
 
-    // Debug: Check if beforeinstallprompt event fires within 5 seconds
-    const debugTimeout = setTimeout(() => {
-      if (!deferredPrompt) {
-        console.warn(
-          "[PWA] ⚠️ beforeinstallprompt event did NOT fire within 5 seconds"
-        );
-        console.log("[PWA] Debugging info:", {
-          userAgent: ua,
-          isMobile: isMobile,
-          isAndroid: isAndroid,
-          isIOS: isAppleDevice,
-          isHTTPS: window.location.protocol === "https:",
-          manifestLoaded: document.querySelector('link[rel="manifest"]') !== null,
-          serviceWorkerRegistered:
-            "serviceWorker" in navigator ? "Yes" : "No",
-        });
-      }
-    }, 5000);
-
     return () => {
-      clearTimeout(debugTimeout);
-      window.removeEventListener(
-        "beforeinstallprompt",
-        handleBeforeInstallPrompt,
-      );
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
   }, []);
 

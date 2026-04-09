@@ -35,6 +35,11 @@ const getStatusStyle = (status) => {
   return styles[status] || styles.SUBMITTED;
 };
 
+// Stable swal helpers outside component to avoid stale closure issues
+const showSuccess = (msg) => Swal.fire({ icon: 'success', title: msg, timer: 2000, showConfirmButton: false, toast: true, position: 'top-end' });
+const showError   = (msg) => Swal.fire({ icon: 'error',   title: msg, timer: 3000, showConfirmButton: false, toast: true, position: 'top-end' });
+const showWarning = (msg) => Swal.fire({ icon: 'warning', title: msg, timer: 3000, showConfirmButton: false, toast: true, position: 'top-end' });
+
 const timelineConfig = {
   SUBMITTED:  { color: '#1d4ed8', bg: '#dbeafe', icon: 'fa-paper-plane'  },
   APPROVED:   { color: '#15803d', bg: '#dcfce7', icon: 'fa-check-circle' },
@@ -80,24 +85,26 @@ const Expenses = () => {
   const [reimbursementNote, setReimbursementNote] = useState('');
 
   const swal = {
-    success: (msg) => Swal.fire({ icon: 'success', title: msg, timer: 2000, showConfirmButton: false, toast: true, position: 'top-end' }),
-    error:   (msg) => Swal.fire({ icon: 'error',   title: msg, timer: 3000, showConfirmButton: false, toast: true, position: 'top-end' }),
-    warning: (msg) => Swal.fire({ icon: 'warning', title: msg, timer: 3000, showConfirmButton: false, toast: true, position: 'top-end' }),
+    success: showSuccess,
+    error:   showError,
+    warning: showWarning,
   };
 
   const isEmployee = user?.role === 'EMPLOYEE';
   const isManagerOrHR = ['MANAGER', 'HR', 'ADMIN'].includes(user?.role);
   const isHROrAdmin = ['HR', 'ADMIN'].includes(user?.role);
-  const canOperate = !lockInfo.isLocked || !isEmployee;
+  const canOperate = !(lockInfo?.isLocked) || !isEmployee;
 
   const fetchExpenses = useCallback(async () => {
     try {
       const response = await api.get(`/api/expenses?billingMonth=${selectedMonth}`);
-      setExpenses(response.data.expenses);
-      setLockInfo(response.data.lockInfo);
+      setExpenses(response.data?.expenses || []);
+      setLockInfo(response.data?.lockInfo || { isLocked: false, isWarning: false, daysLeft: 0, lastDay: 31 });
     } catch (error) {
       console.error('Error fetching expenses:', error);
-      swal.error('Failed to load expenses');
+      setExpenses([]);
+      setLockInfo({ isLocked: false, isWarning: false, daysLeft: 0, lastDay: 31 });
+      showError('Failed to load expenses');
     } finally {
       setLoading(false);
     }
@@ -244,9 +251,9 @@ const handleMarkReimbursed = async () => {
     }
   };
 
-  const filteredExpenses = filterStatus === 'ALL' 
+  const filteredExpenses = (filterStatus === 'ALL' 
     ? expenses 
-    : expenses.filter(e => e.status === filterStatus);
+    : expenses.filter(e => e.status === filterStatus)) || [];
 
   const totalAmount = filteredExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
   const stats = {

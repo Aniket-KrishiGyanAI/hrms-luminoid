@@ -10,6 +10,7 @@ import {
 } from "react-bootstrap";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import PWAInstallBanner from "../components/PWAInstallBanner";
 import "../styles/Login.css";
 
 const Login = () => {
@@ -70,6 +71,7 @@ const Login = () => {
 
   return (
     <div className="modern-login-container">
+      <PWAInstallBanner />
       {/* Animated Background */}
       <div className="animated-bg">
         <div className="gradient-orb orb-1"></div>
