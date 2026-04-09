@@ -11,7 +11,13 @@ const fileSchema = new mongoose.Schema({
   category: String,
   uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   targetUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // For employee files
-  isPublic: { type: Boolean, default: false },
+  isPublic: { type: Boolean, default: false }, // kept for backward compat
+  visibility: {
+    type: { type: String, enum: ['ALL', 'DEPARTMENTS', 'ROLES', 'SPECIFIC_EMPLOYEES'], default: 'ALL' },
+    departments: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Department' }],
+    roles: [{ type: String, enum: ['ADMIN', 'HR', 'MANAGER', 'EMPLOYEE'] }],
+    employees: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
+  },
   description: String,
   requiresAcknowledgment: { type: Boolean, default: false },
   isLocked: { type: Boolean, default: false }, // For employee document submission lock
@@ -25,7 +31,8 @@ const fileSchema = new mongoose.Schema({
   verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   verifiedAt: Date,
   expiryDate: Date,
-  verificationNotes: String
+  verificationNotes: String,
+  folderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Folder', default: null }
 }, { timestamps: true });
 
 module.exports = mongoose.model('File', fileSchema);

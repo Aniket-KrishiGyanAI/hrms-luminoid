@@ -237,3 +237,25 @@ body.dark-mode .swal2-title {
 body.dark-mode .swal2-html-container {
   color: #cbd5e1 !important;
 }
+
+/* ── Dashboard Quote ── */
+body.dark-mode .dash-quote {
+  background: linear-gradient(135deg, #064e3b 0%, #065f46 100%);
+  box-shadow: 0 4px 20px rgba(16, 185, 129, 0.2);
+}
+
+body.dark-mode .dash-quote-icon {
+  background: rgba(255,255,255,0.08);
+}
+
+body.dark-mode .dash-quote-text {
+  color: #e2e8f0;
+}
+
+body.dark-mode .dash-quote-author {
+  color: rgba(226, 232, 240, 0.8);
+}
+
+body.dark-mode .dash-quote-divider {
+  background: rgba(226, 232, 240, 0.3);
+}

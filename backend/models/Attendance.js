@@ -27,6 +27,11 @@ const attendanceSchema = new mongoose.Schema(
       default: 0,
     },
 
+    overtimeHours: {
+      type: Number,
+      default: 0,
+    },
+
     status: {
       type: String,
       enum: ["Present", "Absent", "Half Day", "Late", "On Leave", "LOP"],
@@ -100,73 +105,115 @@ const attendanceSchema = new mongoose.Schema(
       default: null,
     },
     officeLocationName: { type: String, default: null },
+    
+    // Track if employee arrived late (for reporting purposes)
+    arrivedLate: {
+      type: Boolean,
+      default: false,
+    },
+    lateByMinutes: {
+      type: Number,
+      default: 0,
+    },
   },
   { timestamps: true },
 );
 
-// 🔒 One attendance per user per day
-attendanceSchema.index({ userId: 1, date: 1 }, { unique: true });
+// 🔒 One attendance per user per day (excluding deleted records)
+attendanceSchema.index({ userId: 1, date: 1 }, { unique: true, partialFilterExpression: { isDeleted: false } });
 
 attendanceSchema.pre("save", async function (next) {
-  if (this.isManualEntry) return next();
-
   const {
     FULL_DAY_HOURS,
     HALF_DAY_HOURS,
     LOP_THRESHOLD,
     LATE_GRACE_MINUTES,
-    OFFICE_START_TIME
+    OFFICE_START_TIME,
+    DEFAULT_BREAK_MINUTES,
+    OVERTIME_THRESHOLD,
+    OVERTIME_ENABLED
   } = attendanceConfig;
 
-  // Use per-office start time if available
-  let officeStartTime = OFFICE_START_TIME;
+  // Use per-office start time and grace period if available
+  let officeStartHour = OFFICE_START_TIME;
+  let officeStartMinute = 0;
+  let graceMinutes = LATE_GRACE_MINUTES;
+  
   if (this.officeLocation) {
     try {
       const OfficeLocation = require('./OfficeLocation');
       const office = await OfficeLocation.findById(this.officeLocation);
-      if (office) officeStartTime = office.startTime;
+      if (office) {
+        officeStartHour = office.startTime;
+        officeStartMinute = office.startMinute || 0;
+        graceMinutes = office.compensationMinutes || 0;
+      }
     } catch (e) { /* fallback to default */ }
   }
 
-  const OFFICE_START_HOUR = officeStartTime * 60; // in minutes
+  // Calculate office start time in total minutes from midnight
+  const officeStartTotalMinutes = officeStartHour * 60 + officeStartMinute;
+
+  // Check if employee arrived late (track for reporting)
+  let arrivedLate = false;
+  if (this.checkIn) {
+    const checkInTime = new Date(this.checkIn);
+    const checkInTotalMinutes = checkInTime.getHours() * 60 + checkInTime.getMinutes();
+    const lateByMinutes = checkInTotalMinutes - officeStartTotalMinutes;
+    
+    // Employee is late only if they arrived AFTER the grace period
+    arrivedLate = lateByMinutes > graceMinutes;
+    this.arrivedLate = arrivedLate;
+    this.lateByMinutes = Math.max(0, lateByMinutes);
+  }
 
   if (this.checkIn && this.checkOut) {
-    // Calculate total hours worked
+    // Calculate total hours
     const diffMs = this.checkOut - this.checkIn;
     let totalMinutes = diffMs / (1000 * 60);
     
-    // Subtract break time if exists
+    // NOTE: Break time is NOT auto-applied
+    // Employees get full credit for hours worked (check-out - check-in)
+    // If you want to deduct break time, HR can manually set it when editing
+    
+    // Only apply break time if manually set by HR/Admin
     if (this.breakTime > 0) {
       totalMinutes -= this.breakTime;
     }
     
-    this.totalHours = Math.round((totalMinutes / 60) * 100) / 100;
+    this.totalHours = Math.max(0, Math.round((totalMinutes / 60) * 100) / 100);
 
-    // Check if employee arrived late
-    const checkInTime = new Date(this.checkIn);
-    const checkInMinutes = checkInTime.getHours() * 60 + checkInTime.getMinutes();
-    const lateByMinutes = checkInMinutes - OFFICE_START_HOUR;
-    const isLate = lateByMinutes > LATE_GRACE_MINUTES;
-
-    // Determine status based on hours worked and arrival time
-    if (this.totalHours < LOP_THRESHOLD) {
-      this.status = "LOP";
-    } else if (this.totalHours < HALF_DAY_HOURS) {
-      this.status = "Half Day";
-    } else if (this.totalHours >= FULL_DAY_HOURS) {
-      // Full hours worked, but check if late
-      this.status = isLate ? "Late" : "Present";
+    // Calculate overtime if enabled
+    if (OVERTIME_ENABLED && this.totalHours > OVERTIME_THRESHOLD) {
+      this.overtimeHours = Math.round((this.totalHours - OVERTIME_THRESHOLD) * 100) / 100;
     } else {
-      // Between 4-8 hours
-      this.status = isLate ? "Late" : "Half Day";
+      this.overtimeHours = 0;
     }
-  } else if (this.checkIn && !this.checkOut) {
-    // Only checked in, determine if late
-    const checkInTime = new Date(this.checkIn);
-    const checkInMinutes = checkInTime.getHours() * 60 + checkInTime.getMinutes();
-    const lateByMinutes = checkInMinutes - OFFICE_START_HOUR;
-    
-    this.status = lateByMinutes > LATE_GRACE_MINUTES ? "Late" : "Present";
+
+    // Only auto-calculate status if not manual entry
+    if (!this.isManualEntry) {
+      // FIXED LOGIC: Status based on hours worked, not arrival time
+      // "Late" status only applies if they didn't complete full hours
+      
+      if (this.totalHours < LOP_THRESHOLD) {
+        // Less than 4 hours = LOP (Loss of Pay)
+        this.status = "LOP";
+      } else if (this.totalHours < HALF_DAY_HOURS) {
+        // Less than 4 hours but more than LOP threshold = Half Day
+        this.status = "Half Day";
+      } else if (this.totalHours >= FULL_DAY_HOURS) {
+        // 8+ hours worked = Present (regardless of arrival time)
+        // Employee compensated for late arrival by working full hours
+        this.status = "Present";
+      } else {
+        // Between 4-8 hours
+        // Mark as "Late" only if they arrived late AND didn't complete 8 hours
+        this.status = arrivedLate ? "Late" : "Half Day";
+      }
+    }
+  } else if (this.checkIn && !this.checkOut && !this.isManualEntry) {
+    // Only checked in - mark as Late or Present based on arrival time with grace period
+    this.status = arrivedLate ? "Late" : "Present";
   }
 
   next();

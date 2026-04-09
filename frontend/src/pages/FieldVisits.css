@@ -1,0 +1,140 @@
+/* Field Visits Mobile Responsive Styles */
+
+.field-visits-container {
+  padding-bottom: 2rem;
+  min-height: 100vh;
+  background: linear-gradient(to bottom, #f9fafb 0%, #ffffff 100%);
+}
+
+/* Animations */
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Mobile specific adjustments */
+@media (max-width: 768px) {
+  .field-visits-container {
+    padding-bottom: 1rem;
+  }
+
+  .page-header {
+    padding: 1rem !important;
+  }
+
+  .page-title {
+    font-size: 1.5rem !important;
+    margin-bottom: 0.5rem !important;
+  }
+
+  /* Card spacing for mobile */
+  .card {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  /* Button adjustments */
+  .btn-sm {
+    font-size: 0.8rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  /* Badge adjustments */
+  .badge {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.5rem;
+  }
+
+  /* Modal adjustments */
+  .modal-body {
+    padding: 1rem;
+  }
+
+  .modal-title {
+    font-size: 1.1rem;
+  }
+
+  /* Form controls */
+  .form-control,
+  .form-select {
+    font-size: 0.9rem;
+  }
+
+  .form-label {
+    font-size: 0.85rem;
+    margin-bottom: 0.25rem;
+  }
+}
+
+/* Extra small devices */
+@media (max-width: 576px) {
+  .field-visits-container {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .card {
+    border-radius: 10px !important;
+  }
+
+  /* Compact spacing */
+  .mb-3 {
+    margin-bottom: 0.75rem !important;
+  }
+
+  /* Button group adjustments */
+  .d-flex.gap-2 {
+    gap: 0.5rem !important;
+  }
+}
+
+/* Smooth animations */
+.fade-in-up {
+  animation: fadeInUp 0.4s ease-out;
+}
+
+/* Loading spinner */
+.spinner-border-sm {
+  width: 0.875rem;
+  height: 0.875rem;
+  border-width: 0.15em;
+}
+
+/* Card hover effects */
+.card {
+  transition: all 0.3s ease;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+}
+
+/* Button hover effects */
+.btn {
+  transition: all 0.3s ease;
+}
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.15) !important;
+}

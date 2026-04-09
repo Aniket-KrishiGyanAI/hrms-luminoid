@@ -5,7 +5,8 @@ const {
   deactivateEmployee, 
   reactivateEmployee,
   getAllEmployees,
-  deleteEmployee
+  deleteEmployee,
+  toggleFieldEmployee
 } = require('../controllers/employeeManagementController');
 const { auth, authorize } = require('../middleware/auth');
 
@@ -27,6 +28,9 @@ router.put('/:userId/deactivate', auth, authorize('ADMIN', 'HR'), deactivateEmpl
 
 // Reactivate employee (ADMIN/HR only)
 router.put('/:userId/reactivate', auth, authorize('ADMIN', 'HR'), reactivateEmployee);
+
+// Toggle field employee (ADMIN/HR only)
+router.put('/:userId/toggle-field-employee', auth, authorize('ADMIN', 'HR'), toggleFieldEmployee);
 
 // Delete employee permanently (ADMIN only)
 router.delete('/:userId', auth, authorize('ADMIN'), deleteEmployee);

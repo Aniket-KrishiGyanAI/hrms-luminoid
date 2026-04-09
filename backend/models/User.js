@@ -35,7 +35,8 @@ const userSchema = new mongoose.Schema({
     notes: String,
     deactivatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     deactivatedAt: Date
-  }
+  },
+  isFieldEmployee: { type: Boolean, default: false }
 }, { timestamps: true });
 
 userSchema.pre('save', async function(next) {

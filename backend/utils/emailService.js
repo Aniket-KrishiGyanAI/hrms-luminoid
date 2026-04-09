@@ -394,6 +394,94 @@ const sendWelcomeEmail = async ({ to, name, password, loginUrl }) => {
   }
 };
 
+const sendExpenseDeadlineReminder = async (employees, daysLeft, lastDay, billingMonth) => {
+  const [year, month] = billingMonth.split('-');
+  const monthName = new Date(year, month - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
+
+  const urgencyColor   = daysLeft === 1 ? '#dc2626' : '#ea580c';
+  const urgencyBg      = daysLeft === 1 ? '#fee2e2' : '#ffedd5';
+  const urgencyBorder  = daysLeft === 1 ? '#fca5a5' : '#fdba74';
+  const urgencyLabel   = daysLeft === 1 ? '🚨 LAST DAY TOMORROW!' : '⚠️ Only 2 Days Left!';
+
+  const emailPromises = employees.map(employee => {
+    const mailOptions = {
+      from: process.env.SMTP_FROM || 'noreply@company.com',
+      to: employee.email,
+      subject: `[Action Required] Submit Your ${monthName} Expenses — ${daysLeft} Day${daysLeft > 1 ? 's' : ''} Left`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8fafc; padding: 0;">
+
+          <!-- Header -->
+          <div style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); padding: 32px 40px; border-radius: 12px 12px 0 0;">
+            <h1 style="color: #fff; margin: 0; font-size: 22px; font-weight: 700;">💼 Expense Submission Reminder</h1>
+            <p style="color: rgba(255,255,255,0.6); margin: 6px 0 0; font-size: 14px;">${monthName} — Deadline Alert</p>
+          </div>
+
+          <!-- Urgency Banner -->
+          <div style="background: ${urgencyBg}; border: 1.5px solid ${urgencyBorder}; border-radius: 8px; margin: 24px 40px 0; padding: 16px 20px; display: flex; align-items: center;">
+            <p style="margin: 0; color: ${urgencyColor}; font-size: 16px; font-weight: 700;">${urgencyLabel}</p>
+            <p style="margin: 4px 0 0; color: ${urgencyColor}; font-size: 13px;">
+              The expense submission window for <strong>${monthName}</strong> closes on the <strong>${lastDay}th</strong>.
+              After that, no expenses can be submitted or claimed.
+            </p>
+          </div>
+
+          <!-- Body -->
+          <div style="background: #fff; margin: 16px 40px 0; border-radius: 8px; padding: 24px; border: 1px solid #e2e8f0;">
+            <p style="margin: 0 0 16px; color: #334155; font-size: 15px;">Dear <strong>${employee.firstName}</strong>,</p>
+            <p style="margin: 0 0 16px; color: #475569; font-size: 14px; line-height: 1.6;">
+              This is a reminder to submit all your pending expense claims for <strong>${monthName}</strong>.
+              You have <strong style="color: ${urgencyColor};">${daysLeft} day${daysLeft > 1 ? 's' : ''}</strong> remaining.
+            </p>
+
+            <!-- Checklist -->
+            <div style="background: #f8fafc; border-radius: 8px; padding: 16px 20px; margin: 16px 0;">
+              <p style="margin: 0 0 10px; font-weight: 700; color: #1e293b; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em;">Before the deadline, make sure you have:</p>
+              <ul style="margin: 0; padding-left: 20px; color: #475569; font-size: 14px; line-height: 2;">
+                <li>Submitted all expense claims for ${monthName}</li>
+                <li>Uploaded bills/receipts for each expense</li>
+                <li>Verified the amounts and categories are correct</li>
+              </ul>
+            </div>
+
+            <div style="background: #fee2e2; border-radius: 8px; padding: 14px 18px; margin: 16px 0; border-left: 4px solid #dc2626;">
+              <p style="margin: 0; color: #991b1b; font-size: 13px; font-weight: 600;">
+                ❌ After ${lastDay}th ${monthName}, the system will be locked and no new expenses can be submitted or claimed for this month.
+              </p>
+            </div>
+          </div>
+
+          <!-- CTA -->
+          <div style="text-align: center; margin: 24px 40px;">
+            <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/expenses"
+               style="display: inline-block; background: linear-gradient(135deg, #10b981, #059669); color: #fff; text-decoration: none;
+                      padding: 14px 32px; border-radius: 8px; font-size: 15px; font-weight: 700;
+                      box-shadow: 0 4px 12px rgba(16,185,129,0.35);">
+              Submit My Expenses Now →
+            </a>
+          </div>
+
+          <!-- Footer -->
+          <div style="text-align: center; padding: 20px 40px 32px; color: #94a3b8; font-size: 12px;">
+            <p style="margin: 0;">This is an automated reminder from your HRMS. Please do not reply to this email.</p>
+            <p style="margin: 6px 0 0;">© ${new Date().getFullYear()} Luminoid HRMS</p>
+          </div>
+        </div>
+      `
+    };
+    return transporter.sendMail(mailOptions).catch(err =>
+      console.error(`Failed to send expense reminder to ${employee.email}:`, err.message)
+    );
+  });
+
+  try {
+    await Promise.all(emailPromises);
+    console.log(`Expense deadline reminder sent to ${employees.length} employees (${daysLeft} days left)`);
+  } catch (error) {
+    console.error('Error sending expense deadline reminders:', error);
+  }
+};
+
 module.exports = { 
   sendHolidayNotification, 
   sendLeaveApplicationNotification, 
@@ -402,5 +490,6 @@ module.exports = {
   sendLeaveApprovalNotification,
   sendAnnouncementNotification,
   sendBirthdayWishes,
-  sendWelcomeEmail
+  sendWelcomeEmail,
+  sendExpenseDeadlineReminder
 };

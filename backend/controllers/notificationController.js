@@ -40,6 +40,25 @@ exports.markAllAsRead = async (req, res) => {
   }
 };
 
+exports.deleteNotification = async (req, res) => {
+  try {
+    const notification = await Notification.findById(req.params.id);
+    
+    if (!notification) {
+      return res.status(404).json({ message: 'Notification not found' });
+    }
+    
+    if (notification.user.toString() !== req.user.id) {
+      return res.status(403).json({ message: 'Not authorized to delete this notification' });
+    }
+    
+    await Notification.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Notification deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 exports.createNotification = async (userId, type, taskId, message, actionBy, metadata = {}) => {
   try {
     await Notification.create({

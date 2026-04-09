@@ -4,7 +4,7 @@
   min-height: 100vh;
   position: relative;
   overflow: hidden;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
 }
 
 /* Animated Background */
@@ -27,7 +27,7 @@
 .orb-1 {
   width: 500px;
   height: 500px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   top: -10%;
   left: -10%;
   animation-delay: 0s;
@@ -36,7 +36,7 @@
 .orb-2 {
   width: 400px;
   height: 400px;
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background: linear-gradient(135deg, #064e3b 0%, #065f46 100%);
   bottom: -10%;
   right: -10%;
   animation-delay: 5s;
@@ -45,7 +45,7 @@
 .orb-3 {
   width: 350px;
   height: 350px;
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  background: linear-gradient(135deg, #34d399 0%, #6ee7b7 100%);
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
@@ -136,17 +136,21 @@
   width: 80px;
   height: 80px;
   margin: 0 auto;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   border-radius: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
   animation: iconBounce 2s infinite;
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.3);
 }
 
 .login-icon-wrapper i {
   font-size: 2.5rem;
   color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 @keyframes iconBounce {
@@ -164,12 +168,7 @@
   color: #374151;
   font-size: 0.9rem;
   margin-bottom: 0.5rem;
-  display: flex;
-  align-items: center;
-}
-
-.form-label-modern i {
-  color: #667eea;
+  display: block;
 }
 
 .form-control-modern {
@@ -182,8 +181,8 @@
 }
 
 .form-control-modern:focus {
-  border-color: #667eea;
-  box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+  border-color: #10b981;
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.12);
   background: white;
   outline: none;
 }
@@ -208,7 +207,7 @@
 }
 
 .password-toggle-btn:hover {
-  color: #667eea;
+  color: #10b981;
 }
 
 /* Modern Button */
@@ -218,19 +217,19 @@
   font-weight: 600;
   border-radius: 12px;
   border: none;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   color: white;
   transition: all 0.3s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 15px 0 rgba(102, 126, 234, 0.4);
+  box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
 }
 
 .btn-modern:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px 0 rgba(102, 126, 234, 0.6);
-  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.55);
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
   color: white;
 }
 
@@ -245,12 +244,12 @@
 
 /* Link Modern */
 .link-modern {
-  color: #667eea !important;
+  color: #10b981 !important;
   transition: all 0.3s ease;
 }
 
 .link-modern:hover {
-  color: #764ba2 !important;
+  color: #059669 !important;
   text-decoration: underline !important;
 }
 
@@ -314,7 +313,7 @@
 /* Responsive */
 @media (max-width: 991px) {
   .modern-login-container {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
   }
   
   .glass-card {
@@ -324,8 +323,8 @@
 
 @media (max-width: 576px) {
   .login-icon-wrapper {
-    width: 60px;
-    height: 60px;
+    width: 70px;
+    height: 70px;
   }
   
   .login-icon-wrapper i {
@@ -338,6 +337,10 @@
   
   .btn-modern {
     padding: 0.75rem 1.5rem;
+  }
+  
+  h2.fw-bold {
+    font-size: 1.5rem !important;
   }
 }
 

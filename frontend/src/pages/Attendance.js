@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Row, Col, Card, Button, Table, Badge, Form, Modal } from "react-bootstrap";
 import { toast } from "react-toastify";
+import moment from "moment-timezone";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import './AttendanceEnhancements.css';
@@ -19,14 +20,19 @@ const Attendance = () => {
   const [showOfficeModal, setShowOfficeModal] = useState(false);
   const [editingOffice, setEditingOffice] = useState(null);
   const [officeSaving, setOfficeSaving] = useState(false);
-  const [officeForm, setOfficeForm] = useState({ name: '', latitude: '', longitude: '', radiusMeters: 100, startTime: 9, endTime: 18, isActive: true });
+  const [officeForm, setOfficeForm] = useState({ name: '', latitude: '', longitude: '', radiusMeters: 100, startTime: 9, startMinute: 0, endTime: 18, endMinute: 0, compensationMinutes: 0, isActive: true });
   const [fetchingGPS, setFetchingGPS] = useState(false);
   const [mapAddress, setMapAddress] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchingLocation, setSearchingLocation] = useState(false);
   const [weekSummary, setWeekSummary] = useState({
     presentDays: 0,
     totalHours: 0,
     lateDays: 0,
     absentDays: 0,
+    holidayDays: 0,
+    workingDaysThisWeek: 0,
   });
 
   // Edit/Delete states
@@ -41,6 +47,8 @@ const Attendance = () => {
   const [loadingAddress, setLoadingAddress] = useState(false);
   const [addressCache, setAddressCache] = useState({});
   const [liveHours, setLiveHours] = useState(0);
+  const [journeyData, setJourneyData] = useState(null);
+  const [journeyLoading, setJourneyLoading] = useState(false);
 
   // Calculate live hours for checked-in employees
   useEffect(() => {
@@ -73,10 +81,14 @@ const Attendance = () => {
   const [showDeleted, setShowDeleted] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 10;
   const [dateRange, setDateRange] = useState({
     startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0]
   });
+  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM format
+  const [totalRecords, setTotalRecords] = useState(0);
 
   useEffect(() => {
     const initData = async () => {
@@ -84,7 +96,7 @@ const Attendance = () => {
         fetchTodayStatus(selectedUser),
         fetchWeekSummary(selectedUser)
       ]);
-      fetchAttendanceHistory(selectedUser);
+      fetchAttendanceHistory(selectedUser, 1);
     };
     initData();
 
@@ -93,9 +105,12 @@ const Attendance = () => {
     }
     fetchOfficeLocations();
 
+    // Fetch journey status for field employees
+    fetchJourneyStatus();
+
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
-  }, [selectedUser, showDeleted]);
+  }, [selectedUser, showDeleted, selectedMonth]);
 
   const fetchTodayStatus = async (userId = "") => {
     try {
@@ -143,13 +158,20 @@ const Attendance = () => {
     }
   };
 
-  const fetchAttendanceHistory = async (userId = "") => {
+  const fetchAttendanceHistory = async (userId = "", page = 1) => {
     try {
-      let url = "/api/attendance?limit=50";
+      // Calculate date range from selected month
+      const [year, month] = selectedMonth.split('-');
+      const startDate = new Date(year, month - 1, 1).toISOString().split('T')[0];
+      const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+      
+      let url = `/api/attendance?page=${page}&limit=${PAGE_SIZE}&startDate=${startDate}&endDate=${endDate}`;
       if (userId) url += `&userId=${userId}`;
       if (showDeleted) url += `&includeDeleted=true`;
       const response = await api.get(url);
       setAttendanceHistory(response.data.attendance || response.data);
+      setTotalRecords(response.data.total || 0);
+      setCurrentPage(page);
     } catch (error) {
       console.error("Error fetching attendance history:", error);
     }
@@ -157,37 +179,128 @@ const Attendance = () => {
 
   const fetchWeekSummary = async (userId = "") => {
     try {
-      const startOfWeek = new Date();
-      startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
-      const endOfWeek = new Date(startOfWeek);
-      endOfWeek.setDate(startOfWeek.getDate() + 6);
+      const today = moment.tz('Asia/Kolkata');
+      const startOfWeek = today.clone().startOf('isoWeek'); // Monday
+      const endOfWeek = startOfWeek.clone().add(4, 'days').endOf('day'); // Friday
 
-      let url = `/api/attendance?startDate=${startOfWeek.toISOString().split("T")[0]}&endDate=${endOfWeek.toISOString().split("T")[0]}&limit=1000`;
-      
-      // Only add userId filter if it's not empty (for specific user selection)
+      const startDate = startOfWeek.format('YYYY-MM-DD');
+      const endDate = endOfWeek.format('YYYY-MM-DD');
+
+      console.log('📅 Fetching week summary for:', startDate, 'to', endDate);
+
+      // Fetch attendance records
+      let url = `/api/attendance?startDate=${startDate}&endDate=${endDate}&limit=1000`;
       if (userId && userId.trim() !== "") {
         url += `&userId=${userId}`;
       }
-      // If userId is empty, it will fetch all employees' data for admin/hr/manager
 
-      const response = await api.get(url);
-      const records = response.data.attendance || [];
+      // Fetch holidays for the week
+      const holidaysUrl = `/api/holidays?startDate=${startDate}&endDate=${endDate}`;
 
-      const summary = records.reduce(
-        (acc, record) => {
-          if (record.status === "Present") acc.presentDays++;
-          if (record.status === "Late") acc.lateDays++;
-          if (record.status === "Absent") acc.absentDays++;
-          acc.totalHours += record.totalHours || 0;
-          return acc;
-        },
-        { presentDays: 0, totalHours: 0, lateDays: 0, absentDays: 0 },
+      const [attendanceRes, holidaysRes] = await Promise.all([
+        api.get(url).catch(err => {
+          console.error('❌ Attendance API error:', err);
+          return { data: { attendance: [] } };
+        }),
+        api.get(holidaysUrl).catch(err => {
+          console.warn('⚠️ Holidays API error (continuing without holidays):', err.message);
+          return { data: [] };
+        })
+      ]);
+
+      console.log('✅ Attendance response:', attendanceRes.data);
+      console.log('✅ Holidays response:', holidaysRes.data);
+
+      const records = (attendanceRes.data.attendance || []).filter(r => !r.isDeleted);
+      const holidays = Array.isArray(holidaysRes.data) ? holidaysRes.data : holidaysRes.data.holidays || [];
+
+      console.log('📊 Records found:', records.length);
+      console.log('📋 Full records array:', JSON.stringify(records, null, 2));
+      console.log('🏖️ Holidays found:', holidays.length, holidays);
+
+      // Create a map of holidays by date for quick lookup
+      const holidayDatesSet = new Set(
+        holidays.map(h => {
+          const holidayDate = moment.tz(h.date, 'Asia/Kolkata').format('YYYY-MM-DD');
+          console.log('Holiday date:', h.date, '→', holidayDate);
+          return holidayDate;
+        })
       );
 
+      // Initialize summary
+      let summary = {
+        presentDays: 0,
+        lateDays: 0,
+        absentDays: 0,
+        holidayDays: 0,
+        workingDaysThisWeek: 0,
+        totalHours: 0,
+      };
+
+      // Create attendance map by date
+      const attendanceByDate = {};
+      records.forEach(r => {
+        const dateStr = moment.tz(r.date, 'Asia/Kolkata').format('YYYY-MM-DD');
+        attendanceByDate[dateStr] = r;
+        console.log('Attendance on', dateStr, ':', r.status, '| Hours:', r.totalHours);
+      });
+
+      // Loop through Mon-Fri
+      for (let i = 0; i < 5; i++) {
+        const currentDay = startOfWeek.clone().add(i, 'days');
+        const dateStr = currentDay.format('YYYY-MM-DD');
+        const dayName = currentDay.format('dddd');
+
+        console.log(`📆 Checking ${dayName} (${dateStr})`);
+
+        // Check if it's a holiday
+        if (holidayDatesSet.has(dateStr)) {
+          console.log(`  → Holiday found`);
+          summary.holidayDays++;
+          continue; // Skip holidays from working day count
+        }
+
+        summary.workingDaysThisWeek++;
+
+        // Check if there's an attendance record for this day
+        const record = attendanceByDate[dateStr];
+        if (!record) {
+          console.log(`  → Absent (no record)`);
+          summary.absentDays++;
+        } else {
+          if (record.status === "Present") {
+            console.log(`  → Present | Hours: ${record.totalHours}`);
+            summary.presentDays++;
+          } else if (record.status === "Late") {
+            console.log(`  → Late | Hours: ${record.totalHours}`);
+            summary.presentDays++; // Late counts as present
+            summary.lateDays++;
+          } else if (record.status === "Absent") {
+            console.log(`  → Absent | Hours: ${record.totalHours}`);
+            summary.absentDays++;
+          }
+          const hoursToAdd = record.totalHours || 0;
+          summary.totalHours += hoursToAdd;
+          console.log(`     Added ${hoursToAdd}h | Running total: ${summary.totalHours}h`);
+        }
+      }
+
+      console.log('✅ Final summary:', summary);
+      console.log('📊 Hours breakdown:');
+      console.log('  - Total Hours Worked:', summary.totalHours);
+      console.log('  - Working Days This Week:', summary.workingDaysThisWeek);
+      console.log('  - Target Hours (working days × 8):', summary.workingDaysThisWeek * 8);
+      console.log('  - Present Days:', summary.presentDays);
+      console.log('  - Absent Days:', summary.absentDays);
+      console.log('  - Holiday Days:', summary.holidayDays);
+      console.log('  - Late Days:', summary.lateDays);
+      if (summary.presentDays > 0) {
+        console.log('  - Avg Hours/Day:', (summary.totalHours / summary.presentDays).toFixed(2));
+      }
       setWeekSummary(summary);
     } catch (error) {
-      console.error("Error fetching week summary:", error);
-      setWeekSummary({ presentDays: 0, totalHours: 0, lateDays: 0, absentDays: 0 });
+      console.error("❌ Error fetching week summary:", error);
+      setWeekSummary({ presentDays: 0, totalHours: 0, lateDays: 0, absentDays: 0, holidayDays: 0, workingDaysThisWeek: 0 });
     }
   };
 
@@ -201,17 +314,50 @@ const Attendance = () => {
     }
   };
 
+  const fetchJourneyStatus = async () => {
+    try {
+      const res = await api.get('/api/journey/today');
+      setJourneyData(res.data);
+    } catch {}
+  };
+
+  const handleStartJourney = async () => {
+    setJourneyLoading(true);
+    try {
+      await api.post('/api/journey/start');
+      toast.success('🚀 Journey started! GPS tracking active.');
+      await fetchJourneyStatus();
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Failed to start journey');
+    } finally { setJourneyLoading(false); }
+  };
+
+  const handleEndJourney = async () => {
+    setJourneyLoading(true);
+    try {
+      await api.post('/api/journey/end');
+      toast.success('🏁 Journey ended!');
+      await fetchJourneyStatus();
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Failed to end journey');
+    } finally { setJourneyLoading(false); }
+  };
+
   const openAddOffice = () => {
     setEditingOffice(null);
-    setOfficeForm({ name: '', latitude: '', longitude: '', radiusMeters: 100, startTime: 9, endTime: 18, isActive: true });
+    setOfficeForm({ name: '', latitude: '', longitude: '', radiusMeters: 100, startTime: 9, startMinute: 0, endTime: 18, endMinute: 0, compensationMinutes: 0, isActive: true });
     setMapAddress('');
+    setSearchQuery('');
+    setSearchResults([]);
     setShowOfficeModal(true);
   };
 
   const openEditOffice = (loc) => {
     setEditingOffice(loc);
-    setOfficeForm({ name: loc.name, latitude: loc.latitude, longitude: loc.longitude, radiusMeters: loc.radiusMeters, startTime: loc.startTime, endTime: loc.endTime, isActive: loc.isActive });
+    setOfficeForm({ name: loc.name, latitude: loc.latitude, longitude: loc.longitude, radiusMeters: loc.radiusMeters, startTime: loc.startTime, startMinute: loc.startMinute || 0, endTime: loc.endTime, endMinute: loc.endMinute || 0, compensationMinutes: loc.compensationMinutes || 0, isActive: loc.isActive });
     setMapAddress('');
+    setSearchQuery('');
+    setSearchResults([]);
     setShowOfficeModal(true);
   };
 
@@ -234,6 +380,37 @@ const Attendance = () => {
       () => { toast.error('Could not get location. Allow location access.'); setFetchingGPS(false); },
       { enableHighAccuracy: true, timeout: 10000 }
     );
+  };
+
+  const searchLocation = async () => {
+    if (!searchQuery.trim()) return;
+    setSearchingLocation(true);
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=5`,
+        { headers: { 'User-Agent': 'HRMS-App' } }
+      );
+      const data = await res.json();
+      setSearchResults(data);
+      if (data.length === 0) {
+        toast.info('No locations found. Try a different search term.');
+      }
+    } catch (error) {
+      toast.error('Failed to search location');
+      setSearchResults([]);
+    } finally {
+      setSearchingLocation(false);
+    }
+  };
+
+  const selectSearchResult = (result) => {
+    const lat = parseFloat(result.lat);
+    const lng = parseFloat(result.lon);
+    setOfficeForm(f => ({ ...f, latitude: lat, longitude: lng }));
+    setMapAddress(result.display_name);
+    setSearchResults([]);
+    setSearchQuery('');
+    toast.success('Location selected!');
   };
 
   const handleSaveOffice = async () => {
@@ -272,10 +449,11 @@ const Attendance = () => {
     }
   };
 
-  const formatHour = (h) => {
+  const formatHour = (h, m = 0) => {
     const suffix = h >= 12 ? 'PM' : 'AM';
     const hour = h % 12 || 12;
-    return `${hour}:00 ${suffix}`;
+    const minute = String(m).padStart(2, '0');
+    return `${hour}:${minute} ${suffix}`;
   };
 
   const fetchEmployees = async () => {
@@ -320,10 +498,10 @@ const Attendance = () => {
 
       toast.success(`Checked in successfully (${workMode === 'OFFICE' ? '🏢 Office' : workMode === 'REMOTE' ? '🏠 Remote' : '🔄 Hybrid/Field'})`);
       
-      // Refresh data immediately
-      await fetchTodayStatus(selectedUser);
-      await fetchAttendanceHistory(selectedUser);
-      await fetchWeekSummary(selectedUser);
+      // Refresh data in background (no await - instant response to user)
+      fetchTodayStatus(selectedUser);
+      fetchAttendanceHistory(selectedUser);
+      fetchWeekSummary(selectedUser);
     } catch (error) {
       toast.error(
         error.response?.data?.message ||
@@ -377,11 +555,10 @@ const Attendance = () => {
 
       toast.success(data.message || "Checked out successfully");
 
-      // Refresh UI data
-      await Promise.all([
-        fetchTodayStatus(selectedUser),
-        fetchAttendanceHistory(selectedUser),
-      ]);
+      // Refresh data in background (no await - instant response to user)
+      fetchTodayStatus(selectedUser);
+      fetchAttendanceHistory(selectedUser);
+      fetchWeekSummary(selectedUser);
     } catch (error) {
       console.error(error);
 
@@ -659,15 +836,6 @@ const Attendance = () => {
 
   return (
     <div className="fade-in-up">
-      <div className="page-header">
-        <h1 className="page-title">
-          <i className="fas fa-clock me-3 text-primary"></i>
-          Attendance Tracking
-        </h1>
-        <p className="text-muted mb-0">
-          Track your daily attendance and working hours
-        </p>
-      </div>
 
       <Row className="mb-4">
         {/* Today's Status */}
@@ -902,7 +1070,7 @@ const Attendance = () => {
                               <option value="">-- Choose your office --</option>
                               {officeLocations.filter(o => o.isActive).map(o => (
                                 <option key={o._id} value={o._id}>
-                                  {o.name} &nbsp;({o.startTime}:00 – {o.endTime}:00)
+                                  {o.name} &nbsp;({formatHour(o.startTime, o.startMinute || 0)} – {formatHour(o.endTime, o.endMinute || 0)})
                                 </option>
                               ))}
                             </Form.Select>
@@ -1069,6 +1237,65 @@ const Attendance = () => {
                       </Badge>
                     </div>
                   )}
+
+                  {/* Journey Tracker Card — field employees only */}
+                  {journeyData !== null && journeyData !== undefined && (
+                    <div className="mt-3 p-3" style={{
+                      background: journeyData?.journey?.status === 'ACTIVE'
+                        ? 'linear-gradient(135deg, #064e3b 0%, #10b981 100%)'
+                        : journeyData?.canStartJourney
+                          ? 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)'
+                          : '#f8fafc',
+                      borderRadius: '12px',
+                      border: journeyData?.journey?.status === 'ACTIVE' ? 'none' : '2px solid #d1fae5'
+                    }}>
+                      <div className="d-flex align-items-center justify-content-between">
+                        <div className="d-flex align-items-center gap-2">
+                          <div style={{
+                            width: 38, height: 38, borderRadius: 10, flexShrink: 0,
+                            background: journeyData?.journey?.status === 'ACTIVE' ? 'rgba(255,255,255,0.2)' : '#dcfce7',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center'
+                          }}>
+                            <i className="fas fa-route" style={{ color: journeyData?.journey?.status === 'ACTIVE' ? 'white' : '#10b981', fontSize: '1rem' }} />
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: '0.875rem', color: journeyData?.journey?.status === 'ACTIVE' ? 'white' : '#065f46' }}>
+                              Journey Tracker
+                            </div>
+                            <div style={{ fontSize: '0.72rem', color: journeyData?.journey?.status === 'ACTIVE' ? 'rgba(255,255,255,0.8)' : '#6b7280' }}>
+                              {journeyData?.journey?.status === 'ACTIVE'
+                                ? `● Active · ${journeyData.journey.totalDistanceKm} km traveled`
+                                : journeyData?.journey?.status === 'COMPLETED' || journeyData?.journey?.status === 'AUTO_ENDED'
+                                  ? `✅ Completed · ${journeyData.journey.totalDistanceKm} km`
+                                  : journeyData?.canStartJourney
+                                    ? 'Ready to start — tap Start Journey'
+                                    : 'Check in to enable journey tracking'}
+                            </div>
+                          </div>
+                        </div>
+                        <div>
+                          {journeyData?.canStartJourney && (
+                            <button onClick={handleStartJourney} disabled={journeyLoading} style={{
+                              padding: '0.5rem 1rem', borderRadius: 8, border: 'none',
+                              background: 'linear-gradient(135deg, #065f46, #10b981)',
+                              color: 'white', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer'
+                            }}>
+                              {journeyLoading ? <span className="spinner-border spinner-border-sm" /> : <><i className="fas fa-play me-1" />Start</>}
+                            </button>
+                          )}
+                          {journeyData?.journey?.status === 'ACTIVE' && (
+                            <button onClick={handleEndJourney} disabled={journeyLoading} style={{
+                              padding: '0.5rem 1rem', borderRadius: 8, border: '2px solid rgba(255,255,255,0.4)',
+                              background: 'rgba(239,68,68,0.8)', color: 'white',
+                              fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer'
+                            }}>
+                              {journeyLoading ? <span className="spinner-border spinner-border-sm" /> : <><i className="fas fa-stop me-1" />End</>}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   </>
                 )
               ) : (
@@ -1086,7 +1313,7 @@ const Attendance = () => {
           <Card className="h-100 shadow-sm attendance-card">
             <Card.Header className="d-flex align-items-center bg-light">
               <i className="fas fa-chart-bar me-2 text-success"></i>
-              {(selectedUser && selectedUser !== '') || user?.role === 'EMPLOYEE' ? 'This Week Summary' : 'Team Week Summary'}
+              {(selectedUser && selectedUser !== '') || user?.role === 'EMPLOYEE' ? 'This Week Summary' : 'Today\'s Team Summary'}
             </Card.Header>
             <Card.Body>
               {(selectedUser && selectedUser !== '') || user?.role === 'EMPLOYEE' ? (
@@ -1098,163 +1325,184 @@ const Attendance = () => {
                       <i className="fas fa-trophy fa-2x" style={{ color: '#1e3a8a' }}></i>
                     </div>
                     <h2 className="fw-bold mb-1" style={{ color: '#1e3a8a' }}>
-                      {Math.round((weekSummary.presentDays / 7) * 100)}%
+                      {weekSummary.workingDaysThisWeek > 0 ? Math.round((weekSummary.presentDays / weekSummary.workingDaysThisWeek) * 100) : 0}%
                     </h2>
                     <small className="text-muted fw-semibold">Weekly Attendance Score</small>
                     <div className="mt-2">
                       <small style={{ color: '#1e3a8a' }}>
-                        {weekSummary.presentDays === 7 ? '🌟 Perfect Week!' : 
-                         weekSummary.presentDays >= 5 ? '✅ Great Job!' : 
-                         weekSummary.presentDays >= 3 ? '👍 Keep Going!' : '⚠️ Needs Improvement'}
+                        {weekSummary.workingDaysThisWeek === 0 ? '📆 No working days' :
+                         weekSummary.presentDays === weekSummary.workingDaysThisWeek && weekSummary.lateDays === 0 ? '🌟 Perfect Week!' : 
+                         weekSummary.presentDays === weekSummary.workingDaysThisWeek && weekSummary.lateDays > 0 ? '✅ Full Week (with late arrivals)' :
+                         weekSummary.presentDays >= weekSummary.workingDaysThisWeek - 1 ? '✅ Great Job!' : 
+                         weekSummary.presentDays >= weekSummary.workingDaysThisWeek - 2 ? '👍 Keep Going!' : '⚠️ Needs Improvement'}
                       </small>
                     </div>
+                    {weekSummary.lateDays > 0 && (
+                      <div className="mt-2">
+                        <small style={{ color: '#d97706', fontSize: '0.7rem' }}>
+                          <i className="fas fa-clock me-1"></i>
+                          {weekSummary.lateDays} late arrival{weekSummary.lateDays > 1 ? 's' : ''} this week
+                        </small>
+                      </div>
+                    )}
+                    {weekSummary.holidayDays > 0 && (
+                      <div className="mt-2">
+                        <small style={{ color: '#059669', fontSize: '0.7rem' }}>
+                          <i className="fas fa-calendar-check me-1"></i>
+                          {weekSummary.holidayDays} public holiday{weekSummary.holidayDays > 1 ? 's' : ''} (not counted)
+                        </small>
+                      </div>
+                    )}
                   </div>
 
                   {/* Present Days */}
                   <div className="mb-3">
                     <div className="d-flex justify-content-between align-items-center mb-2">
-                      <small className="text-muted fw-semibold">Present Days</small>
+                      <small className="text-muted fw-semibold">Present Days (incl. Late)</small>
                       <span className="fw-bold" style={{ color: '#065f46' }}>
-                        {weekSummary.presentDays}/7
+                        {weekSummary.presentDays}/{weekSummary.workingDaysThisWeek}
                       </span>
                     </div>
                     <div className="progress" style={{ height: '10px', borderRadius: '10px' }}>
                       <div
                         className="progress-bar"
                         style={{ 
-                          width: `${(weekSummary.presentDays / 7) * 100}%`,
-                          background: weekSummary.presentDays === 7 ? 'linear-gradient(90deg, #065f46 0%, #10b981 100%)' :
-                                     weekSummary.presentDays >= 5 ? 'linear-gradient(90deg, #0891b2 0%, #06b6d4 100%)' :
+                          width: weekSummary.workingDaysThisWeek > 0 ? `${(weekSummary.presentDays / weekSummary.workingDaysThisWeek) * 100}%` : '0%',
+                          background: weekSummary.presentDays === weekSummary.workingDaysThisWeek ? 'linear-gradient(90deg, #065f46 0%, #10b981 100%)' :
+                                     weekSummary.presentDays >= weekSummary.workingDaysThisWeek - 1 ? 'linear-gradient(90deg, #0891b2 0%, #06b6d4 100%)' :
                                      'linear-gradient(90deg, #d97706 0%, #f59e0b 100%)'
                         }}
                       ></div>
                     </div>
                   </div>
-
-                  {/* Total Hours */}
-                  <div className="mb-3">
-                    <div className="d-flex justify-content-between align-items-center mb-2">
-                      <small className="text-muted fw-semibold">Total Hours</small>
-                      <span className="fw-bold" style={{ color: '#1e3a8a' }}>
-                        {formatDuration(weekSummary.totalHours)}
-                        <span className="text-muted" style={{ fontSize: '0.8rem' }}> / 45h</span>
-                      </span>
-                    </div>
-                    <div className="progress" style={{ height: '10px', borderRadius: '10px' }}>
-                      <div
-                        className="progress-bar"
-                        style={{ 
-                          width: `${Math.min((weekSummary.totalHours / 45) * 100, 100)}%`,
-                          background: 'linear-gradient(90deg, #1e3a8a 0%, #3b82f6 100%)'
-                        }}
-                      ></div>
-                    </div>
-                    <small className="text-muted">
-                      {weekSummary.presentDays > 0 ? `Avg: ${formatDuration(weekSummary.totalHours / weekSummary.presentDays)} per day` : 'No data'}
-                    </small>
-                  </div>
-
-                  {/* Issues */}
-                  <div className="row g-2">
-                    <div className="col-6">
-                      <div className="text-center p-2" style={{ 
-                        background: weekSummary.lateDays > 0 ? '#fef3c7' : '#f3f4f6', 
-                        borderRadius: '8px', 
-                        border: weekSummary.lateDays > 0 ? '1px solid #fbbf24' : '1px solid #e5e7eb'
-                      }}>
-                        <div className="fw-bold" style={{ color: weekSummary.lateDays > 0 ? '#92400e' : '#6b7280', fontSize: '1.25rem' }}>
-                          {weekSummary.lateDays}
-                        </div>
-                        <small style={{ color: weekSummary.lateDays > 0 ? '#92400e' : '#6b7280', fontSize: '0.7rem' }}>Late Days</small>
-                      </div>
-                    </div>
-                    <div className="col-6">
-                      <div className="text-center p-2" style={{ 
-                        background: weekSummary.absentDays > 0 ? '#fee2e2' : '#f3f4f6', 
-                        borderRadius: '8px', 
-                        border: weekSummary.absentDays > 0 ? '1px solid #f87171' : '1px solid #e5e7eb'
-                      }}>
-                        <div className="fw-bold" style={{ color: weekSummary.absentDays > 0 ? '#991b1b' : '#6b7280', fontSize: '1.25rem' }}>
-                          {weekSummary.absentDays}
-                        </div>
-                        <small style={{ color: weekSummary.absentDays > 0 ? '#991b1b' : '#6b7280', fontSize: '0.7rem' }}>Absent Days</small>
-                      </div>
-                    </div>
-                  </div>
                 </>
               ) : (
-                // Admin/HR aggregated view
+                // Admin/HR today's team summary
                 <>
-                  {/* Total Attendance */}
-                  <div className="mb-3 p-3" style={{ background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)', borderRadius: '10px', border: '1px solid #3b82f6' }}>
-                    <div className="d-flex justify-content-between align-items-center mb-2">
-                      <div>
-                        <i className="fas fa-calendar-check me-2" style={{ color: '#1e3a8a' }}></i>
-                        <span className="fw-semibold" style={{ color: '#1e3a8a' }}>Total Attendance</span>
+                  {todayStatus?.isAggregated && todayStatus?.summary ? (
+                    <>
+                      {/* Today's Attendance Score */}
+                      <div className="mb-3 p-3 text-center" style={{ background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)', borderRadius: '12px', border: '2px solid #3b82f6' }}>
+                        <div className="mb-2">
+                          <i className="fas fa-users fa-2x" style={{ color: '#1e3a8a' }}></i>
+                        </div>
+                        <h2 className="fw-bold mb-1" style={{ color: '#1e3a8a' }}>
+                          {todayStatus.summary.totalEmployees > 0 ? Math.round((todayStatus.summary.checkedIn / todayStatus.summary.totalEmployees) * 100) : 0}%
+                        </h2>
+                        <small className="text-muted fw-semibold">Today's Attendance Rate</small>
+                        <div className="mt-2">
+                          <small style={{ color: '#1e3a8a' }}>
+                            {todayStatus.summary.checkedIn} / {todayStatus.summary.totalEmployees} employees
+                          </small>
+                        </div>
                       </div>
-                      <h4 className="mb-0 fw-bold" style={{ color: '#1e3a8a' }}>
-                        {weekSummary.presentDays}
-                      </h4>
-                    </div>
-                    <small className="text-muted">Total check-ins this week</small>
-                  </div>
 
-                  {/* Average Daily Attendance */}
-                  <div className="mb-3">
-                    <div className="d-flex justify-content-between align-items-center mb-2">
-                      <small className="text-muted fw-semibold">Avg Daily Attendance</small>
-                      <span className="fw-bold" style={{ color: '#065f46' }}>
-                        {employees.length > 0 ? Math.round((weekSummary.presentDays / 7) / employees.length * 100) : 0}%
-                      </span>
-                    </div>
-                    <div className="progress" style={{ height: '8px' }}>
-                      <div
-                        className="progress-bar"
-                        style={{ 
-                          width: `${employees.length > 0 ? Math.min((weekSummary.presentDays / 7) / employees.length * 100, 100) : 0}%`,
-                          background: 'linear-gradient(90deg, #065f46 0%, #10b981 100%)'
-                        }}
-                      ></div>
-                    </div>
-                  </div>
-
-                  {/* Total Hours */}
-                  <div className="mb-3">
-                    <div className="d-flex justify-content-between align-items-center mb-2">
-                      <small className="text-muted fw-semibold">Total Hours Worked</small>
-                      <span className="fw-bold" style={{ color: '#1e3a8a' }}>
-                        {formatDuration(weekSummary.totalHours)}
-                      </span>
-                    </div>
-                    <div className="progress" style={{ height: '8px' }}>
-                      <div
-                        className="progress-bar"
-                        style={{ 
-                          width: `${employees.length > 0 ? Math.min((weekSummary.totalHours / (employees.length * 45)) * 100, 100) : 0}%`,
-                          background: 'linear-gradient(90deg, #1e3a8a 0%, #3b82f6 100%)'
-                        }}
-                      ></div>
-                    </div>
-                    <small className="text-muted">
-                      Avg: {employees.length > 0 && weekSummary.presentDays > 0 ? formatDuration(weekSummary.totalHours / weekSummary.presentDays) : '0h 0m'} per attendance
-                    </small>
-                  </div>
-
-                  {/* Issues Summary */}
-                  <div className="row mt-3 g-2">
-                    <div className="col-6">
-                      <div className="text-center p-2" style={{ background: '#fef3c7', borderRadius: '8px', border: '1px solid #fbbf24' }}>
-                        <div className="fw-bold" style={{ color: '#92400e', fontSize: '1.1rem' }}>{weekSummary.lateDays}</div>
-                        <small style={{ color: '#92400e', fontSize: '0.7rem' }}>Late Arrivals</small>
+                      {/* Checked In */}
+                      <div className="mb-3">
+                        <div className="d-flex justify-content-between align-items-center mb-2">
+                          <small className="text-muted fw-semibold">Checked In</small>
+                          <span className="fw-bold" style={{ color: '#065f46' }}>
+                            {todayStatus.summary.checkedIn}/{todayStatus.summary.totalEmployees}
+                          </span>
+                        </div>
+                        <div className="progress" style={{ height: '10px', borderRadius: '10px' }}>
+                          <div
+                            className="progress-bar"
+                            style={{ 
+                              width: `${todayStatus.summary.totalEmployees > 0 ? (todayStatus.summary.checkedIn / todayStatus.summary.totalEmployees) * 100 : 0}%`,
+                              background: 'linear-gradient(90deg, #065f46 0%, #10b981 100%)'
+                            }}
+                          ></div>
+                        </div>
                       </div>
-                    </div>
-                    <div className="col-6">
-                      <div className="text-center p-2" style={{ background: '#fee2e2', borderRadius: '8px', border: '1px solid #f87171' }}>
-                        <div className="fw-bold" style={{ color: '#991b1b', fontSize: '1.1rem' }}>{weekSummary.absentDays}</div>
-                        <small style={{ color: '#991b1b', fontSize: '0.7rem' }}>Absences</small>
+
+                      {/* Checked Out */}
+                      <div className="mb-3">
+                        <div className="d-flex justify-content-between align-items-center mb-2">
+                          <small className="text-muted fw-semibold">Checked Out</small>
+                          <span className="fw-bold" style={{ color: '#991b1b' }}>
+                            {todayStatus.summary.checkedOut}/{todayStatus.summary.checkedIn}
+                          </span>
+                        </div>
+                        <div className="progress" style={{ height: '10px', borderRadius: '10px' }}>
+                          <div
+                            className="progress-bar"
+                            style={{ 
+                              width: `${todayStatus.summary.checkedIn > 0 ? (todayStatus.summary.checkedOut / todayStatus.summary.checkedIn) * 100 : 0}%`,
+                              background: 'linear-gradient(90deg, #991b1b 0%, #dc2626 100%)'
+                            }}
+                          ></div>
+                        </div>
+                        <small className="text-muted">
+                          {todayStatus.summary.checkedIn - todayStatus.summary.checkedOut} still working
+                        </small>
                       </div>
+
+                      {/* Work Mode Breakdown */}
+                      <div className="mb-3">
+                        <small className="text-muted fw-semibold d-block mb-2">Work Mode Distribution</small>
+                        <div className="row g-2">
+                          <div className="col-4">
+                            <div className="text-center p-2" style={{ background: '#eff6ff', borderRadius: '8px', border: '1px solid #3b82f6' }}>
+                              <div className="fw-bold" style={{ color: '#1e3a8a', fontSize: '1.25rem' }}>
+                                {todayStatus.summary.workModeStats?.OFFICE || 0}
+                              </div>
+                              <small style={{ color: '#1e3a8a', fontSize: '0.7rem' }}>Office</small>
+                            </div>
+                          </div>
+                          <div className="col-4">
+                            <div className="text-center p-2" style={{ background: '#f0fdf4', borderRadius: '8px', border: '1px solid #10b981' }}>
+                              <div className="fw-bold" style={{ color: '#065f46', fontSize: '1.25rem' }}>
+                                {todayStatus.summary.workModeStats?.REMOTE || 0}
+                              </div>
+                              <small style={{ color: '#065f46', fontSize: '0.7rem' }}>Remote</small>
+                            </div>
+                          </div>
+                          <div className="col-4">
+                            <div className="text-center p-2" style={{ background: '#fef2f2', borderRadius: '8px', border: '1px solid #f43f5e' }}>
+                              <div className="fw-bold" style={{ color: '#be123c', fontSize: '1.25rem' }}>
+                                {todayStatus.summary.workModeStats?.HYBRID || 0}
+                              </div>
+                              <small style={{ color: '#be123c', fontSize: '0.7rem' }}>Hybrid</small>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Status Breakdown */}
+                      <div className="row g-2">
+                        <div className="col-6">
+                          <div className="text-center p-2" style={{ 
+                            background: (todayStatus.summary.statusCounts?.Late || 0) > 0 ? '#fef3c7' : '#f3f4f6', 
+                            borderRadius: '8px', 
+                            border: (todayStatus.summary.statusCounts?.Late || 0) > 0 ? '1px solid #fbbf24' : '1px solid #e5e7eb'
+                          }}>
+                            <div className="fw-bold" style={{ color: (todayStatus.summary.statusCounts?.Late || 0) > 0 ? '#92400e' : '#6b7280', fontSize: '1.25rem' }}>
+                              {todayStatus.summary.statusCounts?.Late || 0}
+                            </div>
+                            <small style={{ color: (todayStatus.summary.statusCounts?.Late || 0) > 0 ? '#92400e' : '#6b7280', fontSize: '0.7rem' }}>Late Today</small>
+                          </div>
+                        </div>
+                        <div className="col-6">
+                          <div className="text-center p-2" style={{ 
+                            background: (todayStatus.summary.totalEmployees - todayStatus.summary.checkedIn) > 0 ? '#fee2e2' : '#f3f4f6', 
+                            borderRadius: '8px', 
+                            border: (todayStatus.summary.totalEmployees - todayStatus.summary.checkedIn) > 0 ? '1px solid #f87171' : '1px solid #e5e7eb'
+                          }}>
+                            <div className="fw-bold" style={{ color: (todayStatus.summary.totalEmployees - todayStatus.summary.checkedIn) > 0 ? '#991b1b' : '#6b7280', fontSize: '1.25rem' }}>
+                              {todayStatus.summary.totalEmployees - todayStatus.summary.checkedIn}
+                            </div>
+                            <small style={{ color: (todayStatus.summary.totalEmployees - todayStatus.summary.checkedIn) > 0 ? '#991b1b' : '#6b7280', fontSize: '0.7rem' }}>Absent Today</small>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-center py-4">
+                      <i className="fas fa-users text-muted fa-3x mb-3"></i>
+                      <p className="text-muted mb-0">No team data available</p>
                     </div>
-                  </div>
+                  )}
                 </>
               )}
             </Card.Body>
@@ -1271,14 +1519,28 @@ const Attendance = () => {
             </div>
             <div>
               <span className="fw-semibold" style={{ fontSize: '0.95rem', color: '#1e293b' }}>Recent Attendance History</span>
-              {attendanceHistory.length > 0 && (
+              {totalRecords > 0 && (
                 <Badge className="ms-2" style={{ background: 'linear-gradient(135deg, #0ea5e9, #6366f1)', fontSize: '0.7rem', borderRadius: '20px', padding: '3px 8px' }}>
-                  {attendanceHistory.length} records
+                  {totalRecords} records
                 </Badge>
               )}
             </div>
           </div>
           <div className="d-flex align-items-center gap-2 flex-wrap">
+            {/* Month Selector */}
+            <div className="d-flex align-items-center gap-2">
+              <i className="fas fa-calendar-alt" style={{ color: '#64748b' }}></i>
+              <Form.Control
+                type="month"
+                value={selectedMonth}
+                onChange={(e) => {
+                  setSelectedMonth(e.target.value);
+                  setCurrentPage(1);
+                }}
+                style={{ width: '160px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '0.85rem', padding: '6px 12px' }}
+              />
+            </div>
+            
             {user?.role && ["MANAGER", "HR", "ADMIN"].includes(user.role) && (
               <>
                 {["ADMIN", "HR"].includes(user?.role) && (
@@ -1294,7 +1556,7 @@ const Attendance = () => {
                 <Form.Select
                   size="sm"
                   value={selectedUser}
-                  onChange={(e) => { setSelectedUser(e.target.value); fetchAttendanceHistory(e.target.value); }}
+                  onChange={(e) => { setSelectedUser(e.target.value); setCurrentPage(1); }}
                   style={{ width: '200px', minWidth: '150px', borderRadius: '8px', border: '1.5px solid #e2e8f0' }}
                   className="mb-2 mb-md-0"
                 >
@@ -1317,7 +1579,61 @@ const Attendance = () => {
         </Card.Header>
         <Card.Body style={{ padding: 0 }}>
           {attendanceHistory.length > 0 ? (
-            <div className="table-responsive" style={{ maxHeight: '480px', overflowY: 'auto' }}>
+            <>
+              {/* Mobile card view */}
+              <div className="d-block d-md-none">
+                {attendanceHistory.map((record) => {
+                  const hours = record.totalHours || 0;
+                  const hoursColor = hours >= 8 ? '#059669' : hours >= 4 ? '#d97706' : '#dc2626';
+                  const dateObj = record.date ? new Date(record.date) : null;
+                  const dayName = dateObj ? dateObj.toLocaleDateString('en-IN', { weekday: 'short', timeZone: 'Asia/Kolkata' }) : '';
+                  return (
+                    <div key={record._id} style={{ padding: '0.875rem 1rem', borderBottom: '1px solid #f1f5f9', background: record.isDeleted ? '#fff1f2' : 'white' }}>
+                      {/* Row 1: Date + Status */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        <div>
+                          <span style={{ fontWeight: 700, fontSize: '0.88rem', color: '#1e293b' }}>{formatDate(record.date)}</span>
+                          <span style={{ marginLeft: '0.4rem', fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>{dayName}</span>
+                        </div>
+                        {getStatusBadge(record.status)}
+                      </div>
+                      {/* Row 2: Check In / Check Out / Hours */}
+                      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.4rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                          <i className="fas fa-sign-in-alt" style={{ color: '#10b981', fontSize: '0.75rem' }}></i>
+                          <span style={{ fontSize: '0.8rem', color: '#334155', fontWeight: 600 }}>{record.checkIn ? formatTime(record.checkIn) : '—'}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                          <i className="fas fa-sign-out-alt" style={{ color: '#ef4444', fontSize: '0.75rem' }}></i>
+                          <span style={{ fontSize: '0.8rem', color: '#334155', fontWeight: 600 }}>{record.checkOut ? formatTime(record.checkOut) : 'Pending'}</span>
+                        </div>
+                        {hours > 0 && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <i className="fas fa-clock" style={{ color: hoursColor, fontSize: '0.75rem' }}></i>
+                            <span style={{ fontSize: '0.8rem', color: hoursColor, fontWeight: 700 }}>{formatDuration(hours)}</span>
+                          </div>
+                        )}
+                      </div>
+                      {/* Row 3: Work mode + employee (admin) */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          {getWorkModeBadge(record.workMode || 'OFFICE')}
+                          {record.isAutoCheckout && (
+                            <span style={{ background: '#ede9fe', color: '#6d28d9', fontSize: '0.62rem', fontWeight: 700, padding: '2px 6px', borderRadius: '20px' }}>AUTO</span>
+                          )}
+                        </div>
+                        {user?.role && ['MANAGER','HR','ADMIN'].includes(user.role) && record.userId && (
+                          <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>{record.userId.firstName} {record.userId.lastName}</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop table view */}
+              <div className="d-none d-md-block">
+                <div className="table-responsive">
               <Table className="mb-0 attendance-table">
                 {(() => {
                   const thStyle = { color: '#64748b', fontWeight: '600', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '0.85rem 1rem', whiteSpace: 'nowrap', background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', borderBottom: '2px solid #e2e8f0' };
@@ -1389,7 +1705,11 @@ const Attendance = () => {
                                 <i className="fas fa-sign-out-alt me-1"></i>
                                 {formatTime(record.checkOut)}
                               </span>
-                            ) : <span className="text-muted">—</span>}
+                            ) : (
+                              <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>
+                                <i className="fas fa-clock me-1"></i>Pending
+                              </span>
+                            )}
                             {record.isAutoCheckout && (
                               <span title="Auto checked-out" style={{ background: '#ede9fe', color: '#6d28d9', fontSize: '0.65rem', fontWeight: 700, padding: '2px 7px', borderRadius: '20px', border: '1px solid #c4b5fd', letterSpacing: '0.03em' }}>
                                 <i className="fas fa-robot me-1"></i>AUTO
@@ -1400,14 +1720,24 @@ const Attendance = () => {
 
                         {/* Duration */}
                         <td style={{ padding: '0.85rem 1rem', verticalAlign: 'middle', minWidth: '110px' }}>
-                          {hours > 0 ? (
-                            <div>
-                              <div className="fw-bold mb-1" style={{ fontSize: '0.85rem', color: hoursColor }}>{formatDuration(hours)}</div>
-                              <div className="progress" style={{ height: '4px', borderRadius: '4px', background: '#e2e8f0' }}>
-                                <div style={{ width: `${Math.min((hours / 9) * 100, 100)}%`, background: hoursBarColor, height: '100%', borderRadius: '4px', transition: 'width 0.6s ease' }}></div>
+                          {record.checkOut && record.checkIn ? (
+                            hours > 0 ? (
+                              <div>
+                                <div className="fw-bold mb-1" style={{ fontSize: '0.85rem', color: hoursColor }}>{formatDuration(hours)}</div>
+                                <div className="progress" style={{ height: '4px', borderRadius: '4px', background: '#e2e8f0' }}>
+                                  <div style={{ width: `${Math.min((hours / 9) * 100, 100)}%`, background: hoursBarColor, height: '100%', borderRadius: '4px', transition: 'width 0.6s ease' }}></div>
+                                </div>
                               </div>
-                            </div>
-                          ) : <span className="text-muted">—</span>}
+                            ) : (
+                              <span style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 600 }}>
+                                <i className="fas fa-exclamation-triangle me-1"></i>Error
+                              </span>
+                            )
+                          ) : (
+                            <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>
+                              <i className="fas fa-hourglass-half me-1"></i>In Progress
+                            </span>
+                          )}
                         </td>
 
                         {/* Status */}
@@ -1479,6 +1809,87 @@ const Attendance = () => {
                 </tbody>
               </Table>
             </div>
+              </div>
+              {/* Pagination */}
+              {(() => {
+                const totalPages = Math.ceil(totalRecords / PAGE_SIZE);
+                if (totalPages <= 1) return null;
+                
+                const maxVisiblePages = 5;
+                let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+                
+                if (endPage - startPage + 1 < maxVisiblePages) {
+                  startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                }
+                
+                const pages = [];
+                for (let i = startPage; i <= endPage; i++) pages.push(i);
+                
+                const btnBase = { border: 'none', borderRadius: '8px', padding: '5px 11px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s' };
+                return (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 1rem', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                    <small style={{ color: '#64748b', fontSize: '0.78rem' }}>
+                      Showing {Math.min((currentPage - 1) * PAGE_SIZE + 1, totalRecords)}–{Math.min(currentPage * PAGE_SIZE, totalRecords)} of {totalRecords} records
+                    </small>
+                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                      {/* First Page */}
+                      {currentPage > 1 && startPage > 1 && (
+                        <>
+                          <button
+                            onClick={() => fetchAttendanceHistory(selectedUser, 1)}
+                            style={{ ...btnBase, background: '#e2e8f0', color: '#475569' }}
+                          >
+                            <i className="fas fa-angle-double-left"></i>
+                          </button>
+                        </>
+                      )}
+                      
+                      {/* Previous */}
+                      <button
+                        onClick={() => fetchAttendanceHistory(selectedUser, Math.max(1, currentPage - 1))}
+                        disabled={currentPage === 1}
+                        style={{ ...btnBase, background: currentPage === 1 ? '#f1f5f9' : '#e2e8f0', color: currentPage === 1 ? '#cbd5e1' : '#475569' }}
+                      >
+                        <i className="fas fa-chevron-left"></i>
+                      </button>
+                      
+                      {/* Page Numbers */}
+                      {pages.map(p => (
+                        <button
+                          key={p}
+                          onClick={() => fetchAttendanceHistory(selectedUser, p)}
+                          style={{ ...btnBase, background: p === currentPage ? 'linear-gradient(135deg,#0ea5e9,#6366f1)' : '#f1f5f9', color: p === currentPage ? 'white' : '#475569', minWidth: '32px' }}
+                        >
+                          {p}
+                        </button>
+                      ))}
+                      
+                      {/* Next */}
+                      <button
+                        onClick={() => fetchAttendanceHistory(selectedUser, Math.min(totalPages, currentPage + 1))}
+                        disabled={currentPage === totalPages}
+                        style={{ ...btnBase, background: currentPage === totalPages ? '#f1f5f9' : '#e2e8f0', color: currentPage === totalPages ? '#cbd5e1' : '#475569' }}
+                      >
+                        <i className="fas fa-chevron-right"></i>
+                      </button>
+                      
+                      {/* Last Page */}
+                      {currentPage < totalPages && endPage < totalPages && (
+                        <>
+                          <button
+                            onClick={() => fetchAttendanceHistory(selectedUser, totalPages)}
+                            style={{ ...btnBase, background: '#e2e8f0', color: '#475569' }}
+                          >
+                            <i className="fas fa-angle-double-right"></i>
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </>
           ) : (
             <div className="text-center py-5">
               <div className="mb-3" style={{ width: '64px', height: '64px', background: 'linear-gradient(135deg, #e0f2fe, #dbeafe)', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1887,7 +2298,7 @@ const Attendance = () => {
                 <Table className="mb-0 office-table">
                   <thead>
                     <tr>
-                      {['Location', 'Coordinates', 'GPS Radius', 'Working Hours', 'Status', 'Actions'].map(h => (
+                      {['Location', 'Coordinates', 'GPS Radius', 'Working Hours', 'Grace Period', 'Status', 'Actions'].map(h => (
                         <th key={h} style={{ color: '#64748b', fontWeight: '600', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '0.85rem 1rem', whiteSpace: 'nowrap', background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', borderBottom: '2px solid #e2e8f0' }}>{h}</th>
                       ))}
                     </tr>
@@ -1944,15 +2355,31 @@ const Attendance = () => {
                         <td style={{ padding: '0.9rem 1rem', verticalAlign: 'middle' }}>
                           <div className="d-flex align-items-center gap-1">
                             <span className="office-time-pill office-time-start">
-                              <i className="fas fa-sign-in-alt me-1"></i>{formatHour(loc.startTime)}
+                              <i className="fas fa-sign-in-alt me-1"></i>{formatHour(loc.startTime, loc.startMinute || 0)}
                             </span>
                             <i className="fas fa-arrow-right" style={{ color: '#cbd5e1', fontSize: '0.65rem' }}></i>
                             <span className="office-time-pill office-time-end">
-                              <i className="fas fa-sign-out-alt me-1"></i>{formatHour(loc.endTime)}
+                              <i className="fas fa-sign-out-alt me-1"></i>{formatHour(loc.endTime, loc.endMinute || 0)}
                             </span>
                           </div>
                           <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '3px' }}>
                             {loc.endTime - loc.startTime > 0 ? `${loc.endTime - loc.startTime}h shift` : ''}
+                          </div>
+                        </td>
+
+                        {/* Grace Period */}
+                        <td style={{ padding: '0.9rem 1rem', verticalAlign: 'middle' }}>
+                          <div className="d-flex align-items-center gap-1">
+                            <div className="rounded-circle d-flex align-items-center justify-content-center" style={{ width: '28px', height: '28px', background: loc.compensationMinutes > 0 ? '#fef3c7' : '#f3f4f6', flexShrink: 0 }}>
+                              <i className="fas fa-user-clock" style={{ fontSize: '0.65rem', color: loc.compensationMinutes > 0 ? '#d97706' : '#9ca3af' }}></i>
+                            </div>
+                            <div>
+                              <span className="fw-bold" style={{ fontSize: '0.875rem', color: loc.compensationMinutes > 0 ? '#92400e' : '#6b7280' }}>{loc.compensationMinutes || 0}</span>
+                              <span style={{ fontSize: '0.75rem', color: '#64748b' }}> min</span>
+                            </div>
+                          </div>
+                          <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '3px' }}>
+                            {loc.compensationMinutes > 0 ? 'Late tolerance' : 'No grace period'}
                           </div>
                         </td>
 
@@ -2006,7 +2433,7 @@ const Attendance = () => {
       )}
 
       {/* Office Location Add/Edit Modal */}
-      <Modal show={showOfficeModal} onHide={() => setShowOfficeModal(false)} size="lg" centered>
+      <Modal show={showOfficeModal} onHide={() => setShowOfficeModal(false)} size="lg">
         <Modal.Header closeButton style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)', border: 'none', padding: '1.25rem 1.5rem' }}>
           <Modal.Title className="d-flex align-items-center text-white">
             <div className="rounded-circle d-flex align-items-center justify-content-center me-3" style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.2)' }}>
@@ -2019,7 +2446,7 @@ const Attendance = () => {
           </Modal.Title>
         </Modal.Header>
 
-        <Modal.Body style={{ padding: '1.5rem', background: '#f8fafc' }}>
+        <Modal.Body style={{ padding: '1.5rem', background: '#f8fafc', maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
           <Form>
             {/* Office Name */}
             <div className="mb-4 p-3" style={{ background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
@@ -2044,26 +2471,88 @@ const Attendance = () => {
 
             {/* GPS Coordinates */}
             <div className="mb-4 p-3" style={{ background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-              <div className="d-flex align-items-center justify-content-between mb-3">
-                <div className="d-flex align-items-center">
-                  <div className="rounded-circle d-flex align-items-center justify-content-center me-2" style={{ width: '28px', height: '28px', background: '#f0fdf4' }}>
-                    <i className="fas fa-map-marker-alt" style={{ color: '#10b981', fontSize: '0.75rem' }}></i>
-                  </div>
-                  <span className="fw-semibold" style={{ color: '#065f46', fontSize: '0.875rem' }}>Office Location on Map</span>
+              <div className="d-flex align-items-center mb-3">
+                <div className="rounded-circle d-flex align-items-center justify-content-center me-2" style={{ width: '28px', height: '28px', background: '#f0fdf4' }}>
+                  <i className="fas fa-map-marker-alt" style={{ color: '#10b981', fontSize: '0.75rem' }}></i>
                 </div>
+                <span className="fw-semibold" style={{ color: '#065f46', fontSize: '0.875rem' }}>Office Location on Map</span>
+              </div>
+
+              {/* Search Location */}
+              <div className="mb-3">
+                <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem', color: '#1e293b' }}>
+                  <i className="fas fa-search me-2 text-primary"></i>
+                  Search Location
+                </Form.Label>
+                <div className="d-flex gap-2">
+                  <Form.Control
+                    type="text"
+                    placeholder="Search for office address, city, or landmark..."
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    onKeyPress={e => e.key === 'Enter' && searchLocation()}
+                    style={{ borderRadius: '8px', border: '2px solid #e2e8f0', padding: '10px 14px' }}
+                  />
+                  <Button
+                    onClick={searchLocation}
+                    disabled={searchingLocation || !searchQuery.trim()}
+                    style={{ background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', border: 'none', borderRadius: '8px', fontWeight: 600, padding: '10px 20px', whiteSpace: 'nowrap' }}
+                  >
+                    {searchingLocation ? (
+                      <><span className="spinner-border spinner-border-sm me-2"></span>Searching...</>
+                    ) : (
+                      <><i className="fas fa-search me-2"></i>Search</>
+                    )}
+                  </Button>
+                </div>
+                
+                {/* Search Results */}
+                {searchResults.length > 0 && (
+                  <div className="mt-2" style={{ maxHeight: '200px', overflowY: 'auto', border: '2px solid #e2e8f0', borderRadius: '8px', background: 'white' }}>
+                    {searchResults.map((result, idx) => (
+                      <div
+                        key={idx}
+                        onClick={() => selectSearchResult(result)}
+                        style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: idx < searchResults.length - 1 ? '1px solid #f1f5f9' : 'none', transition: 'background 0.2s' }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'white'}
+                      >
+                        <div className="d-flex align-items-start">
+                          <i className="fas fa-map-pin me-2 mt-1" style={{ color: '#3b82f6', fontSize: '0.9rem' }}></i>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1e293b' }}>{result.display_name.split(',')[0]}</div>
+                            <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{result.display_name}</div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* OR Divider */}
+              <div className="d-flex align-items-center my-3">
+                <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }}></div>
+                <span style={{ padding: '0 12px', fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>OR</span>
+                <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }}></div>
+              </div>
+
+              {/* Use Current Location Button */}
+              <div className="text-center mb-3">
                 <Button
-                  size="sm"
                   onClick={useCurrentLocationForOffice}
                   disabled={fetchingGPS}
-                  style={{ background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)', border: 'none', borderRadius: '8px', fontWeight: 600, fontSize: '0.8rem', padding: '6px 14px' }}
+                  style={{ background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)', border: 'none', borderRadius: '8px', fontWeight: 600, padding: '10px 24px' }}
                 >
-                  {fetchingGPS
-                    ? <><span className="spinner-border spinner-border-sm me-1"></span>Locating...</>
-                    : <><i className="fas fa-crosshairs me-1"></i>Use My Current Location</>}
+                  {fetchingGPS ? (
+                    <><span className="spinner-border spinner-border-sm me-2"></span>Getting Location...</>
+                  ) : (
+                    <><i className="fas fa-crosshairs me-2"></i>Use My Current Location</>
+                  )}
                 </Button>
               </div>
 
-              {/* Map iframe — shows pin at selected coords, click opens Google Maps */}
+              {/* Map Preview */}
               {officeForm.latitude && officeForm.longitude ? (
                 <>
                   <div style={{ borderRadius: '10px', overflow: 'hidden', border: '2px solid #bbf7d0', marginBottom: '12px', position: 'relative' }}>
@@ -2136,23 +2625,11 @@ const Attendance = () => {
               ) : (
                 <div className="text-center py-4" style={{ background: '#f8fafc', borderRadius: '10px', border: '2px dashed #cbd5e1' }}>
                   <i className="fas fa-map-marked-alt fa-2x mb-3" style={{ color: '#94a3b8' }}></i>
-                  <p className="text-muted mb-3" style={{ fontSize: '0.875rem' }}>No location selected yet</p>
-                  <Button
-                    onClick={useCurrentLocationForOffice}
-                    disabled={fetchingGPS}
-                    style={{ background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)', border: 'none', borderRadius: '8px', fontWeight: 600, padding: '10px 20px' }}
-                  >
-                    {fetchingGPS
-                      ? <><span className="spinner-border spinner-border-sm me-2"></span>Getting Location...</>
-                      : <><i className="fas fa-crosshairs me-2"></i>Use My Current Location</>}
-                  </Button>
-                  <p className="text-muted mt-3 mb-0" style={{ fontSize: '0.78rem' }}>
-                    <i className="fas fa-info-circle me-1"></i>
-                    Stand at the office entrance and tap the button above
-                  </p>
+                  <p className="text-muted mb-0" style={{ fontSize: '0.875rem' }}>Search for a location or use your current location to get started</p>
                 </div>
               )}
             </div>
+
 
             {/* Radius + Working Hours */}
             <div className="mb-4 p-3" style={{ background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
@@ -2162,73 +2639,205 @@ const Attendance = () => {
                 </div>
                 <span className="fw-semibold" style={{ color: '#92400e', fontSize: '0.875rem' }}>Boundary & Working Hours</span>
               </div>
-              <Row className="g-3">
-                <Col md={4}>
-                  <Form.Label className="fw-semibold text-secondary" style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Allowed Radius</Form.Label>
-                  <div className="position-relative">
-                    <Form.Control
-                      type="number" min="10" max="1000"
+              
+              {/* GPS Radius */}
+              <div className="mb-4 p-3" style={{ background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                <div className="d-flex align-items-center mb-2">
+                  <i className="fas fa-circle-notch text-primary me-2" style={{ fontSize: '0.9rem' }}></i>
+                  <span className="fw-semibold" style={{ fontSize: '0.85rem', color: '#1e293b' }}>GPS Check-in Radius</span>
+                </div>
+                <Row className="align-items-end">
+                  <Col md={8}>
+                    <Form.Range
+                      min="10"
+                      max="1000"
+                      step="10"
                       value={officeForm.radiusMeters}
                       onChange={e => setOfficeForm({ ...officeForm, radiusMeters: Number(e.target.value) })}
-                      style={{ borderRadius: '8px', border: '2px solid #e2e8f0', padding: '10px 48px 10px 14px' }}
+                      style={{ accentColor: '#3b82f6' }}
                     />
-                    <span className="position-absolute" style={{ right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '0.8rem', fontWeight: 600 }}>m</span>
-                  </div>
-                  <Form.Text className="text-muted" style={{ fontSize: '0.75rem' }}>GPS check-in boundary</Form.Text>
-                </Col>
-                <Col md={4}>
-                  <Form.Label className="fw-semibold text-secondary" style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Start Time</Form.Label>
-                  <div className="position-relative">
-                    <Form.Select
-                      value={officeForm.startTime}
-                      onChange={e => setOfficeForm({ ...officeForm, startTime: Number(e.target.value) })}
-                      style={{ borderRadius: '8px', border: '2px solid #e2e8f0', padding: '10px 14px 10px 38px' }}
-                    >
-                      {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{formatHour(i)}</option>)}
-                    </Form.Select>
-                    <i className="fas fa-sign-in-alt position-absolute" style={{ left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#10b981', fontSize: '0.8rem', pointerEvents: 'none' }}></i>
-                  </div>
-                  <Form.Text className="text-muted" style={{ fontSize: '0.75rem' }}>On-time check-in before this</Form.Text>
-                </Col>
-                <Col md={4}>
-                  <Form.Label className="fw-semibold text-secondary" style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>End Time</Form.Label>
-                  <div className="position-relative">
-                    <Form.Select
-                      value={officeForm.endTime}
-                      onChange={e => setOfficeForm({ ...officeForm, endTime: Number(e.target.value) })}
-                      style={{ borderRadius: '8px', border: '2px solid #e2e8f0', padding: '10px 14px 10px 38px' }}
-                    >
-                      {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{formatHour(i)}</option>)}
-                    </Form.Select>
-                    <i className="fas fa-sign-out-alt position-absolute" style={{ left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#ef4444', fontSize: '0.8rem', pointerEvents: 'none' }}></i>
-                  </div>
-                  <Form.Text className="text-muted" style={{ fontSize: '0.75rem' }}>Auto checkout reference time</Form.Text>
-                </Col>
-              </Row>
-              {/* Working hours preview */}
-              {(() => {
-                const shiftHours = officeForm.endTime - officeForm.startTime;
-                const isValid = shiftHours > 0;
-                return (
-                  <div className="mt-3 p-2 d-flex align-items-center justify-content-between" style={{ background: isValid ? '#fef9f0' : '#fef2f2', borderRadius: '8px', border: `1px solid ${isValid ? '#fde68a' : '#fecaca'}` }}>
-                    <div className="d-flex align-items-center">
-                      <i className={`fas fa-${isValid ? 'info-circle' : 'exclamation-triangle'} me-2`} style={{ color: isValid ? '#d97706' : '#dc2626' }}></i>
-                      <small style={{ color: isValid ? '#92400e' : '#991b1b', fontWeight: 600 }}>
-                        {isValid ? 'Working Hours Preview' : 'End time must be after start time'}
-                      </small>
-                    </div>
+                  </Col>
+                  <Col md={4}>
                     <div className="d-flex align-items-center gap-2">
-                      <Badge bg="success" style={{ fontSize: '0.75rem' }}>{formatHour(officeForm.startTime)}</Badge>
-                      <i className="fas fa-arrow-right" style={{ color: isValid ? '#d97706' : '#dc2626', fontSize: '0.7rem' }}></i>
-                      <Badge bg={isValid ? 'danger' : 'secondary'} style={{ fontSize: '0.75rem' }}>{formatHour(officeForm.endTime)}</Badge>
-                      {isValid && (
-                        <span style={{ color: '#92400e', fontSize: '0.78rem', fontWeight: 600 }}>({shiftHours}h shift)</span>
+                      <Form.Control
+                        type="number"
+                        min="10"
+                        max="1000"
+                        value={officeForm.radiusMeters}
+                        onChange={e => setOfficeForm({ ...officeForm, radiusMeters: Number(e.target.value) })}
+                        style={{ borderRadius: '8px', border: '2px solid #e2e8f0', padding: '8px 12px', textAlign: 'center', fontWeight: 600 }}
+                      />
+                      <span style={{ color: '#64748b', fontSize: '0.9rem', fontWeight: 600 }}>meters</span>
+                    </div>
+                  </Col>
+                </Row>
+                <Form.Text className="text-muted d-block mt-2" style={{ fontSize: '0.75rem' }}>
+                  <i className="fas fa-info-circle me-1"></i>
+                  Employees must be within this radius to check in. Recommended: 50-200m
+                </Form.Text>
+              </div>
+
+              {/* Working Hours */}
+              <div className="p-3" style={{ background: '#f0fdf4', borderRadius: '10px', border: '1px solid #bbf7d0' }}>
+                <div className="d-flex align-items-center mb-3">
+                  <i className="fas fa-business-time text-success me-2" style={{ fontSize: '0.9rem' }}></i>
+                  <span className="fw-semibold" style={{ fontSize: '0.85rem', color: '#065f46' }}>Office Working Hours</span>
+                </div>
+                
+                <Row className="g-3">
+                  {/* Start Time */}
+                  <Col md={6}>
+                    <div className="p-3" style={{ background: 'white', borderRadius: '10px', border: '2px solid #10b981' }}>
+                      <div className="d-flex align-items-center mb-2">
+                        <div className="rounded-circle d-flex align-items-center justify-content-center me-2" style={{ width: '24px', height: '24px', background: '#10b981' }}>
+                          <i className="fas fa-play text-white" style={{ fontSize: '0.6rem' }}></i>
+                        </div>
+                        <span className="fw-semibold" style={{ fontSize: '0.8rem', color: '#065f46' }}>Start Time</span>
+                      </div>
+                      <Row className="g-2">
+                        <Col xs={6}>
+                          <Form.Label style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Hour</Form.Label>
+                          <Form.Select
+                            value={officeForm.startTime}
+                            onChange={e => setOfficeForm({ ...officeForm, startTime: Number(e.target.value) })}
+                            style={{ borderRadius: '8px', border: '2px solid #d1fae5', padding: '10px', fontSize: '1rem', fontWeight: 600, color: '#065f46' }}
+                          >
+                            {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{i.toString().padStart(2, '0')}</option>)}
+                          </Form.Select>
+                        </Col>
+                        <Col xs={6}>
+                          <Form.Label style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Minute</Form.Label>
+                          <Form.Select
+                            value={officeForm.startMinute}
+                            onChange={e => setOfficeForm({ ...officeForm, startMinute: Number(e.target.value) })}
+                            style={{ borderRadius: '8px', border: '2px solid #d1fae5', padding: '10px', fontSize: '1rem', fontWeight: 600, color: '#065f46' }}
+                          >
+                            {Array.from({ length: 12 }, (_, i) => i * 5).map(m => <option key={m} value={m}>{m.toString().padStart(2, '0')}</option>)}
+                          </Form.Select>
+                        </Col>
+                      </Row>
+                      <div className="mt-2 text-center p-2" style={{ background: '#f0fdf4', borderRadius: '6px' }}>
+                        <span style={{ fontSize: '1.1rem', fontWeight: 700, color: '#065f46' }}>{formatHour(officeForm.startTime, officeForm.startMinute)}</span>
+                      </div>
+                    </div>
+                  </Col>
+
+                  {/* End Time */}
+                  <Col md={6}>
+                    <div className="p-3" style={{ background: 'white', borderRadius: '10px', border: '2px solid #ef4444' }}>
+                      <div className="d-flex align-items-center mb-2">
+                        <div className="rounded-circle d-flex align-items-center justify-content-center me-2" style={{ width: '24px', height: '24px', background: '#ef4444' }}>
+                          <i className="fas fa-stop text-white" style={{ fontSize: '0.6rem' }}></i>
+                        </div>
+                        <span className="fw-semibold" style={{ fontSize: '0.8rem', color: '#991b1b' }}>End Time</span>
+                      </div>
+                      <Row className="g-2">
+                        <Col xs={6}>
+                          <Form.Label style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Hour</Form.Label>
+                          <Form.Select
+                            value={officeForm.endTime}
+                            onChange={e => setOfficeForm({ ...officeForm, endTime: Number(e.target.value) })}
+                            style={{ borderRadius: '8px', border: '2px solid #fecaca', padding: '10px', fontSize: '1rem', fontWeight: 600, color: '#991b1b' }}
+                          >
+                            {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{i.toString().padStart(2, '0')}</option>)}
+                          </Form.Select>
+                        </Col>
+                        <Col xs={6}>
+                          <Form.Label style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Minute</Form.Label>
+                          <Form.Select
+                            value={officeForm.endMinute}
+                            onChange={e => setOfficeForm({ ...officeForm, endMinute: Number(e.target.value) })}
+                            style={{ borderRadius: '8px', border: '2px solid #fecaca', padding: '10px', fontSize: '1rem', fontWeight: 600, color: '#991b1b' }}
+                          >
+                            {Array.from({ length: 12 }, (_, i) => i * 5).map(m => <option key={m} value={m}>{m.toString().padStart(2, '0')}</option>)}
+                          </Form.Select>
+                        </Col>
+                      </Row>
+                      <div className="mt-2 text-center p-2" style={{ background: '#fef2f2', borderRadius: '6px' }}>
+                        <span style={{ fontSize: '1.1rem', fontWeight: 700, color: '#991b1b' }}>{formatHour(officeForm.endTime, officeForm.endMinute)}</span>
+                      </div>
+                    </div>
+                  </Col>
+                </Row>
+
+                {/* Time Preview */}
+                {(() => {
+                  const totalMinutes = (officeForm.endTime * 60 + officeForm.endMinute) - (officeForm.startTime * 60 + officeForm.startMinute);
+                  const isValid = totalMinutes > 0;
+                  const hours = Math.floor(totalMinutes / 60);
+                  const minutes = totalMinutes % 60;
+                  return (
+                    <div className="mt-3 p-3 text-center" style={{ background: isValid ? 'white' : '#fef2f2', borderRadius: '10px', border: `2px solid ${isValid ? '#10b981' : '#fca5a5'}` }}>
+                      {isValid ? (
+                        <>
+                          <div className="d-flex align-items-center justify-content-center gap-2 mb-2">
+                            <Badge bg="success" style={{ fontSize: '0.9rem', padding: '6px 12px' }}>{formatHour(officeForm.startTime, officeForm.startMinute)}</Badge>
+                            <i className="fas fa-arrow-right" style={{ color: '#10b981' }}></i>
+                            <Badge bg="danger" style={{ fontSize: '0.9rem', padding: '6px 12px' }}>{formatHour(officeForm.endTime, officeForm.endMinute)}</Badge>
+                          </div>
+                          <div style={{ fontSize: '0.85rem', color: '#065f46', fontWeight: 600 }}>
+                            <i className="fas fa-clock me-1"></i>
+                            Total: {hours}h {minutes > 0 ? `${minutes}m` : ''} shift
+                            {officeForm.compensationMinutes > 0 && (
+                              <span className="ms-2" style={{ color: '#d97706' }}>
+                                <i className="fas fa-user-clock me-1"></i>
+                                +{officeForm.compensationMinutes}min grace
+                              </span>
+                            )}
+                          </div>
+                        </>
+                      ) : (
+                        <div style={{ color: '#991b1b', fontSize: '0.85rem', fontWeight: 600 }}>
+                          <i className="fas fa-exclamation-triangle me-2"></i>
+                          End time must be after start time
+                        </div>
                       )}
                     </div>
-                  </div>
-                );
-              })()}
+                  );
+                })()}
+              </div>
+
+              {/* Grace Period */}
+              <div className="mt-3 p-3" style={{ background: '#fef9f0', borderRadius: '10px', border: '1px solid #fde68a' }}>
+                <div className="d-flex align-items-center mb-2">
+                  <i className="fas fa-user-clock text-warning me-2" style={{ fontSize: '0.9rem' }}></i>
+                  <span className="fw-semibold" style={{ fontSize: '0.85rem', color: '#92400e' }}>Late Arrival Grace Period</span>
+                </div>
+                <Row className="align-items-end">
+                  <Col md={8}>
+                    <Form.Range
+                      min="0"
+                      max="120"
+                      step="5"
+                      value={officeForm.compensationMinutes}
+                      onChange={e => setOfficeForm({ ...officeForm, compensationMinutes: Number(e.target.value) })}
+                      style={{ accentColor: '#f59e0b' }}
+                    />
+                  </Col>
+                  <Col md={4}>
+                    <div className="d-flex align-items-center gap-2">
+                      <Form.Control
+                        type="number"
+                        min="0"
+                        max="120"
+                        step="5"
+                        value={officeForm.compensationMinutes}
+                        onChange={e => setOfficeForm({ ...officeForm, compensationMinutes: Number(e.target.value) })}
+                        style={{ borderRadius: '8px', border: '2px solid #fde68a', padding: '8px 12px', textAlign: 'center', fontWeight: 600, color: '#92400e' }}
+                      />
+                      <span style={{ color: '#92400e', fontSize: '0.9rem', fontWeight: 600 }}>min</span>
+                    </div>
+                  </Col>
+                </Row>
+                <Form.Text className="text-muted d-block mt-2" style={{ fontSize: '0.75rem' }}>
+                  <i className="fas fa-info-circle me-1"></i>
+                  {officeForm.compensationMinutes > 0 
+                    ? `Employees can arrive up to ${officeForm.compensationMinutes} minutes late without penalty`
+                    : 'No grace period - employees must arrive on time'}
+                </Form.Text>
+              </div>
             </div>
+
 
             {/* Active toggle */}
             <div className="p-3 d-flex align-items-center justify-content-between" style={{ background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
@@ -2375,3 +2984,5 @@ const Attendance = () => {
 };
 
 export default Attendance;
+
+

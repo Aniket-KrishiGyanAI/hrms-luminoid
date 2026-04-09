@@ -4,6 +4,7 @@ import { Row, Col, Card, Form, Button, Tab, Tabs, Image } from 'react-bootstrap'
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 import { toast } from 'react-toastify';
+import '../styles/EmployeeProfile.css';
 
 const EmployeeProfile = () => {
   const { user } = useAuth();
@@ -162,110 +163,145 @@ const EmployeeProfile = () => {
   return (
     <div className="fade-in-up employee-profile-page">
       <style>{`
+        .employee-profile-page {
+          background: #f0fdf4;
+          min-height: 100vh;
+          padding-bottom: 2rem;
+        }
         .employee-profile-page .profile-header-card {
-          background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+          background: linear-gradient(135deg, #064e3b 0%, #065f46 40%, #10b981 100%);
           border: none;
           border-radius: 16px;
           overflow: hidden;
           margin-bottom: 24px;
+          box-shadow: 0 12px 40px rgba(16,185,129,0.3);
+          position: relative;
+        }
+        .employee-profile-page .profile-header-card::before {
+          content: '';
+          position: absolute;
+          top: -60px; right: -60px;
+          width: 220px; height: 220px;
+          background: radial-gradient(circle, rgba(255,255,255,0.07) 0%, transparent 70%);
+          pointer-events: none;
         }
         .employee-profile-page .profile-avatar-wrapper {
           position: relative;
           display: inline-block;
         }
         .employee-profile-page .profile-avatar {
-          width: 140px;
-          height: 140px;
-          border: 5px solid rgba(255,255,255,0.3);
-          box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+          width: 130px;
+          height: 130px;
+          border: 4px solid rgba(255,255,255,0.35);
+          box-shadow: 0 8px 24px rgba(0,0,0,0.2);
         }
         .employee-profile-page .profile-avatar-placeholder {
-          width: 140px;
-          height: 140px;
-          background: rgba(255,255,255,0.2);
-          border: 5px solid rgba(255,255,255,0.3);
+          width: 130px;
+          height: 130px;
+          background: rgba(255,255,255,0.15);
+          border: 4px solid rgba(255,255,255,0.3);
           box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+          backdrop-filter: blur(10px);
         }
         .employee-profile-page .profile-upload-btn {
           position: absolute;
           bottom: 5px;
           right: 5px;
-          width: 40px;
-          height: 40px;
+          width: 38px;
+          height: 38px;
           border-radius: 50%;
           background: #fff;
-          border: 3px solid #667eea;
+          border: 3px solid #10b981;
           display: flex;
           align-items: center;
           justify-content: center;
           cursor: pointer;
           transition: all 0.3s;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.15);
         }
         .employee-profile-page .profile-upload-btn:hover {
           transform: scale(1.1);
-          box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+          box-shadow: 0 4px 14px rgba(16,185,129,0.4);
         }
         .employee-profile-page .profile-info-card {
-          border: none;
+          border: 1px solid #d1fae5;
           border-radius: 12px;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+          box-shadow: 0 2px 10px rgba(16,185,129,0.08);
           transition: all 0.3s;
+          background: #fff;
         }
         .employee-profile-page .profile-info-card:hover {
-          box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+          box-shadow: 0 6px 24px rgba(16,185,129,0.14);
         }
         .employee-profile-page .profile-tabs .nav-link {
           border: none;
           border-radius: 8px;
-          padding: 12px 24px;
-          margin-right: 8px;
-          color: #6c757d;
-          font-weight: 500;
-          transition: all 0.3s;
+          padding: 10px 22px;
+          margin-right: 6px;
+          color: #64748b;
+          font-weight: 600;
+          font-size: 0.875rem;
+          transition: all 0.25s;
         }
         .employee-profile-page .profile-tabs .nav-link:hover {
-          background: #f8fafc;
-          color: #1e3a8a;
+          background: #ecfdf5;
+          color: #059669;
         }
         .employee-profile-page .profile-tabs .nav-link.active {
-          background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+          background: linear-gradient(135deg, #064e3b 0%, #10b981 100%);
           color: white;
+          box-shadow: 0 4px 12px rgba(16,185,129,0.3);
         }
         .employee-profile-page .form-label {
           font-weight: 600;
-          color: #495057;
-          margin-bottom: 8px;
-          font-size: 0.9rem;
+          color: #334155;
+          margin-bottom: 6px;
+          font-size: 0.85rem;
         }
-        .employee-profile-page .form-control, .employee-profile-page .form-select {
+        .employee-profile-page .form-control,
+        .employee-profile-page .form-select {
           border-radius: 8px;
-          border: 1.5px solid #e0e0e0;
-          padding: 10px 14px;
-          transition: all 0.3s;
+          border: 1.5px solid #e2e8f0;
+          padding: 9px 13px;
+          font-size: 0.875rem;
+          transition: all 0.25s;
         }
-        .employee-profile-page .form-control:focus, .employee-profile-page .form-select:focus {
-          border-color: #3b82f6;
-          box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.15);
+        .employee-profile-page .form-control:focus,
+        .employee-profile-page .form-select:focus {
+          border-color: #10b981;
+          box-shadow: 0 0 0 3px rgba(16,185,129,0.12);
         }
         .employee-profile-page .section-title {
-          font-size: 1.1rem;
-          font-weight: 600;
-          color: #1e3a8a;
-          margin-bottom: 20px;
+          font-size: 1rem;
+          font-weight: 700;
+          color: #065f46;
+          margin-bottom: 18px;
           padding-bottom: 10px;
-          border-bottom: 2px solid #e0e0e0;
+          border-bottom: 2px solid #d1fae5;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+        .employee-profile-page .section-title i {
+          color: #10b981;
         }
         .employee-profile-page .btn-save {
-          background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+          background: linear-gradient(135deg, #064e3b 0%, #10b981 100%);
           border: none;
-          border-radius: 8px;
-          padding: 12px 32px;
-          font-weight: 600;
-          transition: all 0.3s;
+          border-radius: 10px;
+          padding: 11px 32px;
+          font-weight: 700;
+          font-size: 0.95rem;
+          transition: all 0.25s;
+          box-shadow: 0 4px 14px rgba(16,185,129,0.3);
         }
         .employee-profile-page .btn-save:hover {
           transform: translateY(-2px);
-          box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+          box-shadow: 0 8px 24px rgba(16,185,129,0.45);
+        }
+        .employee-profile-page .btn-save:disabled {
+          opacity: 0.6;
+          transform: none;
         }
       `}</style>
 
@@ -288,11 +324,11 @@ const EmployeeProfile = () => {
                       <i className="fas fa-user fa-3x text-white"></i>
                     </div>
                   )}
-                  <div className="profile-upload-btn" style={{ border: '3px solid #1e3a8a' }} onClick={() => fileInputRef.current?.click()}>
+                  <div className="profile-upload-btn" onClick={() => fileInputRef.current?.click()}>
                     {uploadingImage ? (
-                      <div className="spinner-border spinner-border-sm" style={{ color: '#1e3a8a' }} role="status"></div>
+                      <div className="spinner-border spinner-border-sm" style={{ color: '#10b981' }} role="status"></div>
                     ) : (
-                      <i className="fas fa-camera" style={{ color: '#1e3a8a' }}></i>
+                      <i className="fas fa-camera" style={{ color: '#10b981' }}></i>
                     )}
                   </div>
                   <input

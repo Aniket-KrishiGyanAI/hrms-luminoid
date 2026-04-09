@@ -63,7 +63,7 @@ const DepartmentDetails = () => {
   };
 
   if (loading) return (
-    <Container fluid className="p-4" style={{background: '#f8f9fa', minHeight: '100vh'}}>
+    <Container fluid className="p-4" style={{background: '#f0fdf4', minHeight: '100vh'}}>
       <SkeletonDashboard />
     </Container>
   );
@@ -77,14 +77,14 @@ const DepartmentDetails = () => {
   );
 
   return (
-    <Container fluid className="p-4" style={{background: '#f8f9fa', minHeight: '100vh'}}>
+    <Container fluid className="p-4" style={{background: '#f0fdf4', minHeight: '100vh'}}>
       <style>{`
         .dept-detail-header {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: linear-gradient(135deg, #064e3b 0%, #065f46 40%, #10b981 100%);
           border-radius: 16px;
           padding: 32px;
           margin-bottom: 24px;
-          box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+          box-shadow: 0 10px 30px rgba(16,185,129,0.3);
           color: white;
         }
         .stat-card {
@@ -98,14 +98,14 @@ const DepartmentDetails = () => {
           transform: translateY(-5px);
           box-shadow: 0 8px 30px rgba(0,0,0,0.12);
         }
-        .stat-card-1 { border-top: 4px solid #667eea; }
-        .stat-card-2 { border-top: 4px solid #11998e; }
-        .stat-card-3 { border-top: 4px solid #4facfe; }
-        .stat-card-4 { border-top: 4px solid #fa709a; }
-        .stat-icon-1 { color: #667eea; }
-        .stat-icon-2 { color: #11998e; }
-        .stat-icon-3 { color: #4facfe; }
-        .stat-icon-4 { color: #fa709a; }
+        .stat-card-1 { border-top: 4px solid #10b981; }
+        .stat-card-2 { border-top: 4px solid #3b82f6; }
+        .stat-card-3 { border-top: 4px solid #f59e0b; }
+        .stat-card-4 { border-top: 4px solid #ef4444; }
+        .stat-icon-1 { color: #10b981; }
+        .stat-icon-2 { color: #3b82f6; }
+        .stat-icon-3 { color: #f59e0b; }
+        .stat-icon-4 { color: #ef4444; }
         .content-card {
           border: none;
           border-radius: 16px;
@@ -120,16 +120,16 @@ const DepartmentDetails = () => {
           transition: all 0.3s ease;
         }
         .nav-tabs .nav-link:hover {
-          color: #667eea;
-          background: #f8f9ff;
+          color: #10b981;
+          background: #f0fdf4;
         }
         .nav-tabs .nav-link.active {
-          color: #667eea;
+          color: #059669;
           background: white;
-          border-bottom: 3px solid #667eea;
+          border-bottom: 3px solid #10b981;
         }
         .table thead {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: linear-gradient(135deg, #064e3b 0%, #10b981 100%);
           color: white;
         }
         .table thead th {
@@ -141,11 +141,11 @@ const DepartmentDetails = () => {
           transition: all 0.3s ease;
         }
         .table tbody tr:hover {
-          background: #f8f9ff;
+          background: #f0fdf4;
           transform: translateX(4px);
         }
         .btn-add-custom {
-          background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+          background: linear-gradient(135deg, #059669 0%, #10b981 100%);
           border: none;
           color: white;
           font-weight: 600;
@@ -155,10 +155,10 @@ const DepartmentDetails = () => {
         }
         .btn-add-custom:hover {
           transform: translateY(-2px);
-          box-shadow: 0 4px 15px rgba(17, 153, 142, 0.4);
+          box-shadow: 0 4px 15px rgba(16,185,129,0.4);
         }
         .goal-card {
-          border-left: 4px solid #667eea;
+          border-left: 4px solid #10b981;
           transition: all 0.3s ease;
         }
         .goal-card:hover {

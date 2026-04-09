@@ -17,7 +17,13 @@ const createEmployee = async (req, res) => {
       return res.status(400).json({ message: 'Employee with this email already exists' });
     }
 
-    // Generate temporary password
+    // Resolve department to ObjectId if it's a name string
+    let resolvedDepartment = department;
+    if (department && !mongoose.Types.ObjectId.isValid(department)) {
+      const Department = require('../models/Department');
+      const dept = await Department.findOne({ name: { $regex: `^${department}$`, $options: 'i' } }).select('_id').lean();
+      if (dept) resolvedDepartment = dept._id;
+    }
     const tempPassword = `${firstName}@123`;
 
     // Create user
@@ -27,7 +33,7 @@ const createEmployee = async (req, res) => {
       firstName,
       lastName,
       role: role || 'EMPLOYEE',
-      department,
+      department: resolvedDepartment,
       designation,
       joinDate: joinDate || new Date(),
       managerId,
@@ -165,7 +171,7 @@ const getAllEmployees = async (req, res) => {
     if (role) filter.role = role;
 
     const employees = await User.find(filter)
-      .select('firstName lastName email role department designation joinDate isActive profileImage')
+      .select('firstName lastName email role department designation joinDate isActive profileImage isFieldEmployee')
       .populate('managerId', 'firstName lastName')
       .sort({ firstName: 1 })
       .lean();
@@ -219,4 +225,25 @@ module.exports = {
   reactivateEmployee,
   getAllEmployees,
   deleteEmployee
+};
+
+const toggleFieldEmployee = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId);
+    if (!user) return res.status(404).json({ message: 'Employee not found' });
+    user.isFieldEmployee = !user.isFieldEmployee;
+    await user.save();
+    res.json({ message: `Field employee ${user.isFieldEmployee ? 'enabled' : 'disabled'}`, isFieldEmployee: user.isFieldEmployee });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+module.exports = {
+  createEmployee,
+  deactivateEmployee,
+  reactivateEmployee,
+  getAllEmployees,
+  deleteEmployee,
+  toggleFieldEmployee
 };

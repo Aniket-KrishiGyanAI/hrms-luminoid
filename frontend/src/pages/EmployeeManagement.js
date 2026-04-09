@@ -74,6 +74,16 @@ const EmployeeManagement = () => {
     }
   };
 
+  const handleToggleFieldEmployee = async (userId, currentValue) => {
+    try {
+      await api.put(`/api/employee-management/${userId}/toggle-field-employee`);
+      toast.success(`Field tracking ${!currentValue ? 'enabled' : 'disabled'}`);
+      fetchEmployees();
+    } catch (error) {
+      toast.error('Error updating field employee status');
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       email: '',
@@ -142,6 +152,7 @@ const EmployeeManagement = () => {
                 <th>Department</th>
                 <th>Designation</th>
                 <th>Join Date</th>
+                <th>Field Employee</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -163,6 +174,21 @@ const EmployeeManagement = () => {
                   <td>{emp.department || '-'}</td>
                   <td>{emp.designation || '-'}</td>
                   <td>{emp.joinDate ? new Date(emp.joinDate).toLocaleDateString() : '-'}</td>
+                  <td>
+                    <div className="form-check form-switch d-flex align-items-center gap-2">
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        role="switch"
+                        checked={!!emp.isFieldEmployee}
+                        onChange={() => handleToggleFieldEmployee(emp._id, emp.isFieldEmployee)}
+                        style={{ cursor: 'pointer', width: 36, height: 20 }}
+                      />
+                      <small style={{ color: emp.isFieldEmployee ? '#10b981' : '#9ca3af', fontWeight: 600 }}>
+                        {emp.isFieldEmployee ? 'Yes' : 'No'}
+                      </small>
+                    </div>
+                  </td>
                   <td>
                     <Badge bg={emp.isActive ? 'success' : 'danger'}>
                       {emp.isActive ? 'Active' : 'Inactive'}

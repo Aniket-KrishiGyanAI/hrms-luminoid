@@ -6,14 +6,38 @@ const getFiles = async (req, res) => {
   try {
     const { type } = req.query;
     const query = {};
+    const mongoose = require('mongoose');
 
-    if (type) query.type = type;
+    const isValidObjectId = (val) => val && mongoose.Types.ObjectId.isValid(val);
 
     if (req.user.role === 'EMPLOYEE') {
-      query.$or = [
+      let orConditions = [
+        { type: 'ORGANIZATION', 'visibility.type': 'ALL' },
         { type: 'ORGANIZATION', isPublic: true },
-        { type: 'EMPLOYEE', targetUserId: req.user.id, uploadedBy: req.user.id }
+        { type: 'ORGANIZATION', 'visibility.type': 'ROLES', 'visibility.roles': req.user.role },
+        { type: 'ORGANIZATION', 'visibility.type': 'SPECIFIC_EMPLOYEES', 'visibility.employees': req.user.id },
+        { type: 'EMPLOYEE', targetUserId: req.user.id }
       ];
+      if (isValidObjectId(req.user.department)) {
+        orConditions.push({ type: 'ORGANIZATION', 'visibility.type': 'DEPARTMENTS', 'visibility.departments': req.user.department });
+      }
+      if (type) orConditions = orConditions.filter(c => c.type === type);
+      query.$or = orConditions;
+    } else if (req.user.role === 'MANAGER') {
+      let orConditions = [
+        { type: 'ORGANIZATION', 'visibility.type': 'ALL' },
+        { type: 'ORGANIZATION', isPublic: true },
+        { type: 'ORGANIZATION', 'visibility.type': 'ROLES', 'visibility.roles': 'MANAGER' },
+        { type: 'ORGANIZATION', 'visibility.type': 'SPECIFIC_EMPLOYEES', 'visibility.employees': req.user.id },
+        { type: 'EMPLOYEE' }
+      ];
+      if (isValidObjectId(req.user.department)) {
+        orConditions.push({ type: 'ORGANIZATION', 'visibility.type': 'DEPARTMENTS', 'visibility.departments': req.user.department });
+      }
+      if (type) orConditions = orConditions.filter(c => c.type === type);
+      query.$or = orConditions;
+    } else {
+      if (type) query.type = type;
     }
 
     const files = await File.find(query)
@@ -90,6 +114,12 @@ const uploadFile = async (req, res) => {
 
     const s3Result = await s3.upload(uploadParams).promise();
 
+    // Parse visibility from form data
+    let visibility = { type: 'ALL', departments: [], roles: [], employees: [] };
+    if (req.body.visibility) {
+      try { visibility = JSON.parse(req.body.visibility); } catch (e) {}
+    }
+
     const file = new File({
       name: req.body.name || req.file.originalname,
       originalName: req.file.originalname,
@@ -101,9 +131,11 @@ const uploadFile = async (req, res) => {
       category: req.body.category,
       uploadedBy: req.user.id,
       targetUserId: req.body.targetUserId,
-      isPublic: req.body.isPublic === 'true',
+      isPublic: visibility.type === 'ALL',
+      visibility,
       description: req.body.description,
       requiresAcknowledgment: req.body.requiresAcknowledgment === 'true',
+      folderId: req.body.folderId || null,
       expiryDate: req.body.expiryDate || null
     });
 
@@ -251,6 +283,18 @@ const submitMyDocuments = async (req, res) => {
   }
 };
 
+const lockEmployeeDocuments = async (req, res) => {
+  try {
+    await File.updateMany(
+      { targetUserId: req.params.employeeId, isLocked: false },
+      { isLocked: true }
+    );
+    res.json({ message: 'Documents locked' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 const unlockEmployeeDocuments = async (req, res) => {
   try {
     const { employeeId } = req.params;
@@ -287,6 +331,45 @@ const verifyDocument = async (req, res) => {
   }
 };
 
+const bulkDeleteFiles = async (req, res) => {
+  try {
+    const { fileIds } = req.body;
+    if (!Array.isArray(fileIds) || fileIds.length === 0)
+      return res.status(400).json({ message: 'No file IDs provided' });
+
+    const files = await File.find({ _id: { $in: fileIds } });
+    for (const file of files) {
+      if (req.user.role === 'EMPLOYEE') {
+        if (file.uploadedBy.toString() !== req.user.id || file.isLocked)
+          return res.status(403).json({ message: 'Access denied on one or more files' });
+      }
+      await s3.deleteObject({ Bucket: process.env.AWS_S3_BUCKET, Key: file.s3Key }).promise();
+    }
+    await File.deleteMany({ _id: { $in: fileIds } });
+    res.json({ message: `${files.length} files deleted` });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const getAcknowledgmentCounts = async (req, res) => {
+  try {
+    const { fileIds } = req.query;
+    if (!fileIds) return res.json({});
+    const mongoose = require('mongoose');
+    const ids = fileIds.split(',').map(id => new mongoose.Types.ObjectId(id));
+    const counts = await DocumentAcknowledgment.aggregate([
+      { $match: { fileId: { $in: ids } } },
+      { $group: { _id: '$fileId', count: { $sum: 1 } } }
+    ]);
+    const result = {};
+    counts.forEach(c => { result[c._id.toString()] = c.count; });
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getFiles,
   uploadFile,
@@ -295,6 +378,9 @@ module.exports = {
   acknowledgeDocument,
   getAcknowledgments,
   submitMyDocuments,
+  lockEmployeeDocuments,
   unlockEmployeeDocuments,
-  verifyDocument
+  verifyDocument,
+  bulkDeleteFiles,
+  getAcknowledgmentCounts
 };

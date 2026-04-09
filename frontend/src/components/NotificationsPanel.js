@@ -3,7 +3,7 @@ import { Dropdown, Badge } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
-import { MdNotifications, MdTask, MdEdit, MdComment, MdAlternateEmail, MdSwapHoriz, MdTrendingUp } from 'react-icons/md';
+import { MdNotifications, MdTask, MdEdit, MdComment, MdAlternateEmail, MdSwapHoriz, MdTrendingUp, MdCheckCircle, MdClose } from 'react-icons/md';
 import './NotificationsPanel.css';
 
 const NotificationsPanel = () => {
@@ -35,7 +35,7 @@ const NotificationsPanel = () => {
   const fetchNotifications = async () => {
     try {
       const response = await api.get('/api/notifications');
-      setNotifications(response.data.slice(0, 5));
+      setNotifications(response.data.slice(0, 10));
     } catch (error) {
       if (error.response?.status !== 401) {
         console.error('Error fetching notifications');
@@ -54,6 +54,9 @@ const NotificationsPanel = () => {
     try {
       await api.put(`/api/notifications/${notification._id}/read`);
       setUnreadCount(prev => Math.max(0, prev - 1));
+      setNotifications(prev => prev.map(n => 
+        n._id === notification._id ? { ...n, read: true } : n
+      ));
       setShow(false);
       
       // Navigate to task details and open it
@@ -74,9 +77,22 @@ const NotificationsPanel = () => {
     try {
       await api.put('/api/notifications/mark-all-read');
       setUnreadCount(0);
-      fetchNotifications();
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     } catch (error) {
       console.error('Error marking all as read');
+    }
+  };
+
+  const handleDeleteNotification = async (e, notificationId, wasUnread) => {
+    e.stopPropagation();
+    try {
+      await api.delete(`/api/notifications/${notificationId}`);
+      setNotifications(prev => prev.filter(n => n._id !== notificationId));
+      if (wasUnread) {
+        setUnreadCount(prev => Math.max(0, prev - 1));
+      }
+    } catch (error) {
+      console.error('Error deleting notification:', error);
     }
   };
 
@@ -92,6 +108,18 @@ const NotificationsPanel = () => {
     return icons[type] || MdNotifications;
   };
 
+  const getIconColor = (type) => {
+    const colors = {
+      TASK_ASSIGNED: '#10b981',
+      TASK_UPDATED: '#3b82f6',
+      COMMENT_ADDED: '#8b5cf6',
+      MENTION: '#f59e0b',
+      STATUS_CHANGED: '#06b6d4',
+      PROGRESS_UPDATED: '#ec4899'
+    };
+    return colors[type] || '#10b981';
+  };
+
   const getTimeAgo = (date) => {
     const seconds = Math.floor((new Date() - new Date(date)) / 1000);
     if (seconds < 60) return 'Just now';
@@ -100,67 +128,93 @@ const NotificationsPanel = () => {
     const hours = Math.floor(minutes / 60);
     if (hours < 24) return `${hours}h ago`;
     const days = Math.floor(hours / 24);
-    return `${days}d ago`;
+    if (days === 1) return 'Yesterday';
+    if (days < 7) return `${days}d ago`;
+    return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
   if (!user) return null;
 
   return (
     <Dropdown show={show} onToggle={handleToggle} align="end">
-      <Dropdown.Toggle as="div" className="nav-icon-btn" style={{position: 'relative', cursor: 'pointer'}}>
-        <MdNotifications size={22} />
-        {unreadCount > 0 && (
-          <Badge bg="danger" pill className="badge-pulse" style={{
-            position: 'absolute',
-            top: '-5px',
-            right: '-5px',
-            fontSize: '10px',
-            minWidth: '18px',
-            height: '18px'
-          }}>
-            {unreadCount > 99 ? '99+' : unreadCount}
-          </Badge>
-        )}
+      <Dropdown.Toggle as="div" className="notification-bell-wrapper">
+        <div className="notification-bell">
+          <MdNotifications size={22} className={unreadCount > 0 ? 'bell-ring' : ''} />
+          {unreadCount > 0 && (
+            <Badge className="notification-badge-count">
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </Badge>
+          )}
+        </div>
       </Dropdown.Toggle>
 
-      <Dropdown.Menu className="notification-menu">
-        <div className="notification-header">
-          <h6 className="mb-0">Notifications</h6>
+      <Dropdown.Menu className="notification-dropdown-menu">
+        <div className="notification-dropdown-header">
+          <div className="notification-header-left">
+            <MdNotifications size={24} className="header-icon" />
+            <div>
+              <h6 className="header-title">Notifications</h6>
+              <span className="header-subtitle">{unreadCount} unread</span>
+            </div>
+          </div>
           {unreadCount > 0 && (
-            <button className="btn btn-link btn-sm p-0" onClick={handleMarkAllRead}>
-              Mark all read
+            <button className="mark-all-read-btn" onClick={handleMarkAllRead}>
+              <MdCheckCircle size={18} />
+              <span>Mark all read</span>
             </button>
           )}
         </div>
         
-        <div className="notification-list">
+        <div className="notification-dropdown-list">
           {notifications.length > 0 ? (
-            notifications.map(notif => {
+            notifications.map((notif, index) => {
               const IconComponent = getIcon(notif.type);
+              const iconColor = getIconColor(notif.type);
               return (
                 <div
                   key={notif._id}
-                  className={`notification-item ${!notif.read ? 'unread' : ''}`}
+                  className={`notification-dropdown-item ${!notif.read ? 'unread' : ''}`}
                   onClick={() => handleNotificationClick(notif)}
+                  style={{ animationDelay: `${index * 0.05}s` }}
                 >
-                  <div className="notification-icon">
+                  <div className="notification-item-icon" style={{ background: `${iconColor}15`, color: iconColor }}>
                     <IconComponent size={20} />
                   </div>
-                  <div className="notification-content">
-                    <p className="notification-message">{notif.message}</p>
-                    <small className="notification-time">{getTimeAgo(notif.createdAt)}</small>
+                  <div className="notification-item-content">
+                    <p className="notification-item-message">{notif.message}</p>
+                    <div className="notification-item-footer">
+                      <span className="notification-item-time">{getTimeAgo(notif.createdAt)}</span>
+                      {!notif.read && <span className="notification-unread-badge">New</span>}
+                    </div>
                   </div>
-                  {!notif.read && <div className="notification-dot"></div>}
+                  <button 
+                    className="notification-delete-btn"
+                    onClick={(e) => handleDeleteNotification(e, notif._id, !notif.read)}
+                    title="Delete"
+                  >
+                    <MdClose size={16} />
+                  </button>
                 </div>
               );
             })
           ) : (
-            <div className="text-center py-4 text-muted">
-              <MdNotifications size={48} className="mb-2" style={{opacity: 0.3}} />
-              <p className="mb-0">No notifications</p>
+            <div className="notification-empty-state">
+              <div className="empty-state-icon">
+                <MdNotifications size={48} />
+              </div>
+              <h6 className="empty-state-title">All caught up!</h6>
+              <p className="empty-state-text">You have no notifications at the moment</p>
             </div>
           )}
         </div>
+
+        {notifications.length > 0 && (
+          <div className="notification-dropdown-footer">
+            <button className="view-all-btn" onClick={() => { setShow(false); navigate('/notifications'); }}>
+              View all notifications
+            </button>
+          </div>
+        )}
       </Dropdown.Menu>
     </Dropdown>
   );

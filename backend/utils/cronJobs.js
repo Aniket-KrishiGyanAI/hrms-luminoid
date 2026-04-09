@@ -5,7 +5,7 @@ const LeaveRequest = require('../models/LeaveRequest');
 const User = require('../models/User');
 const Attendance = require('../models/Attendance');
 const DailyUpdate = require('../models/DailyUpdate');
-const { sendHolidayNotification, sendLeaveReminderNotification } = require('./emailService');
+const { sendHolidayNotification, sendLeaveReminderNotification, sendExpenseDeadlineReminder } = require('./emailService');
 const moment = require('moment-timezone');
 
 // Monthly accrual on 1st of every month at 00:00
@@ -84,33 +84,92 @@ cron.schedule('0 10 * * *', async () => {
   }
 });
 
-// Auto checkout - runs daily at 6:30 PM
-cron.schedule('30 18 * * *', async () => {
+// Auto checkout - runs every 30 minutes from 6 PM to 11 PM to handle different office end times
+cron.schedule('*/30 18-23 * * *', async () => {
   console.log('Running auto checkout for employees who forgot to check out...');
   
   const today = moment.tz('Asia/Kolkata').startOf('day').toDate();
-  const checkoutTime = moment.tz('Asia/Kolkata').set({ hour: 18, minute: 0, second: 0, millisecond: 0 }).toDate();
+  const now = moment.tz('Asia/Kolkata');
+  const currentHour = now.hour();
+  const currentMinute = now.minute();
   
   try {
+    const OfficeLocation = require('../models/OfficeLocation');
+    
+    // Find all attendance records that need auto-checkout
     const attendanceRecords = await Attendance.find({
       date: today,
       checkIn: { $exists: true },
       checkOut: { $exists: false },
       status: { $in: ['Present', 'Late'] },
-      isDeleted: { $ne: true }
-    });
+      isDeleted: { $ne: true },
+      officeLocation: { $exists: true, $ne: null }
+    }).populate('officeLocation');
     
-    if (attendanceRecords.length > 0) {
-      for (const record of attendanceRecords) {
+    let checkedOutCount = 0;
+    
+    for (const record of attendanceRecords) {
+      if (!record.officeLocation) continue;
+      
+      const office = record.officeLocation;
+      const officeEndHour = office.endTime;
+      const officeEndMinute = office.endMinute || 0;
+      
+      // Calculate total minutes since midnight
+      const currentTotalMinutes = currentHour * 60 + currentMinute;
+      const officeEndTotalMinutes = officeEndHour * 60 + officeEndMinute;
+      
+      // Auto-checkout if current time is at least 30 minutes after office end time
+      if (currentTotalMinutes >= officeEndTotalMinutes + 30) {
+        const checkoutTime = moment.tz('Asia/Kolkata')
+          .set({ hour: officeEndHour, minute: officeEndMinute, second: 0, millisecond: 0 })
+          .toDate();
+        
         record.checkOut = checkoutTime;
         record.isAutoCheckout = true;
+        
+        const timeStr = `${officeEndHour}:${String(officeEndMinute).padStart(2, '0')}`;
         record.notes = record.notes 
-          ? `${record.notes} | Auto checkout at 6:00 PM` 
-          : 'Auto checkout at 6:00 PM';
+          ? `${record.notes} | Auto checkout at ${timeStr} (${office.name})` 
+          : `Auto checkout at ${timeStr} (${office.name})`;
+        
         await record.save();
+        checkedOutCount++;
       }
+    }
+    
+    // Handle employees without office location (Remote/Hybrid) - use default 6 PM
+    const recordsWithoutOffice = await Attendance.find({
+      date: today,
+      checkIn: { $exists: true },
+      checkOut: { $exists: false },
+      status: { $in: ['Present', 'Late'] },
+      isDeleted: { $ne: true },
+      $or: [
+        { officeLocation: { $exists: false } },
+        { officeLocation: null }
+      ]
+    });
+    
+    // Auto-checkout remote/hybrid employees at 6:30 PM (default)
+    if (currentHour === 18 && currentMinute >= 30) {
+      const defaultCheckoutTime = moment.tz('Asia/Kolkata')
+        .set({ hour: 18, minute: 0, second: 0, millisecond: 0 })
+        .toDate();
       
-      console.log(`Auto checked out ${attendanceRecords.length} employees at 6:00 PM`);
+      for (const record of recordsWithoutOffice) {
+        record.checkOut = defaultCheckoutTime;
+        record.isAutoCheckout = true;
+        record.notes = record.notes 
+          ? `${record.notes} | Auto checkout at 6:00 PM (default)` 
+          : 'Auto checkout at 6:00 PM (default)';
+        await record.save();
+        checkedOutCount++;
+      }
+    }
+    
+    if (checkedOutCount > 0) {
+      console.log(`Auto checked out ${checkedOutCount} employees based on their office end times`);
     }
   } catch (error) {
     console.error('Error in auto checkout job:', error);
@@ -126,6 +185,95 @@ cron.schedule('0 0 * * *', async () => {
     console.log(`Deleted ${result.deletedCount} daily updates`);
   } catch (error) {
     console.error('Error clearing daily updates:', error);
+  }
+});
+
+// Expense deadline reminder — runs daily at 9:00 AM
+// Sends reminder on the last 3 days of every month to all active employees
+cron.schedule('0 9 * * *', async () => {
+  const now = new Date();
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const today = now.getDate();
+  const daysLeft = lastDay - today;
+
+  // Only send on last 2 days (daysLeft = 0, 1 means today is lastDay or lastDay-1)
+  if (daysLeft > 1) return;
+
+  const billingMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  try {
+    const employees = await User.find({ role: 'EMPLOYEE', isActive: { $ne: false } }, 'firstName lastName email');
+    if (employees.length === 0) return;
+    await sendExpenseDeadlineReminder(employees, daysLeft === 0 ? 1 : daysLeft, lastDay, billingMonth);
+  } catch (error) {
+    console.error('Error in expense deadline reminder job:', error);
+  }
+});
+
+// Auto generate field visit daily reports — runs at 11:55 PM every day
+cron.schedule('55 23 * * *', async () => {
+  console.log('Generating field visit daily reports...');
+  try {
+    const { generateDailyReport } = require('../controllers/fieldReportController');
+    const FieldVisit = require('../models/FieldVisit');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Find all employees who had visits today
+    const employeesWithVisits = await FieldVisit.distinct('employeeId', {
+      visitDate: { $gte: today }
+    });
+
+    for (const empId of employeesWithVisits) {
+      await generateDailyReport(empId, new Date());
+    }
+    console.log(`Field reports generated for ${employeesWithVisits.length} employees`);
+  } catch (error) {
+    console.error('Error generating field reports:', error);
+  }
+});
+
+// Auto-end active journeys at midnight
+cron.schedule('59 23 * * *', async () => {
+  console.log('Auto-ending active journeys at midnight...');
+  try {
+    const { autoEndJourneys } = require('../controllers/journeyController');
+    await autoEndJourneys();
+  } catch (error) {
+    console.error('Error in auto-end journeys job:', error);
+  }
+});
+
+// Journey start reminder - runs every 30 minutes during work hours (9 AM - 6 PM)
+cron.schedule('*/30 9-18 * * *', async () => {
+  console.log('Checking for journey start reminders...');
+  try {
+    const { sendJourneyStartReminders } = require('../services/journeyNotificationService');
+    await sendJourneyStartReminders();
+  } catch (error) {
+    console.error('Error in journey start reminder job:', error);
+  }
+});
+
+// End journey reminder - runs at 6 PM and 7 PM
+cron.schedule('0 18,19 * * *', async () => {
+  console.log('Sending end journey reminders...');
+  try {
+    const { sendEndJourneyReminders } = require('../services/journeyNotificationService');
+    await sendEndJourneyReminders();
+  } catch (error) {
+    console.error('Error in end journey reminder job:', error);
+  }
+});
+
+// Low battery alerts - runs every hour during work hours
+cron.schedule('0 9-18 * * *', async () => {
+  console.log('Checking for low battery alerts...');
+  try {
+    const { sendLowBatteryAlerts } = require('../services/journeyNotificationService');
+    await sendLowBatteryAlerts();
+  } catch (error) {
+    console.error('Error in low battery alert job:', error);
   }
 });
 
