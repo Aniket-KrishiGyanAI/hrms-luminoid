@@ -142,11 +142,15 @@
   align-items: center;
   justify-content: center;
   animation: iconBounce 2s infinite;
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.3);
 }
 
 .login-icon-wrapper i {
   font-size: 2.5rem;
   color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 @keyframes iconBounce {
@@ -164,12 +168,7 @@
   color: #374151;
   font-size: 0.9rem;
   margin-bottom: 0.5rem;
-  display: flex;
-  align-items: center;
-}
-
-.form-label-modern i {
-  color: #10b981;
+  display: block;
 }
 
 .form-control-modern {
@@ -324,8 +323,8 @@
 
 @media (max-width: 576px) {
   .login-icon-wrapper {
-    width: 60px;
-    height: 60px;
+    width: 70px;
+    height: 70px;
   }
   
   .login-icon-wrapper i {
@@ -338,6 +337,10 @@
   
   .btn-modern {
     padding: 0.75rem 1.5rem;
+  }
+  
+  h2.fw-bold {
+    font-size: 1.5rem !important;
   }
 }
 

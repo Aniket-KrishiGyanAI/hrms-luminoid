@@ -2,33 +2,39 @@ const attendanceConfig = require("../config/attendanceConfig");
 
 /**
  * Calculate attendance status based on check-in/out times and hours worked
+ * FIXED: Status now based on hours worked, not arrival time
+ * "Late" status only applies if employee didn't complete full 8 hours
  * @param {Date} checkIn - Check-in timestamp
  * @param {Date} checkOut - Check-out timestamp (optional)
  * @param {Number} breakTime - Break time in minutes
- * @returns {Object} { status, totalHours, isLate, lateByMinutes }
+ * @param {Number} officeStartHour - Office start hour (24h format)
+ * @param {Number} officeStartMinute - Office start minute
+ * @param {Number} graceMinutes - Grace period in minutes
+ * @returns {Object} { status, totalHours, arrivedLate, lateByMinutes, overtimeHours }
  */
-function calculateAttendanceStatus(checkIn, checkOut = null, breakTime = 0) {
+function calculateAttendanceStatus(checkIn, checkOut = null, breakTime = 0, officeStartHour = 10, officeStartMinute = 0, graceMinutes = 0) {
   const {
     FULL_DAY_HOURS,
     HALF_DAY_HOURS,
     LOP_THRESHOLD,
-    LATE_GRACE_MINUTES,
-    OFFICE_START_TIME
+    OVERTIME_THRESHOLD,
+    OVERTIME_ENABLED
   } = attendanceConfig;
 
-  const OFFICE_START_HOUR = OFFICE_START_TIME * 60; // in minutes
+  const officeStartTotalMinutes = officeStartHour * 60 + officeStartMinute;
   
   let totalHours = 0;
   let status = "Absent";
-  let isLate = false;
+  let arrivedLate = false;
   let lateByMinutes = 0;
+  let overtimeHours = 0;
 
   // Check if employee arrived late
   if (checkIn) {
     const checkInTime = new Date(checkIn);
     const checkInMinutes = checkInTime.getHours() * 60 + checkInTime.getMinutes();
-    lateByMinutes = checkInMinutes - OFFICE_START_HOUR;
-    isLate = lateByMinutes > LATE_GRACE_MINUTES;
+    lateByMinutes = Math.max(0, checkInMinutes - officeStartTotalMinutes);
+    arrivedLate = lateByMinutes > graceMinutes;
   }
 
   // Calculate hours if both check-in and check-out exist
@@ -41,29 +47,36 @@ function calculateAttendanceStatus(checkIn, checkOut = null, breakTime = 0) {
       totalMinutes -= breakTime;
     }
     
-    totalHours = Math.round((totalMinutes / 60) * 100) / 100;
+    totalHours = Math.max(0, Math.round((totalMinutes / 60) * 100) / 100);
 
-    // Determine status based on hours worked
+    // Calculate overtime
+    if (OVERTIME_ENABLED && totalHours > OVERTIME_THRESHOLD) {
+      overtimeHours = Math.round((totalHours - OVERTIME_THRESHOLD) * 100) / 100;
+    }
+
+    // FIXED LOGIC: Determine status based on hours worked
     if (totalHours < LOP_THRESHOLD) {
       status = "LOP";
     } else if (totalHours < HALF_DAY_HOURS) {
       status = "Half Day";
     } else if (totalHours >= FULL_DAY_HOURS) {
-      status = isLate ? "Late" : "Present";
+      // 8+ hours = Present (regardless of arrival time)
+      status = "Present";
     } else {
-      // Between 4-8 hours
-      status = isLate ? "Late" : "Half Day";
+      // Between 4-8 hours: Late only if arrived late
+      status = arrivedLate ? "Late" : "Half Day";
     }
   } else if (checkIn && !checkOut) {
     // Only checked in
-    status = isLate ? "Late" : "Present";
+    status = arrivedLate ? "Late" : "Present";
   }
 
   return {
     status,
     totalHours,
-    isLate,
-    lateByMinutes: Math.max(0, lateByMinutes)
+    arrivedLate,
+    lateByMinutes,
+    overtimeHours
   };
 }
 

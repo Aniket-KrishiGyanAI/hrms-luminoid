@@ -44,6 +44,7 @@ const fieldVisitSchema = new mongoose.Schema({
   selfReported: { type: Boolean, default: false },
   selfReportNote: { type: String },
   personMet: { type: String },
+  phone: { type: String },
   purposeOfVisit: { type: String },
 
   totalDistanceKm: { type: Number, default: 0 },

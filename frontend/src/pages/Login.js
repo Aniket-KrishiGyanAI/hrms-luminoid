@@ -127,10 +127,10 @@ const Login = () => {
                     <div className="login-icon-wrapper mb-3">
                       <i className="fas fa-user-circle"></i>
                     </div>
-                    <h2 className="fw-bold mb-2">
+                    <h2 className="fw-bold mb-2" style={{ color: '#1e293b' }}>
                       {mode === "login" ? "Welcome Back" : "Create Account"}
                     </h2>
-                    <p className="text-muted mb-0">
+                    <p className="text-muted mb-0" style={{ fontSize: '0.95rem' }}>
                       {mode === "login"
                         ? "Sign in to continue to your account"
                         : "Register to get started"}
@@ -151,7 +151,6 @@ const Login = () => {
                     <Form onSubmit={handleSubmit}>
                       <Form.Group className="mb-3">
                         <Form.Label className="form-label-modern">
-                          <i className="fas fa-envelope me-2"></i>
                           Email Address
                         </Form.Label>
                         <Form.Control
@@ -167,7 +166,6 @@ const Login = () => {
 
                       <Form.Group className="mb-4">
                         <Form.Label className="form-label-modern">
-                          <i className="fas fa-lock me-2"></i>
                           Password
                         </Form.Label>
                         <div className="position-relative">

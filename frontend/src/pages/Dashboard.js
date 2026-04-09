@@ -66,10 +66,27 @@ const Dashboard = () => {
     fetchHolidays();
     fetchFavorites();
     fetchFiles();
+    addDefaultFPOLink();
     if (user?.isFieldEmployee) {
       api.get('/api/journey/today').then(r => setJourneyData(r.data)).catch(() => {});
     }
   }, [user?.role]);
+
+  const addDefaultFPOLink = async () => {
+    try {
+      const response = await api.get("/api/favorites");
+      const hasFPOLink = response.data.some(fav => fav.url.includes('1FAIpQLSfWH86nivabf5ReP3M1Sm7ysMBElA-ZuDrhEVvfuajKrE3rsw'));
+      if (!hasFPOLink) {
+        await api.post("/api/favorites", {
+          title: "FPO Client Form",
+          url: "https://docs.google.com/forms/d/e/1FAIpQLSfWH86nivabf5ReP3M1Sm7ysMBElA-ZuDrhEVvfuajKrE3rsw/viewform",
+          icon: "clipboard-list"
+        });
+      }
+    } catch (error) {
+      console.error("Error adding FPO link:", error);
+    }
+  };
 
   const fetchDashboardData = async () => {
     try {
@@ -429,6 +446,26 @@ const Dashboard = () => {
                   }}
                 >
                   <i className="fas fa-file-alt"></i>Documents
+                </button>
+                <button
+                  onClick={() => window.open('https://docs.google.com/forms/d/e/1FAIpQLSfWH86nivabf5ReP3M1Sm7ysMBElA-ZuDrhEVvfuajKrE3rsw/viewform', '_blank')}
+                  style={{
+                    padding: "0.9rem 1rem",
+                    borderRadius: "0.75rem",
+                    border: "none",
+                    fontWeight: 600,
+                    fontSize: "0.85rem",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "0.55rem",
+                    cursor: "pointer",
+                    background:
+                      "linear-gradient(135deg,#3b82f6 0%,#2563eb 100%)",
+                    color: "#fff",
+                  }}
+                >
+                  <i className="fas fa-clipboard-list"></i>FPO Client Form
                 </button>
 
                 {/* Journey Quick Action — field employees only */}

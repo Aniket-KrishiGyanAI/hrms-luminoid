@@ -9,8 +9,10 @@ const OfficeLocations = () => {
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
-    name: '', latitude: '', longitude: '', radiusMeters: 100,
-    startTime: 9, startMinute: 0, endTime: 18, endMinute: 0, compensationMinutes: 0, isActive: true,
+    name: '', address: '', latitude: '', longitude: '', radiusMeters: 100,
+    startTime: 9, startMinute: 0, endTime: 18, endMinute: 0,
+    autoCheckoutHour: 20, autoCheckoutMinute: 0,
+    compensationMinutes: 0, isActive: true,
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -29,7 +31,7 @@ const OfficeLocations = () => {
 
   const openAdd = () => {
     setEditing(null);
-    setForm({ name: '', latitude: '', longitude: '', radiusMeters: 100, startTime: 9, startMinute: 0, endTime: 18, endMinute: 0, compensationMinutes: 0, isActive: true });
+    setForm({ name: '', address: '', latitude: '', longitude: '', radiusMeters: 100, startTime: 9, startMinute: 0, endTime: 18, endMinute: 0, autoCheckoutHour: 20, autoCheckoutMinute: 0, compensationMinutes: 0, isActive: true });
     setSearchQuery('');
     setSearchResults([]);
     setShowModal(true);
@@ -39,6 +41,7 @@ const OfficeLocations = () => {
     setEditing(loc);
     setForm({
       name: loc.name || '',
+      address: loc.address || '',
       latitude: loc.latitude || '',
       longitude: loc.longitude || '',
       radiusMeters: loc.radiusMeters || 100,
@@ -46,6 +49,8 @@ const OfficeLocations = () => {
       startMinute: loc.startMinute ?? 0,
       endTime: loc.endTime ?? 18,
       endMinute: loc.endMinute ?? 0,
+      autoCheckoutHour: loc.autoCheckoutTime?.hour ?? 20,
+      autoCheckoutMinute: loc.autoCheckoutTime?.minute ?? 0,
       compensationMinutes: loc.compensationMinutes || 0,
       isActive: loc.isActive ?? true,
     });
@@ -55,23 +60,22 @@ const OfficeLocations = () => {
   };
 
   const handleSave = async () => {
-    if (!form.name?.trim()) {
-      return toast.error('Office name is required');
-    }
-    if (!form.latitude || !form.longitude) {
-      return toast.error('Latitude and longitude are required');
-    }
-    if (isNaN(form.latitude) || isNaN(form.longitude)) {
-      return toast.error('Invalid coordinates');
-    }
-    if (Number(form.startTime) >= Number(form.endTime)) {
-      return toast.error('End time must be after start time');
-    }
+    if (!form.name?.trim()) return toast.error('Office name is required');
+    if (!form.latitude || !form.longitude) return toast.error('Latitude and longitude are required');
+    if (isNaN(form.latitude) || isNaN(form.longitude)) return toast.error('Invalid coordinates');
+    const startTotal = Number(form.startTime) * 60 + Number(form.startMinute);
+    const endTotal = Number(form.endTime) * 60 + Number(form.endMinute);
+    if (startTotal >= endTotal) return toast.error('End time must be after start time');
+    const radius = Number(form.radiusMeters);
+    if (!radius || radius < 10 || radius > 5000) return toast.error('Radius must be between 10 and 5000 meters');
+    const grace = Number(form.compensationMinutes);
+    if (grace < 0 || grace > 120) return toast.error('Grace period must be between 0 and 120 minutes');
     
     setSaving(true);
     try {
       const payload = {
         name: form.name.trim(),
+        address: form.address || '',
         latitude: Number(form.latitude),
         longitude: Number(form.longitude),
         radiusMeters: Number(form.radiusMeters) || 100,
@@ -79,6 +83,7 @@ const OfficeLocations = () => {
         startMinute: Number(form.startMinute) || 0,
         endTime: Number(form.endTime),
         endMinute: Number(form.endMinute) || 0,
+        autoCheckoutTime: { hour: Number(form.autoCheckoutHour), minute: Number(form.autoCheckoutMinute) },
         compensationMinutes: Number(form.compensationMinutes) || 0,
         isActive: Boolean(form.isActive)
       };
@@ -139,9 +144,12 @@ const OfficeLocations = () => {
   };
 
   const selectSearchResult = (result) => {
-    const lat = parseFloat(result.lat);
-    const lng = parseFloat(result.lon);
-    setForm(f => ({ ...f, latitude: lat, longitude: lng }));
+    setForm(f => ({
+      ...f,
+      latitude: parseFloat(result.lat),
+      longitude: parseFloat(result.lon),
+      address: result.display_name,
+    }));
     setSearchResults([]);
     setSearchQuery('');
     toast.success('Location selected!');
@@ -240,7 +248,7 @@ const OfficeLocations = () => {
             </div>
             <div>
               <h5 className="mb-0">{editing ? 'Edit Office Location' : 'Add Office Location'}</h5>
-              <small className="text-muted">Update location details and working hours</small>
+              <small className="text-muted">{editing ? 'Update location details and working hours' : 'Fill in the details for the new office location'}</small>
             </div>
           </Modal.Title>
         </Modal.Header>
@@ -259,7 +267,9 @@ const OfficeLocations = () => {
                 value={form.name}
                 onChange={e => setForm({ ...form, name: e.target.value })}
                 className="shadow-sm"
+                isInvalid={form.name !== undefined && form.name.trim() === ''}
               />
+              <Form.Control.Feedback type="invalid">Office name is required.</Form.Control.Feedback>
             </div>
 
             {/* Coordinates Section */}
@@ -278,7 +288,7 @@ const OfficeLocations = () => {
                     placeholder="Search for office address, city, or landmark..."
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
-                    onKeyPress={e => e.key === 'Enter' && searchLocation()}
+                    onKeyDown={e => e.key === 'Enter' && searchLocation()}
                     className="shadow-sm"
                   />
                   <Button
@@ -318,6 +328,13 @@ const OfficeLocations = () => {
                 )}
               </div>
               
+              {form.address ? (
+                <div className="alert alert-success py-2 mb-3 d-flex align-items-center">
+                  <i className="fas fa-check-circle me-2"></i>
+                  <small className="text-truncate">{form.address}</small>
+                  <button type="button" className="btn-close ms-auto" style={{ fontSize: '0.65rem' }} onClick={() => setForm(f => ({ ...f, address: '' }))}></button>
+                </div>
+              ) : null}
               <Row>
                 <Col md={6}>
                   <Form.Group className="mb-3">
@@ -370,14 +387,16 @@ const OfficeLocations = () => {
                 <Form.Control
                   type="number" 
                   min="10" 
-                  max="1000"
+                  max="5000"
                   value={form.radiusMeters}
                   onChange={e => setForm({ ...form, radiusMeters: Number(e.target.value) })}
                   className="shadow-sm"
+                  isInvalid={form.radiusMeters < 10 || form.radiusMeters > 5000}
                 />
+                <Form.Control.Feedback type="invalid">Radius must be between 10 and 5000 meters.</Form.Control.Feedback>
                 <Form.Text className="text-muted">
                   <i className="fas fa-info-circle me-1"></i>
-                  Employees must be within this radius to check in (Recommended: 50-200m)
+                  Employees must be within this radius to check in (Recommended: 50–200m)
                 </Form.Text>
               </Form.Group>
             </div>
@@ -462,6 +481,48 @@ const OfficeLocations = () => {
               </div>
             </div>
 
+            {/* Auto Checkout Section */}
+            <div className="mb-4">
+              <div className="d-flex align-items-center mb-3">
+                <i className="fas fa-sign-out-alt text-danger me-2"></i>
+                <h6 className="mb-0 fw-semibold">Auto Checkout Time</h6>
+              </div>
+              <Row>
+                <Col md={6}>
+                  <Form.Group>
+                    <Form.Label>Hour</Form.Label>
+                    <Form.Select
+                      value={form.autoCheckoutHour}
+                      onChange={e => setForm({ ...form, autoCheckoutHour: Number(e.target.value) })}
+                      className="shadow-sm"
+                    >
+                      {Array.from({ length: 24 }, (_, i) => (
+                        <option key={i} value={i}>{i.toString().padStart(2, '0')}</option>
+                      ))}
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group>
+                    <Form.Label>Minute</Form.Label>
+                    <Form.Select
+                      value={form.autoCheckoutMinute}
+                      onChange={e => setForm({ ...form, autoCheckoutMinute: Number(e.target.value) })}
+                      className="shadow-sm"
+                    >
+                      {Array.from({ length: 12 }, (_, i) => i * 5).map(m => (
+                        <option key={m} value={m}>{m.toString().padStart(2, '0')}</option>
+                      ))}
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+              </Row>
+              <Form.Text className="text-muted">
+                <i className="fas fa-info-circle me-1"></i>
+                Employees will be automatically checked out at this time if they forget to check out.
+              </Form.Text>
+            </div>
+
             {/* Grace Period Section */}
             <div className="mb-4">
               <div className="d-flex align-items-center mb-3">
@@ -478,7 +539,9 @@ const OfficeLocations = () => {
                   value={form.compensationMinutes}
                   onChange={e => setForm({ ...form, compensationMinutes: Number(e.target.value) })}
                   className="shadow-sm"
+                  isInvalid={form.compensationMinutes < 0 || form.compensationMinutes > 120}
                 />
+                <Form.Control.Feedback type="invalid">Grace period must be between 0 and 120 minutes.</Form.Control.Feedback>
                 <Form.Text className="text-muted">
                   <i className="fas fa-info-circle me-1"></i>
                   Employees can check in this many minutes late without being marked as "Late" (e.g., 30 = 30 minutes grace period)

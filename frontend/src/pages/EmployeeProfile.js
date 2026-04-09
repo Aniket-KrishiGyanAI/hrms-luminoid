@@ -4,6 +4,7 @@ import { Row, Col, Card, Form, Button, Tab, Tabs, Image } from 'react-bootstrap'
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 import { toast } from 'react-toastify';
+import '../styles/EmployeeProfile.css';
 
 const EmployeeProfile = () => {
   const { user } = useAuth();

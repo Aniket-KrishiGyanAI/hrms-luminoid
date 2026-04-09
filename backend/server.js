@@ -35,6 +35,7 @@ const fieldVisitRoutes = require('./routes/fieldVisits');
 const visitPlanRoutes = require('./routes/visitPlans');
 const fieldReportRoutes = require('./routes/fieldReports');
 const journeyRoutes = require('./routes/journey');
+const fpoFormRoutes = require('./routes/fpoForms');
 
 const seedDefaultOffice = require('./utils/seedOfficeLocation');
 
@@ -183,6 +184,7 @@ app.use('/api/field-visits', fieldVisitRoutes);
 app.use('/api/visit-plans', visitPlanRoutes);
 app.use('/api/field-reports', fieldReportRoutes);
 app.use('/api/journey', journeyRoutes);
+app.use('/api/fpo-forms', fpoFormRoutes);
 app.use('/uploads/visit-photos', express.static(require('path').join(__dirname, 'uploads/visit-photos')));
 
 // Error handling middleware

@@ -39,12 +39,9 @@ exports.getClient = async (req, res) => {
 exports.createClient = async (req, res) => {
   try {
     const existing = await FieldClient.findOne({
-      $or: [
-        { phone: req.body.phone },
-        { name: { $regex: `^${req.body.name}$`, $options: 'i' } }
-      ]
+      name: { $regex: `^${req.body.name}$`, $options: 'i' }
     });
-    if (existing) return res.status(409).json({ message: `Duplicate client: a client with the same ${existing.phone === req.body.phone ? 'phone number' : 'name'} already exists.` });
+    if (existing) return res.status(409).json({ message: 'Duplicate client: a client with the same name already exists.' });
     const client = await FieldClient.create({ ...req.body, createdBy: req.user.id });
     res.status(201).json(client);
   } catch (error) {
@@ -56,12 +53,9 @@ exports.updateClient = async (req, res) => {
   try {
     const existing = await FieldClient.findOne({
       _id: { $ne: req.params.id },
-      $or: [
-        { phone: req.body.phone },
-        { name: { $regex: `^${req.body.name}$`, $options: 'i' } }
-      ]
+      name: { $regex: `^${req.body.name}$`, $options: 'i' }
     });
-    if (existing) return res.status(409).json({ message: `Duplicate client: a client with the same ${existing.phone === req.body.phone ? 'phone number' : 'name'} already exists.` });
+    if (existing) return res.status(409).json({ message: 'Duplicate client: a client with the same name already exists.' });
     const client = await FieldClient.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
     if (!client) return res.status(404).json({ message: 'Client not found' });
     res.json(client);

@@ -14,15 +14,23 @@ const getOfficeLocations = async (req, res) => {
 
 const createOfficeLocation = async (req, res) => {
   try {
-    const { name, latitude, longitude, radiusMeters, startTime, endTime, autoCheckoutTime } = req.body;
+    const { name, address, latitude, longitude, radiusMeters, startTime, startMinute, endTime, endMinute, compensationMinutes, autoCheckoutTime, isActive } = req.body;
     if (!name || latitude == null || longitude == null || startTime == null || endTime == null) {
       return res.status(400).json({ message: 'name, latitude, longitude, startTime and endTime are required' });
     }
     const location = await OfficeLocation.create({
-      name, latitude, longitude,
+      name,
+      address: address || '',
+      latitude,
+      longitude,
       radiusMeters: radiusMeters || 100,
-      startTime, endTime,
-      autoCheckoutTime: autoCheckoutTime || { hour: endTime, minute: 0 },
+      startTime,
+      startMinute: startMinute || 0,
+      endTime,
+      endMinute: endMinute || 0,
+      autoCheckoutTime: autoCheckoutTime || undefined,
+      compensationMinutes: compensationMinutes || 0,
+      isActive: isActive !== undefined ? isActive : true
     });
     res.status(201).json(location);
   } catch (error) {

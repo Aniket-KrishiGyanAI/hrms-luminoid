@@ -14,18 +14,70 @@ const OUTCOME_OPTIONS = [
 ];
 
 const EMPTY = {
-  clientName: '', personMet: '', purposeOfVisit: '',
+  clientName: '', personMet: '', phone: '', purposeOfVisit: '',
   notes: '', outcome: 'NEUTRAL', dealValue: '',
 };
 
 const getLocation = () =>
-  new Promise((resolve, reject) =>
+  new Promise((resolve, reject) => {
+    console.log('🔵 getLocation called');
+    console.log('Protocol:', window.location.protocol);
+    console.log('Hostname:', window.location.hostname);
+    console.log('navigator.geolocation available:', !!navigator.geolocation);
+    
+    if (!navigator.geolocation) {
+      console.error('❌ Geolocation API not available');
+      reject({ code: 0, message: 'Geolocation not supported on this device' });
+      return;
+    }
+    
+    console.log('🟢 Starting getCurrentPosition...');
     navigator.geolocation.getCurrentPosition(
-      p => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
-      reject,
-      { enableHighAccuracy: true, timeout: 10000 }
-    )
-  );
+      p => {
+        console.log('✅ SUCCESS! Position received');
+        console.log('Latitude:', p.coords.latitude);
+        console.log('Longitude:', p.coords.longitude);
+        console.log('Accuracy:', p.coords.accuracy, 'meters');
+        resolve({ lat: p.coords.latitude, lng: p.coords.longitude });
+      },
+      error => {
+        console.error('❌ getCurrentPosition ERROR');
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
+        
+        // Handle specific geolocation errors
+        const errorDetails = {
+          code: error.code,
+          message: error.message,
+        };
+        
+        if (error.code === 1) {
+          console.error('🔒 PERMISSION_DENIED');
+          errorDetails.userMessage = 'Location permission denied. Please enable location in your phone settings or browser permissions.';
+          errorDetails.action = 'CHECK_PERMISSIONS';
+        } else if (error.code === 2) {
+          console.error('📡 POSITION_UNAVAILABLE');
+          errorDetails.userMessage = 'GPS signal not available. Please ensure GPS is enabled and you are in an open area.';
+          errorDetails.action = 'CHECK_GPS';
+        } else if (error.code === 3) {
+          console.error('⏱️ TIMEOUT');
+          errorDetails.userMessage = 'Location request timed out. Please try again or move to an area with better GPS signal.';
+          errorDetails.action = 'RETRY';
+        } else {
+          console.error('❓ UNKNOWN ERROR');
+          errorDetails.userMessage = 'Unable to get your location. Please try again.';
+          errorDetails.action = 'RETRY';
+        }
+        
+        reject(errorDetails);
+      },
+      { 
+        enableHighAccuracy: true, 
+        timeout: 15000,  // 15 second timeout for mobile GPS lock
+        maximumAge: 0    // Don't use cached location
+      }
+    );
+  });
 
 const getAddress = async (lat, lng) => {
   try {
@@ -60,12 +112,44 @@ const SelfReportVisit = () => {
   const captureGPS = async () => {
     setGpsLoading(true);
     try {
+      console.log('🔵 Starting GPS capture...');
       const pos = await getLocation();
+      console.log('✅ GPS captured:', pos);
       const address = await getAddress(pos.lat, pos.lng);
       setGps({ ...pos, address });
-      toast.success('Location captured');
-    } catch {
-      toast.error('Location access denied');
+      toast.success('✅ Location captured!', { autoClose: 3000 });
+      console.log('📍 Location saved with address:', address);
+    } catch (error) {
+      console.error('❌ GPS Error Code:', error.code, 'Message:', error.message);
+      
+      if (error.code === 1) {
+        console.error('🔒 PERMISSION DENIED - User rejected location access');
+        toast.error('🔒 Permission Denied - Allow location access in Settings', { autoClose: 7000 });
+        // Show alert with steps
+        setTimeout(() => {
+          alert('📍 HOW TO ENABLE LOCATION:\n\n' +
+            '📱 iOS (Safari):\n' +
+            '1. Open Settings → Safari → Location\n' +
+            '2. Select "Allow"\n' +
+            '3. Refresh the page\n\n' +
+            '🤖 Android (Chrome):\n' +
+            '1. Tap 🔒 in address bar\n' +
+            '2. Tap Permissions → Location\n' +
+            '3. Select "Allow"');
+        }, 500);
+      } else if (error.code === 2) {
+        console.error('📡 GPS UNAVAILABLE - Location info unavailable');
+        toast.error('📡 GPS unavailable - Move to open area', { autoClose: 6000 });
+      } else if (error.code === 3) {
+        console.error('⏱️ TIMEOUT - GPS request took too long');
+        toast.error('⏱️ GPS timeout - Try again in open area', { autoClose: 5000 });
+      } else if (error.code === 0) {
+        console.error('⚠️ NOT SUPPORTED - Geolocation API not available');
+        toast.error('⚠️ GPS not supported on this device', { autoClose: 5000 });
+      } else {
+        console.error('❓ UNKNOWN ERROR');
+        toast.error(`❌ Location error: ${error.message}`, { autoClose: 5000 });
+      }
     } finally {
       setGpsLoading(false);
     }
@@ -74,9 +158,15 @@ const SelfReportVisit = () => {
   const handlePhoto = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    
+    // Show preview immediately
     setPhoto({ file, preview: URL.createObjectURL(file) });
-    // auto-capture GPS when photo is taken
-    if (!gps) captureGPS();
+    
+    // Capture GPS automatically if not already captured
+    if (!gps) {
+      toast.info('📍 Capturing location...', { autoClose: 2000 });
+      captureGPS();
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -111,6 +201,40 @@ const SelfReportVisit = () => {
         <h1 className="page-title"><i className="fas fa-plus-circle me-2" style={{ color: '#10b981' }} />Log a Visit</h1>
         <p className="text-muted">Record a self-initiated client visit with photo proof</p>
       </div>
+
+      {/* GPS Permissions & Setup Info */}
+      {(() => {
+        const isHttps = window.location.protocol === 'https:';
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const needsHttps = !isHttps && !isLocalhost;
+        
+        return (
+          <div className={`alert d-flex align-items-start gap-2 mb-3`} 
+               style={{ borderRadius: 10, border: needsHttps ? '1px solid #f59e0b' : '1px solid #bfdbfe' }}>
+            <i className={needsHttps ? 'fas fa-exclamation-triangle' : 'fas fa-info-circle'} 
+               style={{ marginTop: '0.25rem', flexShrink: 0, color: needsHttps ? '#d97706' : '#2563eb' }} />
+            <div style={{ fontSize: '0.88rem', lineHeight: 1.6 }}>
+              {needsHttps ? (
+                <>
+                  <strong>⚠️ Location May Not Work on HTTP</strong>
+                  <p style={{ marginBottom: '0.5rem' }}>You're accessing via HTTP on a non-local IP. GPS requires HTTPS on mobile devices.</p>
+                  <p style={{ marginBottom: '0.5rem', fontSize: '0.8rem' }}>
+                    <strong>Fix:</strong> Use HTTPS URL or access from localhost/127.0.0.1
+                  </p>
+                  <p style={{ marginBottom: 0, fontSize: '0.8rem' }}>
+                    <strong>For now:</strong> Tap "Capture GPS Location" button to try. If it fails, check the URL.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <strong>📍 Location Permission Required</strong>
+                  <p style={{ marginBottom: 0 }}>This app needs GPS access to tag your visits. When prompted, <strong>allow location access</strong>.</p>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {submitted && (
         <div className="alert alert-success d-flex align-items-center gap-2 mb-3" style={{ borderRadius: 10 }}>
@@ -282,7 +406,18 @@ const SelfReportVisit = () => {
                     style={{ borderRadius: 8 }} />
                 </Form.Group>
               </Col>
-              <Col md={12}>
+              <Col md={6}>
+                <Form.Group>
+                  <Form.Label style={{ fontWeight: 600, fontSize: '0.88rem' }}>Phone Number</Form.Label>
+                  <Form.Control
+                    type="tel"
+                    value={form.phone}
+                    onChange={e => set('phone', e.target.value)}
+                    placeholder="Contact number"
+                    style={{ borderRadius: 8 }} />
+                </Form.Group>
+              </Col>
+              <Col md={6}>
                 <Form.Group>
                   <Form.Label style={{ fontWeight: 600, fontSize: '0.88rem' }}>Purpose of Visit</Form.Label>
                   <Form.Control

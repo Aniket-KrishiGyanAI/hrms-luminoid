@@ -17,13 +17,25 @@ const OUTCOME_OPTIONS = [
 ];
 
 const getLocation = () =>
-  new Promise((resolve, reject) =>
+  new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject({ code: 0, message: 'Geolocation not supported' });
+      return;
+    }
+    
     navigator.geolocation.getCurrentPosition(
       p => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
-      reject,
-      { enableHighAccuracy: true, timeout: 10000 }
-    )
-  );
+      error => {
+        console.error('Geolocation error:', error);
+        reject(error);
+      },
+      { 
+        enableHighAccuracy: true, 
+        timeout: 30000,
+        maximumAge: 0
+      }
+    );
+  });
 
 const getAddress = async (lat, lng) => {
   try {
@@ -42,28 +54,54 @@ const FieldVisits = () => {
   const [plan, setPlan] = useState(null);
   const [visits, setVisits] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeVisit, setActiveVisit] = useState(null);
   const [showOutcomeModal, setShowOutcomeModal] = useState(false);
-  const [outcomeForm, setOutcomeForm] = useState({ status: 'NEUTRAL', notes: '', nextAction: '', nextFollowUpDate: '', dealValue: '' });
+  const [showLocationPermissionModal, setShowLocationPermissionModal] = useState(false);
+  const [pendingPhotoFile, setPendingPhotoFile] = useState(null);
+  const [outcomeForm, setOutcomeForm] = useState({ status: 'NEUTRAL', notes: '', nextAction: '', nextFollowUpDate: '', dealValue: '', personMet: '', phone: '', purposeOfVisit: '' });
+  const [formErrors, setFormErrors] = useState({});
   const [gpsLoading, setGpsLoading] = useState({});
   const routeIntervalRef = useRef(null);
   const photoInputRef = useRef(null);
   const [photoVisitId, setPhotoVisitId] = useState(null);
+  const [capturedLocation, setCapturedLocation] = useState(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [routeTrackingErrors, setRouteTrackingErrors] = useState(0);
+  const journeyPollIntervalRef = useRef(null);
 
   // Journey state
-  const [journeyData, setJourneyData] = useState(undefined); // undefined = loading, null = not field employee
+  const [journeyData, setJourneyData] = useState(undefined);
   const [journeyLoading, setJourneyLoading] = useState(false);
   const isJourneyActive = journeyData?.journey?.status === 'ACTIVE';
   useJourneyTracker(isJourneyActive);
+
+  // Derive activeVisit from visits array to prevent desync
+  const activeVisit = visits.find(v => v.status === 'CHECKED_IN')?._id || null;
 
   useEffect(() => {
     fetchTodayData();
     const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener('resize', handleResize);
+    
+    // Network status listeners
+    const handleOnline = () => {
+      setIsOnline(true);
+      toast.success('Back online! Syncing data...');
+      fetchTodayData();
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      toast.warning('You are offline. Changes will be saved when connection is restored.');
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
     return () => {
       clearInterval(routeIntervalRef.current);
+      clearInterval(journeyPollIntervalRef.current);
       window.removeEventListener('resize', handleResize);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
     };
   }, []);
 
@@ -78,40 +116,64 @@ const FieldVisits = () => {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, []);
 
-  // Poll journey status every 10s to pick up attendance check-in
+  // Poll journey status every 30s (optimized from 10s) and only when page is visible
   useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        const res = await api.get('/api/journey/today');
-        setJourneyData(res.data);
-      } catch {}
-    }, 10000);
-    return () => clearInterval(interval);
-  }, []);
+    const pollJourney = async () => {
+      if (document.visibilityState === 'visible' && isOnline) {
+        try {
+          const res = await api.get('/api/journey/today');
+          setJourneyData(res.data);
+        } catch (err) {
+          console.error('Journey poll failed:', err);
+        }
+      }
+    };
+    
+    journeyPollIntervalRef.current = setInterval(pollJourney, 30000);
+    return () => clearInterval(journeyPollIntervalRef.current);
+  }, [isOnline]);
 
   const fetchTodayData = async () => {
+    if (!isOnline) {
+      toast.error('No internet connection. Please check your network.');
+      setLoading(false);
+      return;
+    }
+    
     try {
       const requests = [
         api.get('/api/visit-plans/my-today'),
         api.get('/api/field-visits/today'),
-        api.get('/api/journey/today')  // always fetch — backend validates isFieldEmployee
+        api.get('/api/journey/today')
       ];
 
       const results = await Promise.allSettled(requests);
-      if (results[0].status === 'fulfilled') setPlan(results[0].value.data);
+      
+      if (results[0].status === 'fulfilled') {
+        setPlan(results[0].value.data);
+      } else {
+        console.error('Failed to load visit plan:', results[0].reason);
+      }
+      
       if (results[1].status === 'fulfilled') {
         const visitsData = results[1].value.data;
         setVisits(visitsData);
         const checkedIn = visitsData.find(v => v.status === 'CHECKED_IN');
-        if (checkedIn) { setActiveVisit(checkedIn._id); startRouteTracking(checkedIn._id); }
+        if (checkedIn) {
+          startRouteTracking(checkedIn._id);
+        }
+      } else {
+        toast.error('Failed to load visits. Please refresh the page.');
       }
+      
       if (results[2].status === 'fulfilled') {
         setJourneyData(results[2].value.data);
       } else {
         setJourneyData(null);
       }
-    } catch {
-      toast.error('Failed to load today\'s data');
+    } catch (err) {
+      console.error('Fetch error:', err);
+      toast.error('Unable to load data. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -126,43 +188,85 @@ const FieldVisits = () => {
 
   const startRouteTracking = (visitId) => {
     clearInterval(routeIntervalRef.current);
+    setRouteTrackingErrors(0);
+    
     routeIntervalRef.current = setInterval(async () => {
       try {
         const pos = await getLocation();
         await api.post(`/api/field-visits/${visitId}/route`, { lat: pos.lat, lng: pos.lng });
-      } catch {}
+        setRouteTrackingErrors(0); // Reset on success
+      } catch (err) {
+        const newErrorCount = routeTrackingErrors + 1;
+        setRouteTrackingErrors(newErrorCount);
+        
+        if (newErrorCount >= 3) {
+          clearInterval(routeIntervalRef.current);
+          toast.error('GPS tracking failed multiple times. Please check your location settings.', {
+            autoClose: 7000
+          });
+        }
+      }
     }, 30000);
   };
 
   const handleCheckIn = async (visit) => {
+    if (!isOnline) {
+      toast.error('Cannot check in while offline. Please connect to internet.');
+      return;
+    }
+    
     setGpsLoading(p => ({ ...p, [`checkin-${visit._id}`]: true }));
     try {
       const pos = await getLocation();
       const address = await getAddress(pos.lat, pos.lng);
       await api.post(`/api/field-visits/${visit._id}/checkin`, { ...pos, address });
-      setActiveVisit(visit._id);
       startRouteTracking(visit._id);
       toast.success(`Checked in at ${visit.clientId?.name}`);
       fetchTodayData();
     } catch (e) {
-      toast.error(e.code === 1 ? 'Location permission denied' : 'Check-in failed');
+      let errorMsg = 'Check-in failed';
+      if (e.code === 1) {
+        errorMsg = 'Location permission denied. Please enable location in your browser settings.';
+      } else if (e.code === 2) {
+        errorMsg = 'Location unavailable. Please check your GPS/network.';
+      } else if (e.code === 3) {
+        errorMsg = 'Location request timeout. Please try again.';
+      } else if (e.response) {
+        errorMsg = e.response.data?.message || 'Server error. Please try again.';
+      }
+      toast.error(errorMsg, { autoClose: 5000 });
     } finally {
       setGpsLoading(p => ({ ...p, [`checkin-${visit._id}`]: false }));
     }
   };
 
   const handleCheckOut = async (visit) => {
+    if (!isOnline) {
+      toast.error('Cannot check out while offline. Please connect to internet.');
+      return;
+    }
+    
     setGpsLoading(p => ({ ...p, [`checkout-${visit._id}`]: true }));
     try {
       const pos = await getLocation();
       const address = await getAddress(pos.lat, pos.lng);
       await api.post(`/api/field-visits/${visit._id}/checkout`, { ...pos, address });
       clearInterval(routeIntervalRef.current);
-      setActiveVisit(null);
+      setRouteTrackingErrors(0);
       toast.success('Checked out successfully');
       fetchTodayData();
-    } catch {
-      toast.error('Check-out failed');
+    } catch (e) {
+      let errorMsg = 'Check-out failed';
+      if (e.code === 1) {
+        errorMsg = 'Location permission denied. Please enable location in your browser settings.';
+      } else if (e.code === 2) {
+        errorMsg = 'Location unavailable. Please check your GPS/network.';
+      } else if (e.code === 3) {
+        errorMsg = 'Location request timeout. Please try again.';
+      } else if (e.response) {
+        errorMsg = e.response.data?.message || 'Server error. Please try again.';
+      }
+      toast.error(errorMsg, { autoClose: 5000 });
     } finally {
       setGpsLoading(p => ({ ...p, [`checkout-${visit._id}`]: false }));
     }
@@ -194,38 +298,416 @@ const FieldVisits = () => {
     }
   };
 
+  const requestLocationPermission = async () => {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject({ code: 0, message: 'Geolocation not supported' });
+        return;
+      }
+
+      // Request permission by attempting to get location
+      navigator.geolocation.getCurrentPosition(
+        () => resolve(true),
+        (error) => reject(error),
+        { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
+      );
+    });
+  };
+
+  const handlePhotoClick = async (visitId) => {
+    setPhotoVisitId(visitId);
+    
+    // Check if geolocation is supported
+    if (!navigator.geolocation) {
+      toast.error('❌ Geolocation is not supported on this device');
+      return;
+    }
+    
+    console.log('Photo click - checking permissions...');
+    console.log('Current URL:', window.location.href);
+    console.log('Protocol:', window.location.protocol);
+    console.log('Hostname:', window.location.hostname);
+    
+    // Check if we're on HTTPS or localhost (required for geolocation on mobile)
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const isHttps = window.location.protocol === 'https:';
+    const isLocalNetwork = window.location.hostname.match(/^192\.168\./) || window.location.hostname.match(/^10\./) || window.location.hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./); // Local IP ranges
+    
+    if (!isHttps && !isLocalhost && !isLocalNetwork) {
+      toast.error('⚠️ Location requires HTTPS connection or local network access.', { autoClose: 7000 });
+      setTimeout(() => {
+        alert(
+          '⚠️ Secure Connection Required\n\n' +
+          'Geolocation requires a secure connection.\n\n' +
+          'You can access via:\n' +
+          '✓ https:// (production)\n' +
+          '✓ http://localhost (local development)\n' +
+          '✓ http://192.168.x.x (local network)\n\n' +
+          'Current: ' + window.location.href
+        );
+      }, 500);
+      return;
+    }
+    
+    // Try to check permission state first (if supported)
+    if (navigator.permissions && navigator.permissions.query) {
+      try {
+        const permissionStatus = await navigator.permissions.query({ name: 'geolocation' });
+        console.log('Permission state:', permissionStatus.state);
+        
+        if (permissionStatus.state === 'denied') {
+          // Permission is permanently denied
+          toast.error('🔒 Location access is blocked', { autoClose: 5000 });
+          
+          setTimeout(() => {
+            alert(
+              '🔒 Location Access Blocked\n\n' +
+              'You have previously denied location access.\n\n' +
+              '📱 To enable it:\n\n' +
+              '🤖 Android Chrome:\n' +
+              '1. Tap the lock icon (🔒) in the address bar\n' +
+              '2. Tap "Permissions" or "Site settings"\n' +
+              '3. Find "Location" and change to "Allow"\n' +
+              '4. Refresh the page\n\n' +
+              '🍎 iPhone Safari:\n' +
+              '1. Go to iPhone Settings\n' +
+              '2. Scroll to Safari → Location\n' +
+              '3. Select "Allow"\n' +
+              '4. Come back and try again'
+            );
+          }, 500);
+          return;
+        }
+      } catch (e) {
+        console.log('Permission API not fully supported:', e);
+      }
+    }
+    
+    // Show permission modal
+    setShowLocationPermissionModal(true);
+  };
+
+  const handleLocationPermissionConfirm = async () => {
+    setShowLocationPermissionModal(false);
+    
+    // Small delay to let modal close
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Try to get location permission first before opening camera
+    const loadingToast = toast.info('📍 Requesting location access...', { autoClose: false });
+    
+    try {
+      console.log('=== LOCATION REQUEST START ===');
+      console.log('Navigator.geolocation available:', !!navigator.geolocation);
+      console.log('Protocol:', window.location.protocol);
+      console.log('Hostname:', window.location.hostname);
+      console.log('User Agent:', navigator.userAgent);
+      
+      // Get location FIRST with more aggressive settings for mobile
+      const position = await new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+          reject({ code: 0, message: 'Geolocation not supported' });
+          return;
+        }
+
+        const options = {
+          enableHighAccuracy: true,
+          timeout: 20000,
+          maximumAge: 5000
+        };
+        
+        console.log('Calling getCurrentPosition with options:', options);
+        console.log('⏳ Waiting for user to grant permission...');
+
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            console.log('✅ SUCCESS! Location obtained!');
+            console.log('Latitude:', pos.coords.latitude);
+            console.log('Longitude:', pos.coords.longitude);
+            console.log('Accuracy:', pos.coords.accuracy, 'meters');
+            console.log('Timestamp:', new Date(pos.timestamp).toLocaleString());
+            resolve(pos);
+          },
+          (error) => {
+            console.error('❌ GEOLOCATION ERROR!');
+            console.error('Error Code:', error.code);
+            console.error('Error Message:', error.message);
+            console.error('Error Details:', JSON.stringify(error));
+            
+            // Log specific error codes
+            switch(error.code) {
+              case 1:
+                console.error('PERMISSION_DENIED - User denied the request');
+                break;
+              case 2:
+                console.error('POSITION_UNAVAILABLE - Location info unavailable');
+                break;
+              case 3:
+                console.error('TIMEOUT - Request timed out');
+                break;
+              default:
+                console.error('UNKNOWN_ERROR');
+            }
+            
+            reject(error);
+          },
+          options
+        );
+      });
+      
+      // Store the location
+      const locationData = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+        accuracy: position.coords.accuracy,
+        timestamp: Date.now()
+      };
+      setCapturedLocation(locationData);
+      
+      console.log('📍 Location captured and stored:', locationData);
+      console.log('=== LOCATION REQUEST SUCCESS ===');
+      
+      toast.dismiss(loadingToast);
+      toast.success('✅ Location captured! Opening camera...', { autoClose: 2000 });
+      
+      // Small delay to show success message
+      setTimeout(() => {
+        photoInputRef.current.click();
+      }, 500);
+    } catch (error) {
+      toast.dismiss(loadingToast);
+      
+      console.error('=== LOCATION REQUEST FAILED ===');
+      console.error('Full error:', error);
+      
+      let errorTitle = '';
+      let errorMsg = '';
+      let instructions = '';
+      let troubleshooting = '';
+      
+      if (error.code === 1) {
+        errorTitle = '🔒 Location Permission Denied';
+        errorMsg = 'You tapped "Block" or "Don\'t Allow" when the browser asked for location permission.';
+        
+        // Detect browser type
+        const isChrome = /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
+        const isSafari = /Safari/.test(navigator.userAgent) && /Apple/.test(navigator.vendor);
+        const isFirefox = /Firefox/.test(navigator.userAgent);
+        
+        instructions = '\n\n📱 HOW TO FIX:\n\n';
+        
+        if (isChrome) {
+          instructions += '🤖 Chrome (Android):\n' +
+            '1. Tap the 🔒 or ⓘ icon in the address bar\n' +
+            '2. Tap "Permissions" or "Site settings"\n' +
+            '3. Find "Location" → Change to "Allow"\n' +
+            '4. Refresh this page (pull down)\n' +
+            '5. Try capturing photo again\n';
+        } else if (isSafari) {
+          instructions += '🍎 Safari (iPhone):\n' +
+            '1. Open iPhone Settings app\n' +
+            '2. Scroll down → Tap "Safari"\n' +
+            '3. Tap "Location" → Select "Ask" or "Allow"\n' +
+            '4. Close Safari completely (swipe up)\n' +
+            '5. Reopen Safari and try again\n';
+        } else {
+          instructions += '📱 Your Browser:\n' +
+            '1. Look for lock/info icon in address bar\n' +
+            '2. Find location/permissions settings\n' +
+            '3. Change location to "Allow"\n' +
+            '4. Refresh the page\n' +
+            '5. Try again\n';
+        }
+        
+        troubleshooting = '\n\n🔧 STILL NOT WORKING?\n' +
+          '• Clear browser cache and cookies\n' +
+          '• Try in Chrome (best support)\n' +
+          '• Restart your browser\n' +
+          '• Check device Location is ON in Settings\n' +
+          '• Try in Incognito/Private mode';
+          
+      } else if (error.code === 2) {
+        errorTitle = '📡 Location Unavailable';
+        errorMsg = 'Your device cannot determine your location right now.';
+        instructions = '\n\n📱 PLEASE CHECK:\n' +
+          '✓ Location/GPS is turned ON in device settings\n' +
+          '✓ You have internet or mobile data connection\n' +
+          '✓ You\'re not in airplane mode\n' +
+          '✓ Try moving to an open area (away from buildings)\n' +
+          '✓ Wait a moment for GPS to lock on';
+        troubleshooting = '\n\n🔧 TRY THIS:\n' +
+          '• Turn Location OFF then ON in device settings\n' +
+          '• Restart your device\n' +
+          '• Try again in a few minutes';
+          
+      } else if (error.code === 3) {
+        errorTitle = '⏱️ Location Timeout';
+        errorMsg = 'Location request took too long (20 seconds).';
+        instructions = '\n\n📱 PLEASE TRY:\n' +
+          '✓ Make sure GPS/Location is enabled\n' +
+          '✓ Check your internet connection\n' +
+          '✓ Move to an area with better signal\n' +
+          '✓ Close other apps using location\n' +
+          '✓ Wait a moment and try again';
+        troubleshooting = '\n\n🔧 IF STILL TIMING OUT:\n' +
+          '• Restart your device\n' +
+          '• Try in a different location\n' +
+          '• Check if other apps can access location';
+          
+      } else {
+        errorTitle = '❌ Location Error';
+        errorMsg = 'Unable to access location: ' + (error.message || 'Unknown error');
+        instructions = '\n\n📱 TROUBLESHOOTING:\n' +
+          '✓ Check device location settings\n' +
+          '✓ Make sure browser has location permission\n' +
+          '✓ Try refreshing the page\n' +
+          '✓ Restart your browser\n' +
+          '✓ Try a different browser (Chrome recommended)';
+      }
+      
+      // Show toast error
+      toast.error(errorTitle, { autoClose: 5000 });
+      
+      // Show detailed alert with retry option
+      setTimeout(() => {
+        const fullMessage = errorTitle + '\n\n' + errorMsg + instructions + troubleshooting + '\n\n👉 Would you like to try again?';
+        
+        console.log('Showing error dialog to user');
+        const retry = window.confirm(fullMessage);
+        
+        if (retry) {
+          console.log('User chose to retry');
+          handlePhotoClick(photoVisitId);
+        } else {
+          console.log('User cancelled retry');
+        }
+      }, 600);
+    }
+  };
+
   const handlePhotoCapture = async (e) => {
     const file = e.target.files[0];
-    if (!file || !photoVisitId) return;
+    if (!file || !photoVisitId) {
+      e.target.value = '';
+      return;
+    }
+    
+    console.log('Photo selected, captured location:', capturedLocation);
+    
+    // Auto-recapture location if expired (within last 2 minutes)
+    if (!capturedLocation || (Date.now() - capturedLocation.timestamp) > 120000) {
+      toast.info('Location expired. Recapturing location...');
+      try {
+        const position = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0
+          });
+        });
+        
+        const locationData = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+          timestamp: Date.now()
+        };
+        setCapturedLocation(locationData);
+      } catch (error) {
+        toast.error('❌ Failed to get location. Please try capturing the photo again.');
+        e.target.value = '';
+        setPhotoVisitId(null);
+        setCapturedLocation(null);
+        return;
+      }
+    }
+    
+    const loadingToast = toast.info('📤 Uploading photo with location...', { autoClose: false });
+    
     try {
-      const pos = await getLocation();
-      const address = await getAddress(pos.lat, pos.lng);
+      const address = await getAddress(capturedLocation.lat, capturedLocation.lng);
+      
+      console.log('Uploading photo with location:', capturedLocation.lat, capturedLocation.lng);
+      
       const formData = new FormData();
       formData.append('photo', file);
-      formData.append('lat', pos.lat);
-      formData.append('lng', pos.lng);
+      formData.append('lat', capturedLocation.lat);
+      formData.append('lng', capturedLocation.lng);
       formData.append('address', address);
+      
       await api.post(`/api/field-visits/${photoVisitId}/photo`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      toast.success('Photo uploaded with GPS location');
+      
+      toast.dismiss(loadingToast);
+      toast.success('✅ Photo uploaded with GPS location!', { autoClose: 3000 });
       fetchTodayData();
-    } catch {
-      toast.error('Photo upload failed');
+    } catch (e) {
+      toast.dismiss(loadingToast);
+      
+      console.error('Photo upload error:', e);
+      
+      let errorMsg = '❌ Photo upload failed';
+      
+      if (e.response) {
+        errorMsg = '❌ Upload failed: ' + (e.response?.data?.message || 'Server error');
+      } else if (!isOnline) {
+        errorMsg = '❌ No internet connection. Please try again when online.';
+      }
+      
+      toast.error(errorMsg, { autoClose: 7000 });
     }
+    
     e.target.value = '';
+    setPhotoVisitId(null);
+    setCapturedLocation(null);
+  };
+
+  const validateOutcomeForm = () => {
+    const errors = {};
+    
+    // Phone validation
+    if (outcomeForm.phone && !/^\d{10}$/.test(outcomeForm.phone.replace(/\s/g, ''))) {
+      errors.phone = 'Phone number must be 10 digits';
+    }
+    
+    // Deal value validation
+    if (outcomeForm.dealValue && parseFloat(outcomeForm.dealValue) < 0) {
+      errors.dealValue = 'Deal value cannot be negative';
+    }
+    
+    // If phone is provided, person met should be provided
+    if (outcomeForm.phone && !outcomeForm.personMet) {
+      errors.personMet = 'Please provide person name when phone is entered';
+    }
+    
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const handleOutcomeSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!validateOutcomeForm()) {
+      toast.error('Please fix the form errors');
+      return;
+    }
+    
+    if (!isOnline) {
+      toast.error('Cannot save outcome while offline. Please connect to internet.');
+      return;
+    }
+    
     try {
       await api.post(`/api/field-visits/${activeVisit || visits.find(v => v.status === 'CHECKED_IN')?._id}/outcome`, outcomeForm);
-      toast.success('Outcome saved');
+      toast.success('Outcome saved successfully');
       setShowOutcomeModal(false);
-      setOutcomeForm({ status: 'NEUTRAL', notes: '', nextAction: '', nextFollowUpDate: '', dealValue: '' });
+      setOutcomeForm({ status: 'NEUTRAL', notes: '', nextAction: '', nextFollowUpDate: '', dealValue: '', personMet: '', phone: '', purposeOfVisit: '' });
+      setFormErrors({});
       fetchTodayData();
-    } catch {
-      toast.error('Failed to save outcome');
+    } catch (err) {
+      const errorMsg = err.response?.data?.message || 'Failed to save outcome. Please try again.';
+      toast.error(errorMsg);
     }
   };
 
@@ -240,7 +722,35 @@ const FieldVisits = () => {
 
   return (
     <div className="field-visits-container">
-      <input ref={photoInputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handlePhotoCapture} />
+      <input 
+        ref={photoInputRef} 
+        type="file" 
+        accept="image/*" 
+        capture="environment" 
+        style={{ display: 'none' }} 
+        onChange={handlePhotoCapture}
+      />
+
+      {/* Offline Banner */}
+      {!isOnline && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+          color: '#fff',
+          padding: '0.75rem',
+          textAlign: 'center',
+          zIndex: 10000,
+          fontSize: '0.9rem',
+          fontWeight: 600,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+        }}>
+          <i className="fas fa-wifi-slash me-2" />
+          You are offline. Some features may not work.
+        </div>
+      )}
 
       {/* Professional Header */}
       <div style={{ 
@@ -977,7 +1487,7 @@ const FieldVisits = () => {
                     <>
                       <Button 
                         variant="outline-secondary" 
-                        onClick={() => { setPhotoVisitId(visit._id); photoInputRef.current.click(); }} 
+                        onClick={() => handlePhotoClick(visit._id)} 
                         style={{ 
                           borderRadius: 10,
                           fontSize: isMobile ? '0.85rem' : '0.9rem',
@@ -995,7 +1505,7 @@ const FieldVisits = () => {
                       </Button>
                       
                       <Button 
-                        onClick={() => { setActiveVisit(visit._id); setShowOutcomeModal(true); }} 
+                        onClick={() => { setShowOutcomeModal(true); }} 
                         style={{ 
                           borderRadius: 10,
                           background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
@@ -1008,6 +1518,7 @@ const FieldVisits = () => {
                           boxShadow: '0 4px 12px rgba(59,130,246,0.3)',
                           transition: 'all 0.3s ease'
                         }}
+                        aria-label="Add visit outcome"
                       >
                         <i className="fas fa-clipboard-check" style={{ fontSize: '1rem' }} />
                         {!isMobile && <span className="ms-2">Outcome</span>}
@@ -1054,6 +1565,50 @@ const FieldVisits = () => {
         </Modal.Header>
         <Form onSubmit={handleOutcomeSubmit}>
           <Modal.Body>
+            <Row>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label style={{ fontWeight: 600 }}>Person Met</Form.Label>
+                  <Form.Control 
+                    type="text" 
+                    value={outcomeForm.personMet} 
+                    onChange={e => setOutcomeForm(p => ({ ...p, personMet: e.target.value }))} 
+                    placeholder="Name of person met" 
+                    style={{ borderRadius: 8 }} 
+                    isInvalid={!!formErrors.personMet}
+                  />
+                  <Form.Control.Feedback type="invalid">
+                    {formErrors.personMet}
+                  </Form.Control.Feedback>
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label style={{ fontWeight: 600 }}>Phone Number</Form.Label>
+                  <Form.Control 
+                    type="tel" 
+                    value={outcomeForm.phone} 
+                    onChange={e => setOutcomeForm(p => ({ ...p, phone: e.target.value }))} 
+                    placeholder="10 digit number" 
+                    style={{ borderRadius: 8 }} 
+                    isInvalid={!!formErrors.phone}
+                  />
+                  <Form.Control.Feedback type="invalid">
+                    {formErrors.phone}
+                  </Form.Control.Feedback>
+                </Form.Group>
+              </Col>
+            </Row>
+            <Form.Group className="mb-3">
+              <Form.Label style={{ fontWeight: 600 }}>Purpose of Visit</Form.Label>
+              <Form.Control 
+                type="text" 
+                value={outcomeForm.purposeOfVisit} 
+                onChange={e => setOutcomeForm(p => ({ ...p, purposeOfVisit: e.target.value }))} 
+                placeholder="e.g., Product demo, Follow-up meeting" 
+                style={{ borderRadius: 8 }} 
+              />
+            </Form.Group>
             <Form.Group className="mb-3">
               <Form.Label style={{ fontWeight: 600 }}>Outcome *</Form.Label>
               <Form.Select value={outcomeForm.status} onChange={e => setOutcomeForm(p => ({ ...p, status: e.target.value }))} required style={{ borderRadius: 8 }}>
@@ -1078,7 +1633,17 @@ const FieldVisits = () => {
               <Col>
                 <Form.Group className="mb-3">
                   <Form.Label style={{ fontWeight: 600 }}>Deal Value (₹)</Form.Label>
-                  <Form.Control type="number" value={outcomeForm.dealValue} onChange={e => setOutcomeForm(p => ({ ...p, dealValue: e.target.value }))} placeholder="0" style={{ borderRadius: 8 }} />
+                  <Form.Control 
+                    type="number" 
+                    value={outcomeForm.dealValue} 
+                    onChange={e => setOutcomeForm(p => ({ ...p, dealValue: e.target.value }))} 
+                    placeholder="0" 
+                    style={{ borderRadius: 8 }} 
+                    isInvalid={!!formErrors.dealValue}
+                  />
+                  <Form.Control.Feedback type="invalid">
+                    {formErrors.dealValue}
+                  </Form.Control.Feedback>
                 </Form.Group>
               </Col>
             </Row>
@@ -1088,6 +1653,133 @@ const FieldVisits = () => {
             <Button type="submit" style={{ background: '#10b981', border: 'none', color: '#fff' }}><i className="fas fa-save me-1" />Save Outcome</Button>
           </Modal.Footer>
         </Form>
+      </Modal>
+
+      {/* Location Permission Modal */}
+      <Modal 
+        show={showLocationPermissionModal} 
+        onHide={() => setShowLocationPermissionModal(false)} 
+        centered
+        style={{ zIndex: 9999 }}
+      >
+        <Modal.Header closeButton style={{ borderBottom: 'none', paddingBottom: 0 }}>
+          <Modal.Title style={{ width: '100%', textAlign: 'center' }}>
+            <div style={{
+              width: isMobile ? 70 : 80,
+              height: isMobile ? 70 : 80,
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 1rem',
+              boxShadow: '0 8px 24px rgba(16,185,129,0.3)'
+            }}>
+              <i className="fas fa-map-marker-alt" style={{ fontSize: isMobile ? '1.75rem' : '2rem', color: '#fff' }} />
+            </div>
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body style={{ textAlign: 'center', padding: isMobile ? '0 1.5rem 1.5rem' : '0 2rem 2rem' }}>
+          <h5 style={{ fontWeight: 700, marginBottom: '1rem', color: '#1e293b', fontSize: isMobile ? '1.1rem' : '1.25rem' }}>
+            📍 Location Access Required
+          </h5>
+          <p style={{ color: '#64748b', fontSize: isMobile ? '0.9rem' : '0.95rem', lineHeight: 1.6, marginBottom: '1rem' }}>
+            To capture photos with GPS verification, we need access to your device location.
+          </p>
+          
+          {/* Development Mode Warning - Show for local network access */}
+          {(() => {
+            const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            const isHttps = window.location.protocol === 'https:';
+            const isLocalNetwork = window.location.hostname.match(/^192\.168\./) || window.location.hostname.match(/^10\./) || window.location.hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./); 
+            
+            if (!isHttps && !isLocalhost && isLocalNetwork) {
+              return (
+                <div style={{
+                  background: 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)',
+                  padding: isMobile ? '0.85rem' : '1rem',
+                  borderRadius: 12,
+                  marginBottom: '1rem',
+                  border: '1px solid #93c5fd'
+                }}>
+                  <p style={{ fontSize: isMobile ? '0.75rem' : '0.8rem', color: '#1e40af', marginBottom: '0.5rem', fontWeight: 600 }}>
+                    <i className="fas fa-info-circle me-2" />Development Mode
+                  </p>
+                  <p style={{ fontSize: isMobile ? '0.75rem' : '0.8rem', color: '#1e3a8a', marginBottom: 0, lineHeight: 1.5 }}>
+                    You're accessing via local network ({window.location.hostname}). Use <strong>Chrome</strong> for best location support.
+                  </p>
+                </div>
+              );
+            }
+            return null;
+          })()}
+          
+          <div style={{
+            background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+            padding: isMobile ? '0.85rem' : '1rem',
+            borderRadius: 12,
+            marginBottom: '1rem',
+            border: '1px solid #fbbf24'
+          }}>
+            <p style={{ fontSize: isMobile ? '0.8rem' : '0.85rem', color: '#92400e', marginBottom: '0.5rem', fontWeight: 600 }}>
+              <i className="fas fa-exclamation-triangle me-2" />Important!
+            </p>
+            <p style={{ fontSize: isMobile ? '0.8rem' : '0.85rem', color: '#b45309', marginBottom: 0, lineHeight: 1.5 }}>
+              When you tap "Continue", your browser will ask for location permission. Please tap <strong>"Allow"</strong> or <strong>"Allow While Using"</strong>.
+            </p>
+          </div>
+          <div style={{
+            background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
+            padding: isMobile ? '0.85rem' : '1rem',
+            borderRadius: 12,
+            marginBottom: '1rem',
+            border: '1px solid #bbf7d0'
+          }}>
+            <p style={{ fontSize: isMobile ? '0.75rem' : '0.8rem', color: '#166534', marginBottom: '0.5rem', fontWeight: 600 }}>
+              ✓ Your location is only used to tag photos
+            </p>
+            <p style={{ fontSize: isMobile ? '0.75rem' : '0.8rem', color: '#166534', marginBottom: 0 }}>
+              ✓ We don't track or store your location history
+            </p>
+          </div>
+        </Modal.Body>
+        <Modal.Footer style={{ 
+          borderTop: 'none', 
+          padding: isMobile ? '0 1.5rem 1.5rem' : '0 2rem 2rem', 
+          justifyContent: 'center', 
+          gap: '0.75rem',
+          flexDirection: isMobile ? 'column' : 'row'
+        }}>
+          <Button 
+            variant="outline-secondary" 
+            onClick={() => setShowLocationPermissionModal(false)}
+            style={{ 
+              borderRadius: 10, 
+              padding: isMobile ? '0.75rem' : '0.75rem 1.5rem',
+              fontWeight: 600,
+              width: isMobile ? '100%' : 'auto',
+              minWidth: isMobile ? 0 : 120
+            }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleLocationPermissionConfirm}
+            style={{ 
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              border: 'none',
+              borderRadius: 10,
+              padding: isMobile ? '0.75rem' : '0.75rem 1.5rem',
+              fontWeight: 600,
+              width: isMobile ? '100%' : 'auto',
+              minWidth: isMobile ? 0 : 120,
+              boxShadow: '0 4px 12px rgba(16,185,129,0.3)',
+              fontSize: isMobile ? '0.95rem' : '1rem'
+            }}
+          >
+            <i className="fas fa-arrow-right me-2" />Continue
+          </Button>
+        </Modal.Footer>
       </Modal>
     </div>
   );

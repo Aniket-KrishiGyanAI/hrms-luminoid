@@ -84,33 +84,92 @@ cron.schedule('0 10 * * *', async () => {
   }
 });
 
-// Auto checkout - runs daily at 6:30 PM
-cron.schedule('30 18 * * *', async () => {
+// Auto checkout - runs every 30 minutes from 6 PM to 11 PM to handle different office end times
+cron.schedule('*/30 18-23 * * *', async () => {
   console.log('Running auto checkout for employees who forgot to check out...');
   
   const today = moment.tz('Asia/Kolkata').startOf('day').toDate();
-  const checkoutTime = moment.tz('Asia/Kolkata').set({ hour: 18, minute: 0, second: 0, millisecond: 0 }).toDate();
+  const now = moment.tz('Asia/Kolkata');
+  const currentHour = now.hour();
+  const currentMinute = now.minute();
   
   try {
+    const OfficeLocation = require('../models/OfficeLocation');
+    
+    // Find all attendance records that need auto-checkout
     const attendanceRecords = await Attendance.find({
       date: today,
       checkIn: { $exists: true },
       checkOut: { $exists: false },
       status: { $in: ['Present', 'Late'] },
-      isDeleted: { $ne: true }
-    });
+      isDeleted: { $ne: true },
+      officeLocation: { $exists: true, $ne: null }
+    }).populate('officeLocation');
     
-    if (attendanceRecords.length > 0) {
-      for (const record of attendanceRecords) {
+    let checkedOutCount = 0;
+    
+    for (const record of attendanceRecords) {
+      if (!record.officeLocation) continue;
+      
+      const office = record.officeLocation;
+      const officeEndHour = office.endTime;
+      const officeEndMinute = office.endMinute || 0;
+      
+      // Calculate total minutes since midnight
+      const currentTotalMinutes = currentHour * 60 + currentMinute;
+      const officeEndTotalMinutes = officeEndHour * 60 + officeEndMinute;
+      
+      // Auto-checkout if current time is at least 30 minutes after office end time
+      if (currentTotalMinutes >= officeEndTotalMinutes + 30) {
+        const checkoutTime = moment.tz('Asia/Kolkata')
+          .set({ hour: officeEndHour, minute: officeEndMinute, second: 0, millisecond: 0 })
+          .toDate();
+        
         record.checkOut = checkoutTime;
         record.isAutoCheckout = true;
+        
+        const timeStr = `${officeEndHour}:${String(officeEndMinute).padStart(2, '0')}`;
         record.notes = record.notes 
-          ? `${record.notes} | Auto checkout at 6:00 PM` 
-          : 'Auto checkout at 6:00 PM';
+          ? `${record.notes} | Auto checkout at ${timeStr} (${office.name})` 
+          : `Auto checkout at ${timeStr} (${office.name})`;
+        
         await record.save();
+        checkedOutCount++;
       }
+    }
+    
+    // Handle employees without office location (Remote/Hybrid) - use default 6 PM
+    const recordsWithoutOffice = await Attendance.find({
+      date: today,
+      checkIn: { $exists: true },
+      checkOut: { $exists: false },
+      status: { $in: ['Present', 'Late'] },
+      isDeleted: { $ne: true },
+      $or: [
+        { officeLocation: { $exists: false } },
+        { officeLocation: null }
+      ]
+    });
+    
+    // Auto-checkout remote/hybrid employees at 6:30 PM (default)
+    if (currentHour === 18 && currentMinute >= 30) {
+      const defaultCheckoutTime = moment.tz('Asia/Kolkata')
+        .set({ hour: 18, minute: 0, second: 0, millisecond: 0 })
+        .toDate();
       
-      console.log(`Auto checked out ${attendanceRecords.length} employees at 6:00 PM`);
+      for (const record of recordsWithoutOffice) {
+        record.checkOut = defaultCheckoutTime;
+        record.isAutoCheckout = true;
+        record.notes = record.notes 
+          ? `${record.notes} | Auto checkout at 6:00 PM (default)` 
+          : 'Auto checkout at 6:00 PM (default)';
+        await record.save();
+        checkedOutCount++;
+      }
+    }
+    
+    if (checkedOutCount > 0) {
+      console.log(`Auto checked out ${checkedOutCount} employees based on their office end times`);
     }
   } catch (error) {
     console.error('Error in auto checkout job:', error);

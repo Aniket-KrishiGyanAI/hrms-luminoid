@@ -240,10 +240,11 @@
 .avatar-initials-modern {
   width: 100%; height: 100%;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(255,255,255,0.15);
+  background: linear-gradient(135deg, #064e3b 0%, #10b981 100%);
   color: white;
   font-size: 1.75rem;
   font-weight: 800;
+  text-transform: uppercase;
 }
 
 .status-badge-modern {

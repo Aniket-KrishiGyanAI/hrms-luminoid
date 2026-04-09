@@ -156,3 +156,59 @@ exports.getTeamSummary = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+exports.getMonthlyStats = async (req, res) => {
+  try {
+    const { month, year, employeeId } = req.query;
+    const targetYear = parseInt(year) || new Date().getFullYear();
+    const targetMonth = parseInt(month) || new Date().getMonth() + 1;
+    
+    const start = new Date(targetYear, targetMonth - 1, 1);
+    const end = new Date(targetYear, targetMonth, 0, 23, 59, 59, 999);
+    
+    const filter = { date: { $gte: start, $lte: end } };
+    if (employeeId) filter.employeeId = employeeId;
+    
+    const reports = await FieldReport.find(filter)
+      .populate('employeeId', 'firstName lastName department');
+    
+    const summary = {
+      totalVisits: 0,
+      totalCompleted: 0,
+      totalOrders: 0,
+      totalDealValue: 0,
+      totalDistance: 0,
+      totalDuration: 0,
+      employeeStats: {}
+    };
+    
+    reports.forEach(r => {
+      summary.totalVisits += r.totalVisited;
+      summary.totalCompleted += r.totalCompleted;
+      summary.totalOrders += r.outcomeSummary?.ORDER_RECEIVED || 0;
+      summary.totalDealValue += r.totalDealValue;
+      summary.totalDistance += r.totalDistanceKm;
+      summary.totalDuration += r.totalDurationMinutes;
+      
+      const empId = r.employeeId._id.toString();
+      if (!summary.employeeStats[empId]) {
+        summary.employeeStats[empId] = {
+          name: `${r.employeeId.firstName} ${r.employeeId.lastName}`,
+          department: r.employeeId.department,
+          visits: 0,
+          completed: 0,
+          orders: 0,
+          dealValue: 0
+        };
+      }
+      summary.employeeStats[empId].visits += r.totalVisited;
+      summary.employeeStats[empId].completed += r.totalCompleted;
+      summary.employeeStats[empId].orders += r.outcomeSummary?.ORDER_RECEIVED || 0;
+      summary.employeeStats[empId].dealValue += r.totalDealValue;
+    });
+    
+    res.json(summary);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};

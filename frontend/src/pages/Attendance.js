@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Row, Col, Card, Button, Table, Badge, Form, Modal } from "react-bootstrap";
 import { toast } from "react-toastify";
+import moment from "moment-timezone";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import './AttendanceEnhancements.css';
@@ -30,6 +31,8 @@ const Attendance = () => {
     totalHours: 0,
     lateDays: 0,
     absentDays: 0,
+    holidayDays: 0,
+    workingDaysThisWeek: 0,
   });
 
   // Edit/Delete states
@@ -176,58 +179,128 @@ const Attendance = () => {
 
   const fetchWeekSummary = async (userId = "") => {
     try {
-      // Mon–Fri of current week using Asia/Kolkata timezone
-      const moment = require('moment-timezone');
       const today = moment.tz('Asia/Kolkata');
-      const day = today.day(); // 0=Sun, 1=Mon ... 6=Sat
-      const diffToMon = day === 0 ? -6 : 1 - day;
-      const monday = today.clone().add(diffToMon, 'days').startOf('day');
-      const friday = monday.clone().add(4, 'days').endOf('day');
+      const startOfWeek = today.clone().startOf('isoWeek'); // Monday
+      const endOfWeek = startOfWeek.clone().add(4, 'days').endOf('day'); // Friday
 
-      const startDate = monday.format('YYYY-MM-DD');
-      const endDate = today.format('YYYY-MM-DD'); // Use today instead of Friday to get current week data
-      
-      console.log('Week Summary - Start:', startDate, 'End:', endDate, 'Today:', today.format('YYYY-MM-DD'));
+      const startDate = startOfWeek.format('YYYY-MM-DD');
+      const endDate = endOfWeek.format('YYYY-MM-DD');
 
+      console.log('📅 Fetching week summary for:', startDate, 'to', endDate);
+
+      // Fetch attendance records
       let url = `/api/attendance?startDate=${startDate}&endDate=${endDate}&limit=1000`;
-
       if (userId && userId.trim() !== "") {
         url += `&userId=${userId}`;
       }
 
-      console.log('Fetching week summary from:', url);
-      const response = await api.get(url);
-      console.log('Week summary response:', response.data);
-      console.log('Total records received:', response.data.attendance?.length || 0);
-      
-      const records = (response.data.attendance || []).filter(r => {
-        // exclude weekends and deleted records
-        const recordDate = moment.tz(r.date, 'Asia/Kolkata');
-        const d = recordDate.day();
-        const isWeekday = d >= 1 && d <= 5; // Monday=1 to Friday=5
-        const notDeleted = !r.isDeleted;
-        console.log('Record:', recordDate.format('YYYY-MM-DD'), 'Day:', d, 'Weekday:', isWeekday, 'NotDeleted:', notDeleted, 'Status:', r.status);
-        return isWeekday && notDeleted;
-      });
+      // Fetch holidays for the week
+      const holidaysUrl = `/api/holidays?startDate=${startDate}&endDate=${endDate}`;
 
-      console.log('Filtered records for week summary:', records.length);
+      const [attendanceRes, holidaysRes] = await Promise.all([
+        api.get(url).catch(err => {
+          console.error('❌ Attendance API error:', err);
+          return { data: { attendance: [] } };
+        }),
+        api.get(holidaysUrl).catch(err => {
+          console.warn('⚠️ Holidays API error (continuing without holidays):', err.message);
+          return { data: [] };
+        })
+      ]);
 
-      const summary = records.reduce(
-        (acc, record) => {
-          if (record.status === "Present" || record.status === "Late") acc.presentDays++;
-          if (record.status === "Late") acc.lateDays++;
-          if (record.status === "Absent") acc.absentDays++;
-          acc.totalHours += record.totalHours || 0;
-          return acc;
-        },
-        { presentDays: 0, totalHours: 0, lateDays: 0, absentDays: 0 },
+      console.log('✅ Attendance response:', attendanceRes.data);
+      console.log('✅ Holidays response:', holidaysRes.data);
+
+      const records = (attendanceRes.data.attendance || []).filter(r => !r.isDeleted);
+      const holidays = Array.isArray(holidaysRes.data) ? holidaysRes.data : holidaysRes.data.holidays || [];
+
+      console.log('📊 Records found:', records.length);
+      console.log('📋 Full records array:', JSON.stringify(records, null, 2));
+      console.log('🏖️ Holidays found:', holidays.length, holidays);
+
+      // Create a map of holidays by date for quick lookup
+      const holidayDatesSet = new Set(
+        holidays.map(h => {
+          const holidayDate = moment.tz(h.date, 'Asia/Kolkata').format('YYYY-MM-DD');
+          console.log('Holiday date:', h.date, '→', holidayDate);
+          return holidayDate;
+        })
       );
 
-      console.log('Week summary calculated:', summary);
+      // Initialize summary
+      let summary = {
+        presentDays: 0,
+        lateDays: 0,
+        absentDays: 0,
+        holidayDays: 0,
+        workingDaysThisWeek: 0,
+        totalHours: 0,
+      };
+
+      // Create attendance map by date
+      const attendanceByDate = {};
+      records.forEach(r => {
+        const dateStr = moment.tz(r.date, 'Asia/Kolkata').format('YYYY-MM-DD');
+        attendanceByDate[dateStr] = r;
+        console.log('Attendance on', dateStr, ':', r.status, '| Hours:', r.totalHours);
+      });
+
+      // Loop through Mon-Fri
+      for (let i = 0; i < 5; i++) {
+        const currentDay = startOfWeek.clone().add(i, 'days');
+        const dateStr = currentDay.format('YYYY-MM-DD');
+        const dayName = currentDay.format('dddd');
+
+        console.log(`📆 Checking ${dayName} (${dateStr})`);
+
+        // Check if it's a holiday
+        if (holidayDatesSet.has(dateStr)) {
+          console.log(`  → Holiday found`);
+          summary.holidayDays++;
+          continue; // Skip holidays from working day count
+        }
+
+        summary.workingDaysThisWeek++;
+
+        // Check if there's an attendance record for this day
+        const record = attendanceByDate[dateStr];
+        if (!record) {
+          console.log(`  → Absent (no record)`);
+          summary.absentDays++;
+        } else {
+          if (record.status === "Present") {
+            console.log(`  → Present | Hours: ${record.totalHours}`);
+            summary.presentDays++;
+          } else if (record.status === "Late") {
+            console.log(`  → Late | Hours: ${record.totalHours}`);
+            summary.presentDays++; // Late counts as present
+            summary.lateDays++;
+          } else if (record.status === "Absent") {
+            console.log(`  → Absent | Hours: ${record.totalHours}`);
+            summary.absentDays++;
+          }
+          const hoursToAdd = record.totalHours || 0;
+          summary.totalHours += hoursToAdd;
+          console.log(`     Added ${hoursToAdd}h | Running total: ${summary.totalHours}h`);
+        }
+      }
+
+      console.log('✅ Final summary:', summary);
+      console.log('📊 Hours breakdown:');
+      console.log('  - Total Hours Worked:', summary.totalHours);
+      console.log('  - Working Days This Week:', summary.workingDaysThisWeek);
+      console.log('  - Target Hours (working days × 8):', summary.workingDaysThisWeek * 8);
+      console.log('  - Present Days:', summary.presentDays);
+      console.log('  - Absent Days:', summary.absentDays);
+      console.log('  - Holiday Days:', summary.holidayDays);
+      console.log('  - Late Days:', summary.lateDays);
+      if (summary.presentDays > 0) {
+        console.log('  - Avg Hours/Day:', (summary.totalHours / summary.presentDays).toFixed(2));
+      }
       setWeekSummary(summary);
     } catch (error) {
-      console.error("Error fetching week summary:", error);
-      setWeekSummary({ presentDays: 0, totalHours: 0, lateDays: 0, absentDays: 0 });
+      console.error("❌ Error fetching week summary:", error);
+      setWeekSummary({ presentDays: 0, totalHours: 0, lateDays: 0, absentDays: 0, holidayDays: 0, workingDaysThisWeek: 0 });
     }
   };
 
@@ -425,10 +498,10 @@ const Attendance = () => {
 
       toast.success(`Checked in successfully (${workMode === 'OFFICE' ? '🏢 Office' : workMode === 'REMOTE' ? '🏠 Remote' : '🔄 Hybrid/Field'})`);
       
-      // Refresh data immediately
-      await fetchTodayStatus(selectedUser);
-      await fetchAttendanceHistory(selectedUser);
-      await fetchWeekSummary(selectedUser);
+      // Refresh data in background (no await - instant response to user)
+      fetchTodayStatus(selectedUser);
+      fetchAttendanceHistory(selectedUser);
+      fetchWeekSummary(selectedUser);
     } catch (error) {
       toast.error(
         error.response?.data?.message ||
@@ -482,11 +555,10 @@ const Attendance = () => {
 
       toast.success(data.message || "Checked out successfully");
 
-      // Refresh UI data
-      await Promise.all([
-        fetchTodayStatus(selectedUser),
-        fetchAttendanceHistory(selectedUser),
-      ]);
+      // Refresh data in background (no await - instant response to user)
+      fetchTodayStatus(selectedUser);
+      fetchAttendanceHistory(selectedUser);
+      fetchWeekSummary(selectedUser);
     } catch (error) {
       console.error(error);
 
@@ -1241,7 +1313,7 @@ const Attendance = () => {
           <Card className="h-100 shadow-sm attendance-card">
             <Card.Header className="d-flex align-items-center bg-light">
               <i className="fas fa-chart-bar me-2 text-success"></i>
-              {(selectedUser && selectedUser !== '') || user?.role === 'EMPLOYEE' ? 'This Week Summary' : 'Team Week Summary'}
+              {(selectedUser && selectedUser !== '') || user?.role === 'EMPLOYEE' ? 'This Week Summary' : 'Today\'s Team Summary'}
             </Card.Header>
             <Card.Body>
               {(selectedUser && selectedUser !== '') || user?.role === 'EMPLOYEE' ? (
@@ -1253,15 +1325,16 @@ const Attendance = () => {
                       <i className="fas fa-trophy fa-2x" style={{ color: '#1e3a8a' }}></i>
                     </div>
                     <h2 className="fw-bold mb-1" style={{ color: '#1e3a8a' }}>
-                      {Math.round((weekSummary.presentDays / 5) * 100)}%
+                      {weekSummary.workingDaysThisWeek > 0 ? Math.round((weekSummary.presentDays / weekSummary.workingDaysThisWeek) * 100) : 0}%
                     </h2>
                     <small className="text-muted fw-semibold">Weekly Attendance Score</small>
                     <div className="mt-2">
                       <small style={{ color: '#1e3a8a' }}>
-                        {weekSummary.presentDays === 5 && weekSummary.lateDays === 0 ? '🌟 Perfect Week!' : 
-                         weekSummary.presentDays === 5 && weekSummary.lateDays > 0 ? '✅ Full Week (with late arrivals)' :
-                         weekSummary.presentDays >= 4 ? '✅ Great Job!' : 
-                         weekSummary.presentDays >= 3 ? '👍 Keep Going!' : '⚠️ Needs Improvement'}
+                        {weekSummary.workingDaysThisWeek === 0 ? '📆 No working days' :
+                         weekSummary.presentDays === weekSummary.workingDaysThisWeek && weekSummary.lateDays === 0 ? '🌟 Perfect Week!' : 
+                         weekSummary.presentDays === weekSummary.workingDaysThisWeek && weekSummary.lateDays > 0 ? '✅ Full Week (with late arrivals)' :
+                         weekSummary.presentDays >= weekSummary.workingDaysThisWeek - 1 ? '✅ Great Job!' : 
+                         weekSummary.presentDays >= weekSummary.workingDaysThisWeek - 2 ? '👍 Keep Going!' : '⚠️ Needs Improvement'}
                       </small>
                     </div>
                     {weekSummary.lateDays > 0 && (
@@ -1272,6 +1345,14 @@ const Attendance = () => {
                         </small>
                       </div>
                     )}
+                    {weekSummary.holidayDays > 0 && (
+                      <div className="mt-2">
+                        <small style={{ color: '#059669', fontSize: '0.7rem' }}>
+                          <i className="fas fa-calendar-check me-1"></i>
+                          {weekSummary.holidayDays} public holiday{weekSummary.holidayDays > 1 ? 's' : ''} (not counted)
+                        </small>
+                      </div>
+                    )}
                   </div>
 
                   {/* Present Days */}
@@ -1279,146 +1360,149 @@ const Attendance = () => {
                     <div className="d-flex justify-content-between align-items-center mb-2">
                       <small className="text-muted fw-semibold">Present Days (incl. Late)</small>
                       <span className="fw-bold" style={{ color: '#065f46' }}>
-                        {weekSummary.presentDays}/5
+                        {weekSummary.presentDays}/{weekSummary.workingDaysThisWeek}
                       </span>
                     </div>
                     <div className="progress" style={{ height: '10px', borderRadius: '10px' }}>
                       <div
                         className="progress-bar"
                         style={{ 
-                          width: `${(weekSummary.presentDays / 5) * 100}%`,
-                          background: weekSummary.presentDays === 5 ? 'linear-gradient(90deg, #065f46 0%, #10b981 100%)' :
-                                     weekSummary.presentDays >= 4 ? 'linear-gradient(90deg, #0891b2 0%, #06b6d4 100%)' :
+                          width: weekSummary.workingDaysThisWeek > 0 ? `${(weekSummary.presentDays / weekSummary.workingDaysThisWeek) * 100}%` : '0%',
+                          background: weekSummary.presentDays === weekSummary.workingDaysThisWeek ? 'linear-gradient(90deg, #065f46 0%, #10b981 100%)' :
+                                     weekSummary.presentDays >= weekSummary.workingDaysThisWeek - 1 ? 'linear-gradient(90deg, #0891b2 0%, #06b6d4 100%)' :
                                      'linear-gradient(90deg, #d97706 0%, #f59e0b 100%)'
                         }}
                       ></div>
                     </div>
                   </div>
-
-                  {/* Total Hours */}
-                  <div className="mb-3">
-                    <div className="d-flex justify-content-between align-items-center mb-2">
-                      <small className="text-muted fw-semibold">Total Hours</small>
-                      <span className="fw-bold" style={{ color: '#1e3a8a' }}>
-                        {formatDuration(weekSummary.totalHours)}
-                        <span className="text-muted" style={{ fontSize: '0.8rem' }}> / 40h</span>
-                      </span>
-                    </div>
-                    <div className="progress" style={{ height: '10px', borderRadius: '10px' }}>
-                      <div
-                        className="progress-bar"
-                        style={{ 
-                          width: `${Math.min((weekSummary.totalHours / 40) * 100, 100)}%`,
-                          background: 'linear-gradient(90deg, #1e3a8a 0%, #3b82f6 100%)'
-                        }}
-                      ></div>
-                    </div>
-                    <small className="text-muted">
-                      {weekSummary.presentDays > 0 ? `Avg: ${formatDuration(weekSummary.totalHours / weekSummary.presentDays)} per day` : 'No data'}
-                    </small>
-                  </div>
-
-                  {/* Issues */}
-                  <div className="row g-2">
-                    <div className="col-6">
-                      <div className="text-center p-2" style={{ 
-                        background: weekSummary.lateDays > 0 ? '#fef3c7' : '#f3f4f6', 
-                        borderRadius: '8px', 
-                        border: weekSummary.lateDays > 0 ? '1px solid #fbbf24' : '1px solid #e5e7eb'
-                      }}>
-                        <div className="fw-bold" style={{ color: weekSummary.lateDays > 0 ? '#92400e' : '#6b7280', fontSize: '1.25rem' }}>
-                          {weekSummary.lateDays}
-                        </div>
-                        <small style={{ color: weekSummary.lateDays > 0 ? '#92400e' : '#6b7280', fontSize: '0.7rem' }}>Late Days</small>
-                      </div>
-                    </div>
-                    <div className="col-6">
-                      <div className="text-center p-2" style={{ 
-                        background: weekSummary.absentDays > 0 ? '#fee2e2' : '#f3f4f6', 
-                        borderRadius: '8px', 
-                        border: weekSummary.absentDays > 0 ? '1px solid #f87171' : '1px solid #e5e7eb'
-                      }}>
-                        <div className="fw-bold" style={{ color: weekSummary.absentDays > 0 ? '#991b1b' : '#6b7280', fontSize: '1.25rem' }}>
-                          {weekSummary.absentDays}
-                        </div>
-                        <small style={{ color: weekSummary.absentDays > 0 ? '#991b1b' : '#6b7280', fontSize: '0.7rem' }}>Absent Days</small>
-                      </div>
-                    </div>
-                  </div>
                 </>
               ) : (
-                // Admin/HR aggregated view
+                // Admin/HR today's team summary
                 <>
-                  {/* Total Attendance */}
-                  <div className="mb-3 p-3" style={{ background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)', borderRadius: '10px', border: '1px solid #3b82f6' }}>
-                    <div className="d-flex justify-content-between align-items-center mb-2">
-                      <div>
-                        <i className="fas fa-calendar-check me-2" style={{ color: '#1e3a8a' }}></i>
-                        <span className="fw-semibold" style={{ color: '#1e3a8a' }}>Total Attendance</span>
+                  {todayStatus?.isAggregated && todayStatus?.summary ? (
+                    <>
+                      {/* Today's Attendance Score */}
+                      <div className="mb-3 p-3 text-center" style={{ background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)', borderRadius: '12px', border: '2px solid #3b82f6' }}>
+                        <div className="mb-2">
+                          <i className="fas fa-users fa-2x" style={{ color: '#1e3a8a' }}></i>
+                        </div>
+                        <h2 className="fw-bold mb-1" style={{ color: '#1e3a8a' }}>
+                          {todayStatus.summary.totalEmployees > 0 ? Math.round((todayStatus.summary.checkedIn / todayStatus.summary.totalEmployees) * 100) : 0}%
+                        </h2>
+                        <small className="text-muted fw-semibold">Today's Attendance Rate</small>
+                        <div className="mt-2">
+                          <small style={{ color: '#1e3a8a' }}>
+                            {todayStatus.summary.checkedIn} / {todayStatus.summary.totalEmployees} employees
+                          </small>
+                        </div>
                       </div>
-                      <h4 className="mb-0 fw-bold" style={{ color: '#1e3a8a' }}>
-                        {weekSummary.presentDays}
-                      </h4>
-                    </div>
-                    <small className="text-muted">Total check-ins this week</small>
-                  </div>
 
-                  {/* Average Daily Attendance */}
-                  <div className="mb-3">
-                    <div className="d-flex justify-content-between align-items-center mb-2">
-                      <small className="text-muted fw-semibold">Avg Daily Attendance</small>
-                      <span className="fw-bold" style={{ color: '#065f46' }}>
-                        {employees.length > 0 ? Math.round((weekSummary.presentDays / 5) / employees.length * 100) : 0}%
-                      </span>
-                    </div>
-                    <div className="progress" style={{ height: '8px' }}>
-                      <div
-                        className="progress-bar"
-                        style={{ 
-                          width: `${employees.length > 0 ? Math.min((weekSummary.presentDays / 5) / employees.length * 100, 100) : 0}%`,
-                          background: 'linear-gradient(90deg, #065f46 0%, #10b981 100%)'
-                        }}
-                      ></div>
-                    </div>
-                  </div>
-
-                  {/* Total Hours */}
-                  <div className="mb-3">
-                    <div className="d-flex justify-content-between align-items-center mb-2">
-                      <small className="text-muted fw-semibold">Total Hours Worked</small>
-                      <span className="fw-bold" style={{ color: '#1e3a8a' }}>
-                        {formatDuration(weekSummary.totalHours)}
-                      </span>
-                    </div>
-                    <div className="progress" style={{ height: '8px' }}>
-                      <div
-                        className="progress-bar"
-                        style={{ 
-                          width: `${employees.length > 0 ? Math.min((weekSummary.totalHours / (employees.length * 40)) * 100, 100) : 0}%`,
-                          background: 'linear-gradient(90deg, #1e3a8a 0%, #3b82f6 100%)'
-                        }}
-                      ></div>
-                    </div>
-                    <small className="text-muted">
-                      Avg: {employees.length > 0 && weekSummary.presentDays > 0 ? formatDuration(weekSummary.totalHours / weekSummary.presentDays) : '0h 0m'} per attendance
-                    </small>
-                  </div>
-
-                  {/* Issues Summary */}
-                  <div className="row mt-3 g-2">
-                    <div className="col-6">
-                      <div className="text-center p-2" style={{ background: '#fef3c7', borderRadius: '8px', border: '1px solid #fbbf24' }}>
-                        <div className="fw-bold" style={{ color: '#92400e', fontSize: '1.1rem' }}>{weekSummary.lateDays}</div>
-                        <small style={{ color: '#92400e', fontSize: '0.7rem' }}>Late Arrivals</small>
+                      {/* Checked In */}
+                      <div className="mb-3">
+                        <div className="d-flex justify-content-between align-items-center mb-2">
+                          <small className="text-muted fw-semibold">Checked In</small>
+                          <span className="fw-bold" style={{ color: '#065f46' }}>
+                            {todayStatus.summary.checkedIn}/{todayStatus.summary.totalEmployees}
+                          </span>
+                        </div>
+                        <div className="progress" style={{ height: '10px', borderRadius: '10px' }}>
+                          <div
+                            className="progress-bar"
+                            style={{ 
+                              width: `${todayStatus.summary.totalEmployees > 0 ? (todayStatus.summary.checkedIn / todayStatus.summary.totalEmployees) * 100 : 0}%`,
+                              background: 'linear-gradient(90deg, #065f46 0%, #10b981 100%)'
+                            }}
+                          ></div>
+                        </div>
                       </div>
-                    </div>
-                    <div className="col-6">
-                      <div className="text-center p-2" style={{ background: '#fee2e2', borderRadius: '8px', border: '1px solid #f87171' }}>
-                        <div className="fw-bold" style={{ color: '#991b1b', fontSize: '1.1rem' }}>{weekSummary.absentDays}</div>
-                        <small style={{ color: '#991b1b', fontSize: '0.7rem' }}>Absences</small>
+
+                      {/* Checked Out */}
+                      <div className="mb-3">
+                        <div className="d-flex justify-content-between align-items-center mb-2">
+                          <small className="text-muted fw-semibold">Checked Out</small>
+                          <span className="fw-bold" style={{ color: '#991b1b' }}>
+                            {todayStatus.summary.checkedOut}/{todayStatus.summary.checkedIn}
+                          </span>
+                        </div>
+                        <div className="progress" style={{ height: '10px', borderRadius: '10px' }}>
+                          <div
+                            className="progress-bar"
+                            style={{ 
+                              width: `${todayStatus.summary.checkedIn > 0 ? (todayStatus.summary.checkedOut / todayStatus.summary.checkedIn) * 100 : 0}%`,
+                              background: 'linear-gradient(90deg, #991b1b 0%, #dc2626 100%)'
+                            }}
+                          ></div>
+                        </div>
+                        <small className="text-muted">
+                          {todayStatus.summary.checkedIn - todayStatus.summary.checkedOut} still working
+                        </small>
                       </div>
+
+                      {/* Work Mode Breakdown */}
+                      <div className="mb-3">
+                        <small className="text-muted fw-semibold d-block mb-2">Work Mode Distribution</small>
+                        <div className="row g-2">
+                          <div className="col-4">
+                            <div className="text-center p-2" style={{ background: '#eff6ff', borderRadius: '8px', border: '1px solid #3b82f6' }}>
+                              <div className="fw-bold" style={{ color: '#1e3a8a', fontSize: '1.25rem' }}>
+                                {todayStatus.summary.workModeStats?.OFFICE || 0}
+                              </div>
+                              <small style={{ color: '#1e3a8a', fontSize: '0.7rem' }}>Office</small>
+                            </div>
+                          </div>
+                          <div className="col-4">
+                            <div className="text-center p-2" style={{ background: '#f0fdf4', borderRadius: '8px', border: '1px solid #10b981' }}>
+                              <div className="fw-bold" style={{ color: '#065f46', fontSize: '1.25rem' }}>
+                                {todayStatus.summary.workModeStats?.REMOTE || 0}
+                              </div>
+                              <small style={{ color: '#065f46', fontSize: '0.7rem' }}>Remote</small>
+                            </div>
+                          </div>
+                          <div className="col-4">
+                            <div className="text-center p-2" style={{ background: '#fef2f2', borderRadius: '8px', border: '1px solid #f43f5e' }}>
+                              <div className="fw-bold" style={{ color: '#be123c', fontSize: '1.25rem' }}>
+                                {todayStatus.summary.workModeStats?.HYBRID || 0}
+                              </div>
+                              <small style={{ color: '#be123c', fontSize: '0.7rem' }}>Hybrid</small>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Status Breakdown */}
+                      <div className="row g-2">
+                        <div className="col-6">
+                          <div className="text-center p-2" style={{ 
+                            background: (todayStatus.summary.statusCounts?.Late || 0) > 0 ? '#fef3c7' : '#f3f4f6', 
+                            borderRadius: '8px', 
+                            border: (todayStatus.summary.statusCounts?.Late || 0) > 0 ? '1px solid #fbbf24' : '1px solid #e5e7eb'
+                          }}>
+                            <div className="fw-bold" style={{ color: (todayStatus.summary.statusCounts?.Late || 0) > 0 ? '#92400e' : '#6b7280', fontSize: '1.25rem' }}>
+                              {todayStatus.summary.statusCounts?.Late || 0}
+                            </div>
+                            <small style={{ color: (todayStatus.summary.statusCounts?.Late || 0) > 0 ? '#92400e' : '#6b7280', fontSize: '0.7rem' }}>Late Today</small>
+                          </div>
+                        </div>
+                        <div className="col-6">
+                          <div className="text-center p-2" style={{ 
+                            background: (todayStatus.summary.totalEmployees - todayStatus.summary.checkedIn) > 0 ? '#fee2e2' : '#f3f4f6', 
+                            borderRadius: '8px', 
+                            border: (todayStatus.summary.totalEmployees - todayStatus.summary.checkedIn) > 0 ? '1px solid #f87171' : '1px solid #e5e7eb'
+                          }}>
+                            <div className="fw-bold" style={{ color: (todayStatus.summary.totalEmployees - todayStatus.summary.checkedIn) > 0 ? '#991b1b' : '#6b7280', fontSize: '1.25rem' }}>
+                              {todayStatus.summary.totalEmployees - todayStatus.summary.checkedIn}
+                            </div>
+                            <small style={{ color: (todayStatus.summary.totalEmployees - todayStatus.summary.checkedIn) > 0 ? '#991b1b' : '#6b7280', fontSize: '0.7rem' }}>Absent Today</small>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-center py-4">
+                      <i className="fas fa-users text-muted fa-3x mb-3"></i>
+                      <p className="text-muted mb-0">No team data available</p>
                     </div>
-                  </div>
+                  )}
                 </>
               )}
             </Card.Body>

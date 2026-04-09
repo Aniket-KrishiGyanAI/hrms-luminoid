@@ -1,0 +1,284 @@
+/* ═══════════════════════════════════════════════════════════════
+   EMPLOYEE PROFILE - MOBILE OPTIMIZED
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Mobile Styles */
+@media (max-width: 768px) {
+  .employee-profile-page {
+    padding-bottom: 80px !important;
+  }
+
+  /* Header Card - Mobile - Compact & Professional */
+  .employee-profile-page .profile-header-card {
+    border-radius: 0 0 16px 16px !important;
+    margin: -1rem -0.75rem 1rem !important;
+    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.2) !important;
+    background: linear-gradient(135deg, #047857 0%, #10b981 100%) !important;
+  }
+
+  .employee-profile-page .profile-header-card::before {
+    display: none;
+  }
+
+  .employee-profile-page .profile-header-card .card-body {
+    padding: 1rem !important;
+  }
+
+  /* Avatar - Mobile - Smaller */
+  .employee-profile-page .profile-avatar,
+  .employee-profile-page .profile-avatar-placeholder {
+    width: 70px !important;
+    height: 70px !important;
+    border-width: 3px !important;
+  }
+
+  .employee-profile-page .profile-avatar-placeholder i {
+    font-size: 1.5rem !important;
+  }
+
+  .employee-profile-page .profile-upload-btn {
+    width: 28px !important;
+    height: 28px !important;
+    bottom: -2px !important;
+    right: -2px !important;
+    border-width: 2px !important;
+  }
+
+  .employee-profile-page .profile-upload-btn i {
+    font-size: 0.7rem;
+  }
+
+  /* Header Layout - Horizontal on Mobile */
+  .employee-profile-page .profile-header-card .row {
+    align-items: center !important;
+  }
+
+  .employee-profile-page .profile-header-card .col-md-3 {
+    width: auto !important;
+    flex: 0 0 auto !important;
+    text-align: left !important;
+    padding-right: 0.75rem !important;
+  }
+
+  .employee-profile-page .profile-header-card .col-md-9 {
+    flex: 1 !important;
+    width: auto !important;
+    margin-top: 0 !important;
+    text-align: left !important;
+  }
+
+  /* Header Info - Mobile - Compact */
+  .employee-profile-page .profile-header-card h2 {
+    font-size: 1.125rem !important;
+    margin-top: 0 !important;
+    margin-bottom: 0.25rem !important;
+    font-weight: 700 !important;
+    line-height: 1.3 !important;
+  }
+
+  .employee-profile-page .profile-header-card p {
+    font-size: 0.8rem !important;
+    margin-bottom: 0.5rem !important;
+    opacity: 0.95 !important;
+  }
+
+  .employee-profile-page .profile-header-card p i {
+    font-size: 0.75rem;
+  }
+
+  /* Info Grid - Mobile - Compact */
+  .employee-profile-page .profile-header-card .row.g-3 {
+    gap: 0.375rem !important;
+    margin-top: 0.25rem !important;
+  }
+
+  .employee-profile-page .profile-header-card .row.g-3 > div {
+    padding: 0 !important;
+    width: 100% !important;
+  }
+
+  .employee-profile-page .profile-header-card .row.g-3 .d-flex {
+    padding: 0.375rem 0.625rem;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    backdrop-filter: blur(10px);
+  }
+
+  .employee-profile-page .profile-header-card small {
+    font-size: 0.7rem !important;
+    line-height: 1.4;
+  }
+
+  .employee-profile-page .profile-header-card .row.g-3 i {
+    font-size: 0.7rem;
+    margin-right: 0.375rem !important;
+    flex-shrink: 0;
+  }
+
+  /* Remove Photo Button - Mobile */
+  .employee-profile-page .btn-link {
+    font-size: 0.7rem !important;
+    padding: 0.25rem 0 !important;
+    margin-top: 0.25rem !important;
+  }
+
+  .employee-profile-page .btn-link i {
+    font-size: 0.65rem;
+  }
+
+  /* Info Cards - Mobile */
+  .employee-profile-page .profile-info-card {
+    border-radius: 16px !important;
+    margin-bottom: 1rem !important;
+  }
+
+  .employee-profile-page .profile-info-card .card-body {
+    padding: 1.25rem 1rem !important;
+  }
+
+  /* Section Titles - Mobile */
+  .employee-profile-page .section-title {
+    font-size: 0.9rem !important;
+    margin-bottom: 1rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+
+  .employee-profile-page .section-title i {
+    font-size: 0.85rem;
+  }
+
+  /* Tabs - Mobile */
+  .employee-profile-page .profile-tabs {
+    margin-bottom: 1rem !important;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .employee-profile-page .profile-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .employee-profile-page .profile-tabs .nav {
+    flex-wrap: nowrap !important;
+    border-bottom: none !important;
+  }
+
+  .employee-profile-page .profile-tabs .nav-link {
+    padding: 0.625rem 1rem !important;
+    font-size: 0.8rem !important;
+    margin-right: 0.5rem !important;
+    white-space: nowrap;
+    border-radius: 10px !important;
+  }
+
+  .employee-profile-page .profile-tabs .nav-link i {
+    font-size: 0.75rem;
+  }
+
+  /* Form Elements - Mobile */
+  .employee-profile-page .form-label {
+    font-size: 0.8rem !important;
+    margin-bottom: 0.375rem !important;
+  }
+
+  .employee-profile-page .form-label i {
+    font-size: 0.75rem;
+  }
+
+  .employee-profile-page .form-control,
+  .employee-profile-page .form-select {
+    padding: 0.625rem 0.75rem !important;
+    font-size: 0.8125rem !important;
+    border-radius: 10px !important;
+  }
+
+  .employee-profile-page .form-group,
+  .employee-profile-page .mb-3 {
+    margin-bottom: 0.875rem !important;
+  }
+
+  /* Buttons - Mobile */
+  .employee-profile-page .btn-save {
+    width: 100%;
+    padding: 0.875rem 1.5rem !important;
+    font-size: 0.875rem !important;
+    border-radius: 12px !important;
+  }
+
+  .employee-profile-page .btn-outline-danger {
+    width: 100%;
+    margin-bottom: 0.75rem;
+    padding: 0.75rem 1.25rem !important;
+    font-size: 0.8125rem !important;
+    border-radius: 10px !important;
+  }
+
+  /* Action Buttons Container - Mobile */
+  .employee-profile-page .d-flex.justify-content-between {
+    flex-direction: column !important;
+    gap: 0.75rem;
+  }
+
+  .employee-profile-page .d-flex.justify-content-between > div {
+    width: 100%;
+  }
+
+  /* Row Spacing - Mobile */
+  .employee-profile-page .row {
+    margin-left: -0.5rem !important;
+    margin-right: -0.5rem !important;
+  }
+
+  .employee-profile-page .row > * {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+  }
+
+  /* Tab Content - Mobile */
+  .employee-profile-page .tab-content {
+    margin-top: 0.5rem;
+  }
+
+  /* Form Text - Mobile */
+  .employee-profile-page .form-text {
+    font-size: 0.7rem !important;
+    margin-top: 0.25rem !important;
+  }
+}
+
+/* Extra Small Devices */
+@media (max-width: 576px) {
+  .employee-profile-page .profile-header-card {
+    margin: -0.5rem -0.5rem 1rem !important;
+  }
+
+  .employee-profile-page .profile-header-card .card-body {
+    padding: 0.875rem !important;
+  }
+
+  .employee-profile-page .profile-avatar,
+  .employee-profile-page .profile-avatar-placeholder {
+    width: 64px !important;
+    height: 64px !important;
+  }
+
+  .employee-profile-page .profile-header-card h2 {
+    font-size: 1rem !important;
+  }
+
+  .employee-profile-page .profile-header-card p {
+    font-size: 0.75rem !important;
+  }
+
+  .employee-profile-page .section-title {
+    font-size: 0.85rem !important;
+  }
+
+  .employee-profile-page .profile-tabs .nav-link {
+    padding: 0.5rem 0.875rem !important;
+    font-size: 0.75rem !important;
+  }
+}

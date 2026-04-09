@@ -839,11 +839,11 @@ const EmployeeDirectory = () => {
                 <div className="employee-card-modern" onClick={() => handleViewProfile(employee)}>
                   <div className="card-header-modern">
                     <div className="employee-avatar-modern">
-                      {employee?.profileImage ? (
-                        <img src={employee.profileImage} alt="Profile" />
+                      {employee?.profileImage || employee?.userId?.profileImage ? (
+                        <img src={employee.profileImage || employee.userId.profileImage} alt="Profile" />
                       ) : (
                         <div className="avatar-initials-modern">
-                          {employee?.firstName?.charAt(0)}{employee?.lastName?.charAt(0)}
+                          {employee?.firstName?.charAt(0)?.toUpperCase()}{employee?.lastName?.charAt(0)?.toUpperCase()}
                         </div>
                       )}
                     </div>

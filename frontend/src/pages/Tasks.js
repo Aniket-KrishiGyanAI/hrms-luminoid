@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Row, Col, Card, Button, Modal, Form, Table, Badge, Tabs, Tab } from 'react-bootstrap';
 import { useAuth } from '../context/AuthContext';
 import { useLocation } from 'react-router-dom';
@@ -51,6 +51,8 @@ const Tasks = () => {
   const [mentionSearch, setMentionSearch] = useState('');
   const [employees, setEmployees] = useState([]);
   const [gpsAddresses, setGpsAddresses] = useState({ checkIn: '', checkOut: '' });
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [formErrors, setFormErrors] = useState({});
   const [updateForm, setUpdateForm] = useState({
     progressPercent: 0,
     status: 'ON_TRACK',
@@ -74,6 +76,9 @@ const Tasks = () => {
     hoursSpent: '',
     category: 'GENERAL'
   });
+  
+  const reminderIntervalRef = useRef(null);
+  const taskRefreshIntervalRef = useRef(null);
 
   useEffect(() => {
     fetchTasks();
@@ -94,14 +99,32 @@ const Tasks = () => {
     
     checkReminder();
     
-    // Check every 5 minutes for 5:30 PM reminder
-    const reminderInterval = setInterval(() => {
+    // Check every 30 minutes for 5:30 PM reminder (optimized from 5 min)
+    reminderIntervalRef.current = setInterval(() => {
       if (isWorkingDay() && tasks.length > 0) {
         scheduleTaskReminder(tasks);
       }
-    }, 300000); // 5 minutes
+    }, 1800000); // 30 minutes
     
-    return () => clearInterval(reminderInterval);
+    // Network status listeners
+    const handleOnline = () => {
+      setIsOnline(true);
+      toast.success('Back online!');
+      fetchTasks();
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      toast.warning('You are offline. Some features may not work.');
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      clearInterval(reminderIntervalRef.current);
+      clearInterval(taskRefreshIntervalRef.current);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   useEffect(() => {
@@ -126,21 +149,36 @@ const Tasks = () => {
   }, [tasks]);
 
   useEffect(() => {
-    let interval;
-    if (showDetailsModal && selectedTask) {
-      interval = setInterval(async () => {
-        try {
-          const response = await api.get(`/api/tasks/${selectedTask._id}`);
-          setSelectedTask(response.data);
-        } catch (error) {
-          console.error('Error refreshing task');
+    // Optimized auto-refresh: 30s instead of 3s, only when visible and online
+    if (showDetailsModal && selectedTask && isOnline) {
+      const refreshTask = async () => {
+        if (document.visibilityState === 'visible') {
+          try {
+            const response = await api.get(`/api/tasks/${selectedTask._id}`);
+            setSelectedTask(response.data);
+          } catch (error) {
+            console.error('Error refreshing task:', error);
+          }
         }
-      }, 3000);
+      };
+      
+      taskRefreshIntervalRef.current = setInterval(refreshTask, 30000);
     }
-    return () => clearInterval(interval);
-  }, [showDetailsModal, selectedTask]);
+    
+    return () => {
+      if (taskRefreshIntervalRef.current) {
+        clearInterval(taskRefreshIntervalRef.current);
+      }
+    };
+  }, [showDetailsModal, selectedTask, isOnline]);
 
   const fetchTasks = async () => {
+    if (!isOnline) {
+      toast.error('No internet connection');
+      setLoading(false);
+      return;
+    }
+    
     try {
       const response = await api.get('/api/tasks');
       setTasks(response.data);
@@ -156,7 +194,8 @@ const Tasks = () => {
       });
       setPendingUpdatesCount(pending.length);
     } catch (error) {
-      toast.error('Error fetching tasks');
+      const errorMsg = error.response?.data?.message || 'Error fetching tasks. Please try again.';
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -184,6 +223,11 @@ const Tasks = () => {
   };
 
   const handleCheckIn = async (task) => {
+    if (!isOnline) {
+      toast.error('Cannot start task while offline');
+      return;
+    }
+    
     setLoadingStates(prev => ({ ...prev, [`checkin-${task._id}`]: true }));
     try {
       if (task.requireCheckIn) {
@@ -192,11 +236,12 @@ const Tasks = () => {
       } else {
         await api.put(`/api/tasks/${task._id}/status`, { status: 'IN_PROGRESS' });
       }
-      toast.success('Task started');
+      toast.success('Task started successfully');
       fetchTasks();
       setShowCheckInModal(false);
     } catch (error) {
-      toast.error('Error starting task');
+      const errorMsg = error.response?.data?.message || error.message || 'Error starting task';
+      toast.error(errorMsg);
     } finally {
       setLoadingStates(prev => ({ ...prev, [`checkin-${task._id}`]: false }));
     }
@@ -299,6 +344,30 @@ const Tasks = () => {
 
   const handleDailyUpdate = async (e) => {
     e.preventDefault();
+    
+    // Validation
+    const errors = {};
+    if (!updateForm.workDone || updateForm.workDone.trim().length < 10) {
+      errors.workDone = 'Work description must be at least 10 characters';
+    }
+    if (updateForm.hoursSpent && (parseFloat(updateForm.hoursSpent) <= 0 || parseFloat(updateForm.hoursSpent) > 24)) {
+      errors.hoursSpent = 'Hours must be between 0 and 24';
+    }
+    if ((updateForm.status === 'BLOCKED' || updateForm.status === 'NEED_HELP') && !updateForm.issues) {
+      errors.issues = 'Please describe the issue';
+    }
+    
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      toast.error('Please fix the form errors');
+      return;
+    }
+    
+    if (!isOnline) {
+      toast.error('Cannot submit update while offline');
+      return;
+    }
+    
     setLoadingStates(prev => ({ ...prev, update: true }));
     try {
       // Remove empty string values to avoid enum validation errors
@@ -306,7 +375,7 @@ const Tasks = () => {
         Object.entries(updateForm).filter(([_, v]) => v !== '')
       );
       await api.post(`/api/tasks/${selectedTask._id}/daily-update`, cleanedData);
-      toast.success('Daily update submitted');
+      toast.success('Daily update submitted successfully');
       setShowUpdateModal(false);
       setUpdateForm({ 
         progressPercent: 0, 
@@ -318,6 +387,7 @@ const Tasks = () => {
         visitOutcome: '', 
         orderValue: '' 
       });
+      setFormErrors({});
       fetchTasks();
     } catch (error) {
       console.error('Update error:', error.response?.data || error.message);
@@ -412,14 +482,47 @@ const Tasks = () => {
     toast.success('Report exported successfully');
   };
 
+  const validateWorkLog = () => {
+    const errors = {};
+    
+    bulkLogs.forEach((log, index) => {
+      if (!log.workDone || log.workDone.trim().length < 10) {
+        errors[`workDone-${index}`] = 'Work description must be at least 10 characters';
+      }
+      
+      if (!log.hoursSpent || parseFloat(log.hoursSpent) <= 0 || parseFloat(log.hoursSpent) > 24) {
+        errors[`hoursSpent-${index}`] = 'Hours must be between 0 and 24';
+      }
+      
+      if (log.status === 'BLOCKED' && (!log.issues || log.issues.trim().length < 5)) {
+        errors[`issues-${index}`] = 'Please describe the blocker';
+      }
+    });
+    
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleWorkLogSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!validateWorkLog()) {
+      toast.error('Please fix the form errors');
+      return;
+    }
+    
+    if (!isOnline) {
+      toast.error('Cannot submit work log while offline');
+      return;
+    }
+    
     setLoadingStates(prev => ({ ...prev, worklog: true }));
     try {
       await api.post('/api/work-logs/bulk', { logs: bulkLogs });
-      toast.success('Work log submitted');
+      toast.success('Work log submitted successfully');
       setShowWorkLogModal(false);
       setBulkLogs([{ workDone: '', hoursSpent: '', category: 'GENERAL', status: 'COMPLETED', project: '', deliverables: '', location: 'OFFICE', issues: '', date: new Date().toISOString().split('T')[0], templateData: {}, customCategory: '' }]);
+      setFormErrors({});
       checkTodayLog();
       fetchWorkLogs();
     } catch (error) {
@@ -629,6 +732,27 @@ const Tasks = () => {
 
   return (
     <div className="fade-in-up">
+      {/* Offline Banner */}
+      {!isOnline && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+          color: '#fff',
+          padding: '0.75rem',
+          textAlign: 'center',
+          zIndex: 10000,
+          fontSize: '0.9rem',
+          fontWeight: 600,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+        }}>
+          <i className="fas fa-wifi-slash me-2" />
+          You are offline. Some features may not work.
+        </div>
+      )}
+      
       <div className="page-header">
         <div className="d-flex justify-content-between align-items-center">
           <div>

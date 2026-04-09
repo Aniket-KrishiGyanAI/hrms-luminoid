@@ -310,13 +310,69 @@ const Layout = ({ children }) => {
       <Offcanvas 
         show={showMobileSidebar} 
         onHide={() => setShowMobileSidebar(false)}
-        className="sidebar-mobile"
+        className="mobile-sidebar-offcanvas"
       >
-        <Offcanvas.Header closeButton className="text-white">
-          <Offcanvas.Title>Menu</Offcanvas.Title>
-        </Offcanvas.Header>
-        <Offcanvas.Body className="p-0">
-          <SidebarContent />
+        <Offcanvas.Body className="p-0 d-flex flex-column" style={{background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)', height: '100%'}}>
+          {/* Header with Close Button */}
+          <div className="mobile-sidebar-header">
+            <div className="d-flex align-items-center gap-2">
+              <MdBusiness size={20} color="#f59e0b" />
+              <div>
+                <div className="fw-bold text-white" style={{fontSize: '0.875rem', lineHeight: 1.2}}>HRMS Pro</div>
+                <div style={{fontSize: '0.6rem', color: '#94a3b8'}}>Leave Management</div>
+              </div>
+            </div>
+            <button className="mobile-sidebar-close-btn" onClick={() => setShowMobileSidebar(false)} title="Close">
+              <MdLogout size={18} style={{transform: 'rotate(180deg)'}} />
+            </button>
+          </div>
+
+          {/* User Info */}
+          <div className="mobile-sidebar-user">
+            <div className="mobile-sidebar-avatar">
+              {user?.firstName?.charAt(0)}{user?.lastName?.charAt(0)}
+            </div>
+            <div style={{minWidth: 0, flex: 1}}>
+              <div className="fw-bold text-white" style={{fontSize: '0.8rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>
+                {user?.firstName} {user?.lastName}
+              </div>
+              <div style={{fontSize: '0.65rem', color: '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{user?.email}</div>
+              <span className="mobile-sidebar-role-badge">{user?.role}</span>
+            </div>
+          </div>
+
+          {/* Nav Items */}
+          <nav className="mobile-sidebar-nav flex-grow-1">
+            {getMenuItems().map(item => {
+              const IconComponent = item.icon;
+              const isActive = location.pathname === item.path;
+              return (
+                <LinkContainer key={item.path} to={item.path}>
+                  <a
+                    className={`mobile-sidebar-nav-item${isActive ? ' active' : ''}`}
+                    onClick={() => setShowMobileSidebar(false)}
+                  >
+                    <IconComponent size={17} />
+                    <span>{item.label}</span>
+                    {item.path === '/approvals' && pendingCount > 0 && (
+                      <Badge bg="warning" pill style={{fontSize: '0.55rem', marginLeft: 'auto', padding: '0.15rem 0.4rem'}}>{pendingCount}</Badge>
+                    )}
+                  </a>
+                </LinkContainer>
+              );
+            })}
+          </nav>
+
+          {/* Footer Logout */}
+          <div className="mobile-sidebar-footer">
+            <button
+              className="mobile-sidebar-logout"
+              onClick={() => { logout(); setShowMobileSidebar(false); }}
+            >
+              <MdLogout size={17} />
+              <span>Logout</span>
+            </button>
+          </div>
         </Offcanvas.Body>
       </Offcanvas>
 

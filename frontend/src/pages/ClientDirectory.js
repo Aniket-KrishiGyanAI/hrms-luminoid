@@ -117,10 +117,10 @@ const ClientDirectory = () => {
                 <Form.Control value={form.contactPerson} onChange={e => setForm(p => ({ ...p, contactPerson: e.target.value }))} required placeholder="Contact name" style={{ borderRadius: 8, fontSize: '0.875rem' }} />
               </Col>
               <Col md={6}>
-                <Form.Label style={{ fontWeight: 600, fontSize: '0.82rem', color: '#374151' }}>Phone <span className="text-danger">*</span></Form.Label>
+                <Form.Label style={{ fontWeight: 600, fontSize: '0.82rem', color: '#374151' }}>Phone</Form.Label>
                 <InputGroup>
                   <InputGroup.Text style={{ background: '#f1f5f9', borderRadius: '8px 0 0 8px' }}><i className="fas fa-phone text-muted" style={{ fontSize: '0.75rem' }} /></InputGroup.Text>
-                  <Form.Control value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} required placeholder="Phone number" style={{ borderRadius: '0 8px 8px 0', fontSize: '0.875rem' }} />
+                  <Form.Control value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} placeholder="Phone number" style={{ borderRadius: '0 8px 8px 0', fontSize: '0.875rem' }} />
                 </InputGroup>
               </Col>
               <Col md={6}>
@@ -228,11 +228,19 @@ const ClientDirectory = () => {
             <h1 className="page-title"><i className="fas fa-building me-2 text-success" />Client Directory</h1>
             <p className="text-muted mb-0">{clients.length} clients total</p>
           </div>
-          {panel !== 'add' && (
-            <Button onClick={openAdd} style={{ borderRadius: 8, background: 'linear-gradient(135deg,#10b981,#059669)', border: 'none', fontWeight: 600 }}>
-              <i className="fas fa-plus me-2" />Add Client
+          <div className="d-flex gap-2">
+            <Button 
+              onClick={() => window.open('https://docs.google.com/forms/d/e/1FAIpQLSfWH86nivabf5ReP3M1Sm7ysMBElA-ZuDrhEVvfuajKrE3rsw/viewform', '_blank')}
+              style={{ borderRadius: 8, background: 'linear-gradient(135deg,#3b82f6,#2563eb)', border: 'none', fontWeight: 600 }}
+            >
+              <i className="fas fa-clipboard-list me-2" />FPO Client Form
             </Button>
-          )}
+            {panel !== 'add' && (
+              <Button onClick={openAdd} style={{ borderRadius: 8, background: 'linear-gradient(135deg,#10b981,#059669)', border: 'none', fontWeight: 600 }}>
+                <i className="fas fa-plus me-2" />Add Client
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 

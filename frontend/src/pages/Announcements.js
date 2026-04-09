@@ -10,6 +10,7 @@ const Announcements = () => {
   const [announcements, setAnnouncements] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
@@ -80,38 +81,61 @@ const Announcements = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validation
+    if (!formData.title.trim()) {
+      toast.error('Please enter a title');
+      return;
+    }
+    
+    if (!formData.content.trim()) {
+      toast.error('Please enter content');
+      return;
+    }
+    
+    setSubmitting(true);
+    
     try {
-      // Optimistic update - add to UI immediately
-      const tempAnnouncement = {
-        _id: 'temp-' + Date.now(),
-        ...formData,
-        targetRoles: formData.targetRoles.length > 0 ? formData.targetRoles : ['EMPLOYEE', 'MANAGER', 'HR', 'ADMIN'],
-        createdBy: { firstName: user.firstName, lastName: user.lastName },
-        createdAt: new Date().toISOString()
-      };
-      setAnnouncements(prev => [tempAnnouncement, ...prev]);
-      
-      // Close modal immediately
-      setShowModal(false);
-      setFormData({ title: '', content: '', priority: 'MEDIUM', targetRoles: [], targetDepartments: [], expiryDate: '' });
-      toast.success('Announcement created successfully');
-      
-      // Send to server in background
+      // Prepare data
       const submitData = {
-        ...formData,
-        targetRoles: formData.targetRoles.length > 0 ? formData.targetRoles : ['EMPLOYEE', 'MANAGER', 'HR', 'ADMIN']
+        title: formData.title.trim(),
+        content: formData.content.trim(),
+        priority: formData.priority,
+        targetRoles: formData.targetRoles.length > 0 ? formData.targetRoles : ['EMPLOYEE', 'MANAGER', 'HR', 'ADMIN'],
+        targetDepartments: formData.targetDepartments,
+        expiryDate: formData.expiryDate || null
       };
+      
+      console.log('Submitting announcement:', submitData);
+      
+      // Send to server
       const response = await api.post('/api/announcements', submitData);
       
-      // Replace temp with real data
-      setAnnouncements(prev => 
-        prev.map(ann => ann._id === tempAnnouncement._id ? response.data : ann)
-      );
+      console.log('Response:', response.data);
+      
+      // Close modal and reset form
+      setShowModal(false);
+      setFormData({ 
+        title: '', 
+        content: '', 
+        priority: 'MEDIUM', 
+        targetRoles: [], 
+        targetDepartments: [], 
+        expiryDate: '' 
+      });
+      
+      // Show success message
+      toast.success('Announcement created successfully');
+      
+      // Refresh announcements
+      fetchAnnouncements();
       
     } catch (error) {
-      // Remove temp announcement on error
-      setAnnouncements(prev => prev.filter(ann => !ann._id.startsWith('temp-')));
-      toast.error('Failed to create announcement');
+      console.error('Error creating announcement:', error);
+      console.error('Error response:', error.response?.data);
+      toast.error(error.response?.data?.message || 'Failed to create announcement');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -362,11 +386,18 @@ const Announcements = () => {
             </Row>
           </Modal.Body>
           <Modal.Footer>
-            <Button variant="secondary" onClick={() => setShowModal(false)}>
+            <Button variant="secondary" onClick={() => setShowModal(false)} disabled={submitting}>
               Cancel
             </Button>
-            <Button variant="primary" type="submit">
-              Create Announcement
+            <Button variant="primary" type="submit" disabled={submitting}>
+              {submitting ? (
+                <>
+                  <span className="spinner-border spinner-border-sm me-2"></span>
+                  Creating...
+                </>
+              ) : (
+                'Create Announcement'
+              )}
             </Button>
           </Modal.Footer>
         </Form>

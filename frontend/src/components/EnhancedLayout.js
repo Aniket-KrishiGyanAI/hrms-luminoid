@@ -13,7 +13,7 @@ import {
   MdMenu, MdLogout, MdHome,
   MdTask, MdCheckCircle, MdAddCircle, MdAssignment, MdSchool,
   MdAccessTimeFilled, MdCalendarMonth, MdWbSunny, MdNightsStay, MdWbTwilight,
-  MdLocationOn
+  MdLocationOn, MdDescription
 } from 'react-icons/md';
 
 const PAGE_META = {
@@ -35,7 +35,7 @@ const PAGE_META = {
   '/expenses':           { title: 'Expenses',          icon: 'receipt' },
   '/assets':             { title: 'Assets',            icon: 'laptop' },
   '/training':           { title: 'Training Materials', icon: 'graduation-cap' },
-  '/field-visits':      { title: 'Field Visits',       icon: 'map-marker-alt' },
+  '/field-visits':       { title: 'Field Visits',       icon: 'map-marker-alt' },
 };
 
 // ── Isolated clock component — re-renders every second but doesn't affect sidebar ──
@@ -282,21 +282,61 @@ const EnhancedLayout = ({ children }) => {
             </div>
           </div>
 
-          <Offcanvas show={showSidebar} onHide={() => setShowSidebar(false)} className="enhanced-sidebar" placement="start">
-            <Offcanvas.Header className="sidebar-header">
-              <Button variant="link" className="custom-close-btn" onClick={() => setShowSidebar(false)}>
-                <i className="fas fa-arrow-left"></i>
-              </Button>
-            </Offcanvas.Header>
-            <Offcanvas.Body className="p-0">
-              <SidebarNav
-                user={user}
-                menuItems={menuItems}
-                currentPath={location.pathname}
-                onNavigate={() => setShowSidebar(false)}
-                onLogout={() => { handleLogout(); setShowSidebar(false); }}
-                scrollRef={sidebarScrollRef}
-              />
+          <Offcanvas show={showSidebar} onHide={() => setShowSidebar(false)} className="mobile-sidebar-offcanvas" placement="start">
+            <Offcanvas.Body className="p-0 d-flex flex-column" style={{background: '#1a1a1a', height: '100%'}}>
+              {/* Close Button - Top Right */}
+              <button className="mobile-sidebar-close-btn" onClick={() => setShowSidebar(false)} title="Close">
+                ×
+              </button>
+
+              {/* User Profile Section */}
+              <div className="mobile-sidebar-user">
+                <div className="mobile-sidebar-avatar">
+                  {user?.firstName?.charAt(0)}{user?.lastName?.charAt(0)}
+                </div>
+                <div style={{minWidth: 0, flex: 1}}>
+                  <div className="mobile-sidebar-user-name">
+                    {user?.firstName} {user?.lastName}
+                  </div>
+                  <div className="mobile-sidebar-user-email">{user?.email}</div>
+                  <span className="mobile-sidebar-role-badge">{user?.role}</span>
+                </div>
+              </div>
+
+              {/* Nav Items */}
+              <nav className="mobile-sidebar-nav flex-grow-1">
+                {menuItems.map(item => {
+                  const IconComponent = item.icon;
+                  const isActive = location.pathname === item.path;
+                  return (
+                    <LinkContainer key={item.path} to={item.path}>
+                      <a
+                        className={`mobile-sidebar-nav-item${isActive ? ' active' : ''}`}
+                        onClick={() => setShowSidebar(false)}
+                      >
+                        <div className="mobile-nav-icon">
+                          <IconComponent size={20} />
+                        </div>
+                        <span className="mobile-nav-label">{item.label}</span>
+                        {item.badge > 0 && (
+                          <Badge className="mobile-nav-badge">{item.badge}</Badge>
+                        )}
+                      </a>
+                    </LinkContainer>
+                  );
+                })}
+              </nav>
+
+              {/* Footer Logout */}
+              <div className="mobile-sidebar-footer">
+                <button
+                  className="mobile-sidebar-logout"
+                  onClick={() => { handleLogout(); setShowSidebar(false); }}
+                >
+                  <MdLogout size={20} />
+                  <span>Logout</span>
+                </button>
+              </div>
             </Offcanvas.Body>
           </Offcanvas>
 
@@ -315,7 +355,7 @@ const EnhancedLayout = ({ children }) => {
             </div>
           )}
 
-          <div className="enhanced-content mobile-content" style={{ paddingTop: '58px' }}>
+          <div className="enhanced-content mobile-content">
             {children}
           </div>
 

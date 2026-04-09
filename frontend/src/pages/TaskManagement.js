@@ -793,10 +793,10 @@ const TaskManagement = () => {
               <i className="fas fa-download me-2"></i>Export
             </Button>
             {['ADMIN', 'HR', 'MANAGER'].includes(user?.role) && (
-              <Button className="btn-export" onClick={() => {
+              <Button className="btn-work-logs" onClick={() => {
                 fetchWorkLogs();
                 setShowWorkLogHistory(true);
-              }} style={{background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none'}}>
+              }}>
                 <i className="fas fa-clipboard-list me-2"></i>Work Logs
               </Button>
             )}

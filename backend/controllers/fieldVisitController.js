@@ -172,7 +172,13 @@ exports.submitOutcome = async (req, res) => {
     if (!visit) return res.status(404).json({ message: 'Visit not found' });
     if (visit.employeeId.toString() !== req.user.id) return res.status(403).json({ message: 'Not authorized' });
 
-    visit.outcome = { ...visit.outcome, ...req.body };
+    const { personMet, phone, purposeOfVisit, ...outcomeData } = req.body;
+    
+    visit.outcome = { ...visit.outcome, ...outcomeData };
+    if (personMet) visit.personMet = personMet;
+    if (phone) visit.phone = phone;
+    if (purposeOfVisit) visit.purposeOfVisit = purposeOfVisit;
+    
     await visit.save();
     res.json(visit);
   } catch (error) {
@@ -182,7 +188,7 @@ exports.submitOutcome = async (req, res) => {
 
 exports.selfReportVisit = async (req, res) => {
   try {
-    const { clientName, personMet, purposeOfVisit, notes, outcome, dealValue, lat, lng, address } = req.body;
+    const { clientName, personMet, phone, purposeOfVisit, notes, outcome, dealValue, lat, lng, address } = req.body;
     if (!clientName) return res.status(400).json({ message: 'Client name is required' });
 
     // Find or create an ad-hoc FieldClient entry
@@ -192,7 +198,7 @@ exports.selfReportVisit = async (req, res) => {
       client = await FieldClient.create({
         name: clientName,
         contactPerson: personMet || 'Self-reported',
-        phone: '-',
+        phone: phone || '-',
         address: address || 'Self-reported',
         status: 'PROSPECT',
         priority: 'MEDIUM',
@@ -207,6 +213,7 @@ exports.selfReportVisit = async (req, res) => {
       visitDate: now,
       selfReported: true,
       personMet,
+      phone,
       purposeOfVisit,
       selfReportNote: notes,
       checkIn: { time: now, location: { lat: parseFloat(lat) || null, lng: parseFloat(lng) || null, address } },
