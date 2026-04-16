@@ -64,6 +64,13 @@ const expenseSchema = new mongoose.Schema(
         timestamp: { type: Date, default: Date.now },
       },
     ],
+
+    // ✨ Soft delete support
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date },
+    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    deletedByName: { type: String },
+    deletionReason: { type: String },
   },
   { timestamps: true },
 );
@@ -71,5 +78,6 @@ const expenseSchema = new mongoose.Schema(
 // Index for faster queries
 expenseSchema.index({ billingMonth: 1, employeeId: 1 });
 expenseSchema.index({ status: 1, billingMonth: 1 });
+expenseSchema.index({ isDeleted: 1, billingMonth: 1 });
 
 module.exports = mongoose.model("Expense", expenseSchema);

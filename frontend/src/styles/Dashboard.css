@@ -234,6 +234,14 @@
 .action-btn i { font-size: 0.95rem; }
 
 /* ══════════════════════════════════════════
+   STAT CARD CONTENT WRAPPER
+══════════════════════════════════════════ */
+.stat-content {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ══════════════════════════════════════════
    STATS GRID
 ══════════════════════════════════════════ */
 .stats-grid {
@@ -537,6 +545,24 @@
 .empty-text { font-size: 0.85rem; font-weight: 500; }
 
 /* ══════════════════════════════════════════
+   ACTIVITY ROW — PRO
+══════════════════════════════════════════ */
+.activity-row-pro {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.75rem 1.4rem;
+  border-bottom: 1px solid var(--d-border-soft);
+  transition: background 0.15s;
+}
+
+.activity-row-pro:last-child { border-bottom: none; }
+.activity-row-pro:hover { background: #f8fafc; }
+
+body.dark-mode .activity-row-pro:hover { background: #0f2035; }
+body.dark-mode .activity-row-pro { border-bottom-color: #1e3a5f; }
+
+/* ══════════════════════════════════════════
    BADGE MODERN
 ══════════════════════════════════════════ */
 .badge-modern {
@@ -574,6 +600,46 @@
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #a7f3d0; border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--d-primary); }
+
+/* Mobile scrollbar - thinner */
+@media (max-width: 768px) {
+  ::-webkit-scrollbar { width: 2px; height: 2px; }
+}
+
+/* Touch-friendly improvements */
+@media (hover: none) and (pointer: coarse) {
+  /* Better tap targets */
+  .action-btn,
+  .dash-quick-actions button,
+  .dash-admin-actions button {
+    min-height: 48px;
+    touch-action: manipulation;
+  }
+
+  /* Remove hover effects on touch devices */
+  .stat-card:hover,
+  .balance-card:hover,
+  .dept-card:hover,
+  .holiday-item:hover,
+  .announcement-item:hover {
+    transform: none;
+  }
+
+  /* Add active states instead */
+  .stat-card:active,
+  .balance-card:active,
+  .dept-card:active {
+    transform: scale(0.98);
+    transition: transform 0.1s;
+  }
+
+  .action-btn:active,
+  .dash-quick-actions button:active,
+  .dash-admin-actions button:active {
+    transform: scale(0.97);
+    transition: transform 0.1s;
+  }
+}
 
 /* ══════════════════════════════════════════
    DARK MODE
@@ -642,6 +708,8 @@ body.dark-mode .birthday-banner {
 @media (max-width: 1024px) {
   .dashboard-page { padding: 1.25rem; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .quick-actions { grid-template-columns: repeat(3, 1fr); }
+  .dash-quick-actions { grid-template-columns: repeat(3, 1fr); }
 }
 
 /* ══════════════════════════════════════════
@@ -650,72 +718,242 @@ body.dark-mode .birthday-banner {
 @media (max-width: 768px) {
   .dashboard-page { padding: 0.875rem 0.75rem 5rem; }
 
-  /* Stats — 2 columns */
+  /* Stats — 2 columns, more compact */
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 0.625rem;
     margin-bottom: 1rem;
   }
-  .stat-card { padding: 0.875rem 1rem; }
-  .stat-icon { width: 38px; height: 38px; font-size: 1rem; margin-bottom: 0.75rem; }
-  .stat-value { font-size: 1.6rem; }
-  .stat-label { font-size: 0.68rem; }
+  .stat-card { 
+    padding: 0.875rem;
+    min-height: auto;
+  }
+  .stat-icon { 
+    width: 36px; 
+    height: 36px; 
+    font-size: 0.95rem; 
+    margin-bottom: 0.65rem;
+  }
+  .stat-value { 
+    font-size: 1.5rem;
+    margin-bottom: 0.25rem;
+  }
+  .stat-label { 
+    font-size: 0.65rem;
+    line-height: 1.3;
+  }
+  .stat-sub {
+    font-size: 0.65rem;
+    margin-top: 0.3rem;
+  }
 
-  /* Quick Actions — 2x2 grid */
+  /* Quick Actions — 2 columns, better touch targets */
   .dash-quick-actions {
     grid-template-columns: repeat(2, 1fr);
     gap: 0.625rem;
   }
+  .dash-quick-actions button,
+  .action-btn {
+    padding: 0.85rem 0.75rem;
+    font-size: 0.8rem;
+    gap: 0.45rem;
+    min-height: 44px;
+  }
+  .dash-quick-actions button i,
+  .action-btn i {
+    font-size: 0.9rem;
+  }
 
-  /* Admin buttons — single column */
+  /* Admin buttons — single column for better readability */
   .dash-admin-actions {
     grid-template-columns: 1fr;
     gap: 0.625rem;
   }
+  .dash-admin-actions button {
+    padding: 0.9rem 1rem;
+    font-size: 0.85rem;
+  }
 
-  /* Cards */
+  /* Cards — better spacing */
   .modern-card,
-  .dashboard-card { border-radius: 0.875rem; }
+  .dashboard-card { 
+    border-radius: 0.875rem;
+    margin-bottom: 0.875rem;
+  }
   .modern-card .card-header,
   .dashboard-card .card-header {
     padding: 0.75rem 1rem;
     font-size: 0.82rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
   }
-  .modern-card .card-body { padding: 0.875rem; }
+  .modern-card .card-body { 
+    padding: 0.875rem;
+    max-height: 350px;
+  }
 
-  /* Balance grid — 2 columns */
-  .balance-grid { grid-template-columns: repeat(2, 1fr); gap: 0.625rem; }
-  .balance-card { padding: 0.875rem; }
-  .balance-value { font-size: 1.6rem; }
+  /* Balance grid — 2 columns, better spacing */
+  .balance-grid { 
+    grid-template-columns: repeat(2, 1fr); 
+    gap: 0.625rem;
+  }
+  .balance-card { 
+    padding: 0.875rem;
+    min-height: auto;
+  }
+  .balance-type {
+    font-size: 0.68rem;
+    margin-bottom: 0.5rem;
+  }
+  .balance-value { 
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+  }
+  .balance-details {
+    font-size: 0.68rem;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
 
-  /* Dept grid */
-  .dept-grid { grid-template-columns: repeat(2, 1fr); gap: 0.625rem; }
+  /* Dept grid — 3 columns for better use of space */
+  .dept-grid { 
+    grid-template-columns: repeat(3, 1fr); 
+    gap: 0.5rem;
+  }
+  .dept-card {
+    padding: 0.75rem 0.5rem;
+  }
+  .dept-icon {
+    width: 36px;
+    height: 36px;
+    font-size: 0.95rem;
+    margin-bottom: 0.5rem;
+  }
+  .dept-count {
+    font-size: 1.3rem;
+  }
+  .dept-name {
+    font-size: 0.65rem;
+    line-height: 1.2;
+  }
 
-  /* Quote */
-  .dash-quote { padding: 0.875rem 1rem; gap: 0.75rem; margin-bottom: 1rem; }
-  .dash-quote-icon { width: 40px; height: 40px; font-size: 1.1rem; }
-  .dash-quote-text { font-size: 0.85rem; }
+  /* Quote — stack on mobile */
+  .dash-quote { 
+    padding: 0.875rem 1rem; 
+    gap: 0.75rem; 
+    margin-bottom: 1rem;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .dash-quote-icon { 
+    width: 40px; 
+    height: 40px; 
+    font-size: 1.1rem;
+  }
+  .dash-quote-text { 
+    font-size: 0.85rem;
+    line-height: 1.6;
+  }
+  .dash-quote-author {
+    font-size: 0.78rem;
+  }
 
   /* Row gaps */
   .mb-4 { margin-bottom: 0.875rem !important; }
   .mb-3 { margin-bottom: 0.625rem !important; }
 
-  /* Tables — compact */
-  .table td, .table th { padding: 0.5rem 0.625rem; font-size: 0.8rem; }
+  /* Bootstrap row/col adjustments */
+  .row { margin-left: -0.5rem; margin-right: -0.5rem; }
+  .row > * { padding-left: 0.5rem; padding-right: 0.5rem; }
+  .col, [class*="col-"] { margin-bottom: 0.875rem; }
 
-  /* Holiday items */
-  .holiday-item { padding: 0.625rem 0.75rem; }
-  .holiday-name { font-size: 0.82rem; }
+  /* Tables — more compact, horizontal scroll */
+  .table-responsive {
+    margin: -0.875rem;
+    padding: 0.875rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .table td, .table th { 
+    padding: 0.5rem 0.625rem; 
+    font-size: 0.78rem;
+    white-space: nowrap;
+  }
+  .table .fw-semibold {
+    font-size: 0.8rem;
+  }
+  .table small {
+    font-size: 0.7rem;
+  }
 
-  /* Announcement items */
-  .announcement-item { padding: 0.75rem 0.875rem; gap: 0.625rem; }
-  .announcement-title { font-size: 0.8rem; }
-  .announcement-text { font-size: 0.73rem; }
+  /* Holiday items — better touch targets */
+  .holiday-item { 
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .holiday-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .holiday-name { 
+    font-size: 0.82rem;
+    margin-bottom: 0.15rem;
+  }
+  .holiday-date {
+    font-size: 0.7rem;
+  }
 
-  /* Dept cards */
-  .dept-card { padding: 0.875rem 0.625rem; }
-  .dept-count { font-size: 1.35rem; }
-  .dept-name { font-size: 0.68rem; }
+  /* Announcement items — better readability */
+  .announcement-item { 
+    padding: 0.75rem 0.875rem; 
+    gap: 0.625rem;
+    flex-wrap: nowrap;
+  }
+  .announcement-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 0.8rem;
+  }
+  .announcement-title { 
+    font-size: 0.8rem;
+    line-height: 1.3;
+  }
+  .announcement-text { 
+    font-size: 0.73rem;
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .announcement-meta {
+    font-size: 0.68rem;
+  }
+
+  /* Badge adjustments */
+  .badge {
+    font-size: 0.68rem !important;
+    padding: 0.25rem 0.5rem !important;
+  }
+
+  /* Button adjustments */
+  .btn-sm {
+    padding: 0.4rem 0.65rem;
+    font-size: 0.75rem;
+  }
+
+  /* Modal adjustments */
+  .modal-body {
+    padding: 1rem;
+  }
+  .modal-header {
+    padding: 0.875rem 1rem;
+  }
+  .modal-title {
+    font-size: 1rem;
+  }
 }
 
 /* ══════════════════════════════════════════
@@ -724,31 +962,163 @@ body.dark-mode .birthday-banner {
 @media (max-width: 480px) {
   .dashboard-page { padding: 0.625rem 0.5rem 5rem; }
 
-  /* Stats — horizontal compact cards */
-  .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 0.5rem; }
+  /* Stats — single column for better readability */
+  .stats-grid { 
+    grid-template-columns: 1fr; 
+    gap: 0.5rem;
+  }
   .stat-card {
-    padding: 0.75rem;
+    padding: 0.75rem 0.875rem;
     display: flex;
     align-items: center;
-    gap: 0.625rem;
+    gap: 0.75rem;
   }
-  .stat-icon { width: 34px; height: 34px; font-size: 0.9rem; margin-bottom: 0; flex-shrink: 0; }
-  .stat-value { font-size: 1.35rem; letter-spacing: -0.5px; }
-  .stat-label { font-size: 0.62rem; }
+  .stat-icon { 
+    width: 40px; 
+    height: 40px; 
+    font-size: 1rem; 
+    margin-bottom: 0; 
+    flex-shrink: 0;
+  }
+  .stat-content {
+    flex: 1;
+    min-width: 0;
+  }
+  .stat-value { 
+    font-size: 1.5rem; 
+    letter-spacing: -0.5px;
+    margin-bottom: 0.15rem;
+  }
+  .stat-label { 
+    font-size: 0.68rem;
+    line-height: 1.3;
+  }
+  .stat-sub {
+    font-size: 0.65rem;
+    margin-top: 0.25rem;
+  }
+
+  /* Quick Actions — single column for better touch */
+  .dash-quick-actions {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+  .dash-quick-actions button,
+  .action-btn {
+    padding: 0.875rem 1rem;
+    font-size: 0.85rem;
+    justify-content: flex-start;
+  }
 
   /* Balance — single column */
-  .balance-grid { grid-template-columns: 1fr; }
+  .balance-grid { 
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+  .balance-card {
+    padding: 0.875rem 1rem;
+  }
 
   /* Dept — 2 columns */
-  .dept-grid { grid-template-columns: repeat(2, 1fr); }
+  .dept-grid { 
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+  }
+  .dept-card {
+    padding: 0.75rem 0.5rem;
+  }
+  .dept-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 0.9rem;
+  }
+  .dept-count {
+    font-size: 1.25rem;
+  }
+  .dept-name {
+    font-size: 0.62rem;
+  }
 
-  /* Quote — stack */
-  .dash-quote { flex-direction: column; gap: 0.625rem; padding: 0.875rem; }
-  .dash-quote-icon { width: 36px; height: 36px; font-size: 1rem; }
-  .dash-quote-text { font-size: 0.82rem; }
+  /* Quote — full stack */
+  .dash-quote { 
+    flex-direction: column; 
+    gap: 0.625rem; 
+    padding: 0.875rem;
+    align-items: flex-start;
+  }
+  .dash-quote-icon { 
+    width: 36px; 
+    height: 36px; 
+    font-size: 1rem;
+  }
+  .dash-quote-text { 
+    font-size: 0.82rem;
+    line-height: 1.6;
+  }
+  .dash-quote-author {
+    font-size: 0.75rem;
+  }
 
-  /* Cards tighter */
+  /* Cards — tighter spacing */
   .modern-card .card-header,
-  .dashboard-card .card-header { padding: 0.625rem 0.875rem; font-size: 0.8rem; }
-  .modern-card .card-body { padding: 0.75rem; }
+  .dashboard-card .card-header { 
+    padding: 0.625rem 0.875rem; 
+    font-size: 0.8rem;
+  }
+  .modern-card .card-body { 
+    padding: 0.75rem;
+    max-height: 300px;
+  }
+
+  /* Announcement — stack layout */
+  .announcement-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.75rem;
+  }
+  .announcement-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 0.75rem;
+  }
+  .announcement-content {
+    width: 100%;
+  }
+
+  /* Holiday items — stack */
+  .holiday-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.75rem;
+  }
+
+  /* Tables — ensure scroll */
+  .table-responsive {
+    margin: -0.75rem;
+    padding: 0.75rem;
+  }
+  .table td, .table th {
+    padding: 0.4rem 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  /* Form controls in modals */
+  .modal-body .form-label {
+    font-size: 0.85rem;
+  }
+  .modal-body .form-control,
+  .modal-body .form-select {
+    font-size: 0.85rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  /* Birthday banner */
+  .birthday-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.875rem;
+  }
 }

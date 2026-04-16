@@ -16,7 +16,9 @@ const Departments = () => {
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedDept, setSelectedDept] = useState(null);
+  const [deptEmployees, setDeptEmployees] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterLocation, setFilterLocation] = useState('');
@@ -300,6 +302,56 @@ const Departments = () => {
     setShowModal(true);
   };
 
+  const viewDepartmentDetails = async (dept) => {
+    setSelectedDept(dept);
+    setShowDetailsModal(true);
+    setDeptEmployees([]); // Reset employees
+    // Fetch employees in this department
+    try {
+      const response = await api.get(`/api/departments/${dept._id}`);
+      if (response.data.success && response.data.data.employees) {
+        setDeptEmployees(response.data.data.employees);
+      } else {
+        setDeptEmployees([]);
+      }
+    } catch (error) {
+      console.error('Error fetching department employees:', error);
+      setDeptEmployees([]);
+    }
+  };
+
+  const handleRemoveEmployee = async (empId, empName) => {
+    const result = await Swal.fire({
+      title: 'Remove Employee?',
+      html: `Remove <strong>${empName}</strong> from this department?<br/><small class="text-muted">Employee will remain in the system but won't be assigned to any department.</small>`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#dc2626',
+      cancelButtonColor: '#6c757d',
+      confirmButtonText: 'Yes, remove',
+      cancelButtonText: 'Cancel'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        await api.delete(`/api/departments/${selectedDept._id}/employees/${empId}`);
+        Swal.fire('Removed!', 'Employee removed from department successfully', 'success');
+        // Refresh employee list
+        const response = await api.get(`/api/departments/${selectedDept._id}`);
+        if (response.data.success && response.data.data.employees) {
+          setDeptEmployees(response.data.data.employees);
+          // Update department employee count in the list
+          setDepartments(prev => prev.map(d => 
+            d._id === selectedDept._id ? { ...d, employeeCount: response.data.data.employees.length } : d
+          ));
+          setSelectedDept(prev => ({ ...prev, employeeCount: response.data.data.employees.length }));
+        }
+      } catch (error) {
+        Swal.fire('Error', error.response?.data?.message || 'Failed to remove employee', 'error');
+      }
+    }
+  };
+
   const exportToExcel = (selectedDepts = null) => {
     const dataToExport = selectedDepts || filteredDepartments;
     const data = dataToExport.map(d => ({
@@ -368,89 +420,107 @@ const Departments = () => {
           padding: 18px 16px;
           vertical-align: middle;
         }
-        .btn-primary-custom {
-          background: linear-gradient(135deg, #064e3b 0%, #10b981 100%);
-          border: none;
-          padding: 10px 24px;
+        .btn-add-dept {
+          background: white;
+          border: 2px solid rgba(255, 255, 255, 0.3);
+          padding: 10px 20px;
           border-radius: 10px;
           font-weight: 600;
-          color: white;
+          color: #064e3b;
           transition: all 0.3s ease;
-          box-shadow: 0 4px 15px rgba(16,185,129,0.3);
+          box-shadow: 0 4px 15px rgba(255, 255, 255, 0.2);
         }
-        .btn-primary-custom:hover {
+        .btn-add-dept:hover {
           transform: translateY(-2px);
-          box-shadow: 0 6px 25px rgba(16,185,129,0.5);
+          box-shadow: 0 6px 25px rgba(255, 255, 255, 0.4);
+          background: rgba(255, 255, 255, 0.95);
+          border-color: white;
+          color: #064e3b;
         }
-        .btn-success-custom {
-          background: linear-gradient(135deg, #059669 0%, #10b981 100%);
-          border: none;
-          padding: 10px 24px;
+        .btn-assign-dept {
+          background: white;
+          border: 2px solid rgba(255, 255, 255, 0.3);
+          padding: 10px 20px;
           border-radius: 10px;
           font-weight: 600;
-          color: white;
+          color: #064e3b;
           transition: all 0.3s ease;
-          box-shadow: 0 4px 15px rgba(5, 150, 105, 0.3);
+          box-shadow: 0 4px 15px rgba(255, 255, 255, 0.2);
         }
-        .btn-success-custom:hover {
+        .btn-assign-dept:hover {
           transform: translateY(-2px);
-          box-shadow: 0 6px 25px rgba(5, 150, 105, 0.5);
+          box-shadow: 0 6px 25px rgba(255, 255, 255, 0.4);
+          background: rgba(255, 255, 255, 0.95);
+          border-color: white;
+          color: #064e3b;
         }
-        .btn-info-custom {
-          background: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%);
-          border: none;
-          padding: 10px 24px;
+        .btn-bulk-dept {
+          background: white;
+          border: 2px solid rgba(255, 255, 255, 0.3);
+          padding: 10px 20px;
           border-radius: 10px;
           font-weight: 600;
-          color: white;
+          color: #064e3b;
           transition: all 0.3s ease;
-          box-shadow: 0 4px 15px rgba(8, 145, 178, 0.3);
+          box-shadow: 0 4px 15px rgba(255, 255, 255, 0.2);
         }
-        .btn-info-custom:hover {
+        .btn-bulk-dept:hover {
           transform: translateY(-2px);
-          box-shadow: 0 6px 25px rgba(8, 145, 178, 0.5);
+          box-shadow: 0 6px 25px rgba(255, 255, 255, 0.4);
+          background: rgba(255, 255, 255, 0.95);
+          border-color: white;
+          color: #064e3b;
         }
-        .btn-warning-custom {
-          background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);
-          border: none;
-          padding: 10px 24px;
+        .btn-transfer-dept {
+          background: white;
+          border: 2px solid rgba(255, 255, 255, 0.3);
+          padding: 10px 20px;
           border-radius: 10px;
           font-weight: 600;
-          color: white;
+          color: #064e3b;
           transition: all 0.3s ease;
-          box-shadow: 0 4px 15px rgba(217, 119, 6, 0.3);
+          box-shadow: 0 4px 15px rgba(255, 255, 255, 0.2);
         }
-        .btn-warning-custom:hover {
+        .btn-transfer-dept:hover {
           transform: translateY(-2px);
-          box-shadow: 0 6px 25px rgba(217, 119, 6, 0.5);
+          box-shadow: 0 6px 25px rgba(255, 255, 255, 0.4);
+          background: rgba(255, 255, 255, 0.95);
+          border-color: white;
+          color: #064e3b;
         }
-        .btn-secondary-custom {
-          background: linear-gradient(135deg, #475569 0%, #64748b 100%);
-          border: none;
-          padding: 10px 24px;
+        .btn-import-dept {
+          background: white;
+          border: 2px solid rgba(255, 255, 255, 0.3);
+          padding: 10px 20px;
           border-radius: 10px;
           font-weight: 600;
-          color: white;
+          color: #064e3b;
           transition: all 0.3s ease;
-          box-shadow: 0 4px 15px rgba(71, 85, 105, 0.3);
+          box-shadow: 0 4px 15px rgba(255, 255, 255, 0.2);
         }
-        .btn-secondary-custom:hover {
+        .btn-import-dept:hover {
           transform: translateY(-2px);
-          box-shadow: 0 6px 25px rgba(71, 85, 105, 0.5);
+          box-shadow: 0 6px 25px rgba(255, 255, 255, 0.4);
+          background: rgba(255, 255, 255, 0.95);
+          border-color: white;
+          color: #064e3b;
         }
-        .btn-export-custom {
-          background: linear-gradient(135deg, #065f46 0%, #34d399 100%);
-          border: none;
-          padding: 10px 24px;
+        .btn-export-dept {
+          background: white;
+          border: 2px solid rgba(255, 255, 255, 0.3);
+          padding: 10px 20px;
           border-radius: 10px;
           font-weight: 600;
-          color: white;
+          color: #064e3b;
           transition: all 0.3s ease;
-          box-shadow: 0 4px 15px rgba(16,185,129,0.3);
+          box-shadow: 0 4px 15px rgba(255, 255, 255, 0.2);
         }
-        .btn-export-custom:hover {
+        .btn-export-dept:hover {
           transform: translateY(-2px);
-          box-shadow: 0 6px 25px rgba(16,185,129,0.5);
+          box-shadow: 0 6px 25px rgba(255, 255, 255, 0.4);
+          background: rgba(255, 255, 255, 0.95);
+          border-color: white;
+          color: #064e3b;
         }
         .badge-code {
           background: linear-gradient(135deg, #064e3b 0%, #10b981 100%);
@@ -522,22 +592,22 @@ const Departments = () => {
           </Col>
           <Col md={4} className="text-md-end">
             <div className="d-flex flex-wrap gap-2 justify-content-md-end">
-              <Button className="btn-primary-custom" size="sm" onClick={() => setShowModal(true)}>
+              <Button className="btn-add-dept" size="sm" onClick={() => setShowModal(true)}>
                 <i className="fas fa-plus me-2"></i>Add
               </Button>
-              <Button className="btn-success-custom" size="sm" onClick={() => setShowAssignModal(true)}>
+              <Button className="btn-assign-dept" size="sm" onClick={() => setShowAssignModal(true)}>
                 <i className="fas fa-user-plus me-2"></i>Assign
               </Button>
-              <Button className="btn-info-custom" size="sm" onClick={() => setShowBulkModal(true)}>
+              <Button className="btn-bulk-dept" size="sm" onClick={() => setShowBulkModal(true)}>
                 <i className="fas fa-users me-2"></i>Bulk
               </Button>
-              <Button className="btn-warning-custom" size="sm" onClick={() => setShowTransferModal(true)}>
+              <Button className="btn-transfer-dept" size="sm" onClick={() => setShowTransferModal(true)}>
                 <i className="fas fa-exchange-alt me-2"></i>Transfer
               </Button>
-              <Button className="btn-secondary-custom" size="sm" onClick={() => setShowImportModal(true)}>
+              <Button className="btn-import-dept" size="sm" onClick={() => setShowImportModal(true)}>
                 <i className="fas fa-file-import me-2"></i>Import
               </Button>
-              <Button className="btn-export-custom" size="sm" onClick={() => setShowExportModal(true)}>
+              <Button className="btn-export-dept" size="sm" onClick={() => setShowExportModal(true)}>
                 <i className="fas fa-download me-2"></i>Export
               </Button>
             </div>
@@ -634,7 +704,7 @@ const Departments = () => {
             </thead>
             <tbody>
               {filteredDepartments.map(dept => (
-                <tr key={dept._id} onClick={() => navigate(`/departments/${dept._id}`)} style={{cursor: 'pointer'}}>
+                <tr key={dept._id} style={{cursor: 'pointer'}}>
                   <td onClick={(e) => e.stopPropagation()}>
                     <Form.Check 
                       type="checkbox" 
@@ -669,7 +739,7 @@ const Departments = () => {
                     </Badge>
                   </td>
                   <td onClick={(e) => e.stopPropagation()}>
-                    <Button className="action-btn-view me-2" size="sm" onClick={() => navigate(`/departments/${dept._id}`)} title="View Details">
+                    <Button className="action-btn-view me-2" size="sm" onClick={() => viewDepartmentDetails(dept)} title="View Details">
                       <i className="fas fa-eye"></i>
                     </Button>
                     <Button className="action-btn-edit me-2" size="sm" onClick={() => editDepartment(dept)} title="Edit">
@@ -1177,6 +1247,338 @@ const Departments = () => {
             </Button>
           </div>
         </Modal.Body>
+      </Modal>
+
+      {/* Department Details Modal */}
+      <Modal show={showDetailsModal} onHide={() => setShowDetailsModal(false)} centered size="lg" className="dept-details-modal">
+        <Modal.Header closeButton style={{ background: 'linear-gradient(135deg, #064e3b 0%, #10b981 100%)', color: 'white', border: 'none' }}>
+          <Modal.Title className="fw-bold">
+            <i className="fas fa-building me-2"></i>
+            Department Details
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body style={{ padding: '0', background: '#f0fdf4' }}>
+          {selectedDept && (
+            <>
+              {/* Header Section */}
+              <div style={{ 
+                background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)', 
+                padding: '30px', 
+                borderBottom: '3px solid #10b981'
+              }}>
+                <Row className="align-items-center">
+                  <Col md={8}>
+                    <div className="d-flex align-items-center gap-3 mb-3">
+                      <div style={{
+                        width: '70px',
+                        height: '70px',
+                        background: 'linear-gradient(135deg, #064e3b 0%, #10b981 100%)',
+                        borderRadius: '16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '28px',
+                        color: 'white',
+                        boxShadow: '0 8px 20px rgba(16, 185, 129, 0.3)'
+                      }}>
+                        <i className="fas fa-building"></i>
+                      </div>
+                      <div>
+                        <h3 className="mb-1" style={{ color: '#064e3b', fontWeight: '800' }}>{selectedDept.name}</h3>
+                        <Badge className="badge-code" style={{ fontSize: '0.9rem' }}>{selectedDept.code}</Badge>
+                      </div>
+                    </div>
+                    {selectedDept.description && (
+                      <p style={{ color: '#065f46', marginBottom: '0', fontSize: '0.95rem', lineHeight: '1.6' }}>
+                        <i className="fas fa-info-circle me-2"></i>
+                        {selectedDept.description}
+                      </p>
+                    )}
+                  </Col>
+                  <Col md={4} className="text-end">
+                    <Badge bg={selectedDept.status === 'ACTIVE' ? 'success' : 'danger'} style={{ 
+                      padding: '12px 20px', 
+                      borderRadius: '10px', 
+                      fontSize: '1rem',
+                      fontWeight: '600'
+                    }}>
+                      <i className={`fas fa-${selectedDept.status === 'ACTIVE' ? 'check-circle' : 'times-circle'} me-2`}></i>
+                      {selectedDept.status}
+                    </Badge>
+                  </Col>
+                </Row>
+              </div>
+
+              {/* Info Cards Section */}
+              <div style={{ padding: '30px' }}>
+                <Row className="g-3 mb-4">
+                  <Col md={6}>
+                    <div style={{
+                      background: 'white',
+                      borderRadius: '12px',
+                      padding: '20px',
+                      border: '2px solid #d1fae5',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+                    }}>
+                      <div className="d-flex align-items-center gap-3">
+                        <div style={{
+                          width: '50px',
+                          height: '50px',
+                          background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                          borderRadius: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '20px',
+                          color: 'white'
+                        }}>
+                          <i className="fas fa-user-tie"></i>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.8rem', color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Department Head</div>
+                          <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#064e3b', marginTop: '4px' }}>
+                            {selectedDept.departmentHead ? (
+                              `${selectedDept.departmentHead.firstName} ${selectedDept.departmentHead.lastName}`
+                            ) : (
+                              <span style={{ color: '#9ca3af' }}>Not Assigned</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </Col>
+                  <Col md={6}>
+                    <div style={{
+                      background: 'white',
+                      borderRadius: '12px',
+                      padding: '20px',
+                      border: '2px solid #d1fae5',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+                    }}>
+                      <div className="d-flex align-items-center gap-3">
+                        <div style={{
+                          width: '50px',
+                          height: '50px',
+                          background: 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)',
+                          borderRadius: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '20px',
+                          color: 'white'
+                        }}>
+                          <i className="fas fa-map-marker-alt"></i>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.8rem', color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Location</div>
+                          <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#064e3b', marginTop: '4px' }}>
+                            {selectedDept.location || <span style={{ color: '#9ca3af' }}>Not Set</span>}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </Col>
+                  <Col md={6}>
+                    <div style={{
+                      background: 'white',
+                      borderRadius: '12px',
+                      padding: '20px',
+                      border: '2px solid #d1fae5',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+                    }}>
+                      <div className="d-flex align-items-center gap-3">
+                        <div style={{
+                          width: '50px',
+                          height: '50px',
+                          background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                          borderRadius: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '20px',
+                          color: 'white'
+                        }}>
+                          <i className="fas fa-users"></i>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.8rem', color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Employees</div>
+                          <div style={{ fontSize: '1.8rem', fontWeight: '800', color: '#064e3b', marginTop: '4px' }}>
+                            {selectedDept.employeeCount}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </Col>
+                  <Col md={6}>
+                    <div style={{
+                      background: 'white',
+                      borderRadius: '12px',
+                      padding: '20px',
+                      border: '2px solid #d1fae5',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+                    }}>
+                      <div className="d-flex align-items-center gap-3">
+                        <div style={{
+                          width: '50px',
+                          height: '50px',
+                          background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                          borderRadius: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '20px',
+                          color: 'white'
+                        }}>
+                          <i className="fas fa-sitemap"></i>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.8rem', color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Parent Department</div>
+                          <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#064e3b', marginTop: '4px' }}>
+                            {selectedDept.parentDepartment ? (
+                              selectedDept.parentDepartment.name
+                            ) : (
+                              <span style={{ color: '#9ca3af' }}>None</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </Col>
+                </Row>
+
+                {/* Employees List */}
+                <div style={{
+                  background: 'white',
+                  borderRadius: '12px',
+                  padding: '24px',
+                  border: '2px solid #d1fae5',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+                }}>
+                  <h5 style={{ color: '#064e3b', fontWeight: '700', marginBottom: '20px' }}>
+                    <i className="fas fa-users me-2"></i>
+                    Employees in this Department ({deptEmployees.length})
+                  </h5>
+                  {deptEmployees.length > 0 ? (
+                    <div style={{ maxHeight: '300px', overflowY: 'auto', overflowX: 'hidden' }}>
+                      <style>{`
+                        .employee-card-item * {
+                          text-decoration: none !important;
+                        }
+                      `}</style>
+                      <Row className="g-2" style={{ margin: 0 }}>
+                        {deptEmployees.map((emp, index) => (
+                          <Col md={12} key={index}>
+                            <div className="employee-card-item" style={{
+                              background: 'linear-gradient(to right, #f0fdf4 0%, #ecfdf5 100%)',
+                              padding: '12px 16px',
+                              borderRadius: '10px',
+                              border: '1px solid #d1fae5',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '12px',
+                              transition: 'all 0.2s ease',
+                              overflow: 'hidden'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.transform = 'translateX(4px)';
+                              e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.15)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.transform = 'translateX(0)';
+                              e.currentTarget.style.boxShadow = 'none';
+                            }}>
+                              <div style={{
+                                width: '40px',
+                                height: '40px',
+                                background: 'linear-gradient(135deg, #064e3b 0%, #10b981 100%)',
+                                borderRadius: '10px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: 'white',
+                                fontWeight: '700',
+                                fontSize: '0.9rem',
+                                flexShrink: 0
+                              }}>
+                                {emp.firstName?.charAt(0)}{emp.lastName?.charAt(0)}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                                <div style={{ fontWeight: '600', color: '#064e3b', fontSize: '0.95rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {emp.firstName} {emp.lastName}
+                                </div>
+                                <div style={{ fontSize: '0.8rem', color: '#6b7280', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {emp.designation || emp.email}
+                                </div>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="outline-danger"
+                                onClick={() => handleRemoveEmployee(emp._id, `${emp.firstName} ${emp.lastName}`)}
+                                style={{
+                                  borderRadius: '8px',
+                                  padding: '6px 12px',
+                                  fontSize: '0.8rem',
+                                  fontWeight: '600',
+                                  border: '2px solid #fecaca',
+                                  color: '#dc2626',
+                                  background: 'white',
+                                  transition: 'all 0.2s ease'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = '#dc2626';
+                                  e.currentTarget.style.color = 'white';
+                                  e.currentTarget.style.borderColor = '#dc2626';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = 'white';
+                                  e.currentTarget.style.color = '#dc2626';
+                                  e.currentTarget.style.borderColor = '#fecaca';
+                                }}
+                                title="Remove from department"
+                              >
+                                <i className="fas fa-times me-1"></i>Remove
+                              </Button>
+                            </div>
+                          </Col>
+                        ))}
+                      </Row>
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>
+                      <i className="fas fa-user-slash" style={{ fontSize: '3rem', marginBottom: '16px', opacity: 0.3 }}></i>
+                      <p style={{ marginBottom: '0', fontSize: '1rem' }}>No employees assigned to this department</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </Modal.Body>
+        <Modal.Footer style={{ background: 'white', borderTop: '2px solid #d1fae5', padding: '20px 30px' }}>
+          <Button 
+            onClick={() => {
+              setShowDetailsModal(false);
+              editDepartment(selectedDept);
+            }}
+            style={{ 
+              background: 'linear-gradient(135deg, #064e3b 0%, #10b981 100%)', 
+              border: 'none', 
+              borderRadius: '10px', 
+              padding: '12px 30px', 
+              fontWeight: '600',
+              boxShadow: '0 4px 15px rgba(16,185,129,0.3)'
+            }}
+          >
+            <i className="fas fa-edit me-2"></i>Edit Department
+          </Button>
+          <Button 
+            variant="secondary" 
+            onClick={() => setShowDetailsModal(false)}
+            style={{ borderRadius: '10px', padding: '12px 30px', fontWeight: '600' }}
+          >
+            <i className="fas fa-times me-2"></i>Close
+          </Button>
+        </Modal.Footer>
       </Modal>
     </Container>
   );

@@ -1,0 +1,54 @@
+/* Example: Migrate inline styles to CSS modules */
+
+.quickActionButton {
+  padding: 0.9rem 1rem;
+  border-radius: 0.75rem;
+  border: none;
+  font-weight: 600;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  cursor: pointer;
+  color: #fff;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.quickActionButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.quickActionButton:active {
+  transform: translateY(0);
+}
+
+.quickActionPrimary {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+}
+
+.quickActionSuccess {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.quickActionInfo {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+}
+
+.quickActionWarning {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+}
+
+.quickActionDanger {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+}
+
+/* Usage:
+import styles from './Dashboard.module.css';
+
+<button className={`${styles.quickActionButton} ${styles.quickActionPrimary}`}>
+  <i className="fas fa-calendar-plus"></i>
+  Apply Leave
+</button>
+*/

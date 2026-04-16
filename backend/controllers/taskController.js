@@ -1,5 +1,6 @@
 const Task = require('../models/Task');
 const { createNotification } = require('./notificationController');
+const logger = require('../utils/logger');
 
 const addActivity = async (task, type, user, message, metadata = {}) => {
   task.activityLog.push({ type, user, message, metadata });
@@ -7,6 +8,7 @@ const addActivity = async (task, type, user, message, metadata = {}) => {
 
 exports.createTask = async (req, res) => {
   try {
+    logger.info('createTask', { userId: req.user?.id });
     const task = await Task.create({
       ...req.body,
       assignedBy: req.user.id
@@ -28,12 +30,15 @@ exports.createTask = async (req, res) => {
     
     res.status(201).json(task);
   } catch (error) {
+    logger.error('createTask error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(400).json({ message: error.message });
   }
 };
 
 exports.getTasks = async (req, res) => {
   try {
+    logger.info('getTasks', { userId: req.user?.id });
     const { status, taskType, department, startDate, endDate } = req.query;
     let filter = {};
 
@@ -63,12 +68,15 @@ exports.getTasks = async (req, res) => {
 
     res.json(tasks);
   } catch (error) {
+    logger.error('getTasks error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ message: error.message });
   }
 };
 
 exports.getTask = async (req, res) => {
   try {
+    logger.info('getTask', { userId: req.user?.id });
     const task = await Task.findById(req.params.id)
       .populate('assignedTo', 'firstName lastName email phone')
       .populate('assignedBy', 'firstName lastName')
@@ -79,12 +87,15 @@ exports.getTask = async (req, res) => {
     if (!task) return res.status(404).json({ message: 'Task not found' });
     res.json(task);
   } catch (error) {
+    logger.error('getTask error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ message: error.message });
   }
 };
 
 exports.updateTask = async (req, res) => {
   try {
+    logger.info('updateTask', { userId: req.user?.id });
     const oldTask = await Task.findById(req.params.id);
     if (!oldTask) return res.status(404).json({ message: 'Task not found' });
     
@@ -119,22 +130,28 @@ exports.updateTask = async (req, res) => {
     
     res.json(task);
   } catch (error) {
+    logger.error('updateTask error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(400).json({ message: error.message });
   }
 };
 
 exports.deleteTask = async (req, res) => {
   try {
+    logger.info('deleteTask', { userId: req.user?.id });
     const task = await Task.findByIdAndDelete(req.params.id);
     if (!task) return res.status(404).json({ message: 'Task not found' });
     res.json({ message: 'Task deleted' });
   } catch (error) {
+    logger.error('deleteTask error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ message: error.message });
   }
 };
 
 exports.checkIn = async (req, res) => {
   try {
+    logger.info('checkIn', { userId: req.user?.id });
     const { lat, lng } = req.body;
     const task = await Task.findById(req.params.id);
     
@@ -152,12 +169,15 @@ exports.checkIn = async (req, res) => {
 
     res.json(task);
   } catch (error) {
+    logger.error('checkIn error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(400).json({ message: error.message });
   }
 };
 
 exports.checkOut = async (req, res) => {
   try {
+    logger.info('checkOut', { userId: req.user?.id });
     const { lat, lng, outcome, notes, orderValue, orderDetails, nextFollowUpDate, actualHours } = req.body;
     const task = await Task.findById(req.params.id);
     
@@ -182,12 +202,15 @@ exports.checkOut = async (req, res) => {
 
     res.json(task);
   } catch (error) {
+    logger.error('checkOut error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(400).json({ message: error.message });
   }
 };
 
 exports.updateStatus = async (req, res) => {
   try {
+    logger.info('updateStatus', { userId: req.user?.id });
     const { status } = req.body;
     const task = await Task.findById(req.params.id);
     
@@ -201,12 +224,15 @@ exports.updateStatus = async (req, res) => {
 
     res.json(task);
   } catch (error) {
+    logger.error('updateStatus error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(400).json({ message: error.message });
   }
 };
 
 exports.addComment = async (req, res) => {
   try {
+    logger.info('addComment', { userId: req.user?.id });
     const { text } = req.body;
     const task = await Task.findById(req.params.id);
     
@@ -270,12 +296,15 @@ exports.addComment = async (req, res) => {
     
     res.json(populatedTask);
   } catch (error) {
+    logger.error('addComment error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(400).json({ message: error.message });
   }
 };
 
 exports.addAttachment = async (req, res) => {
   try {
+    logger.info('addAttachment', { userId: req.user?.id });
     const { name, url } = req.body;
     const task = await Task.findById(req.params.id);
     
@@ -286,12 +315,15 @@ exports.addAttachment = async (req, res) => {
     
     res.json(task);
   } catch (error) {
+    logger.error('addAttachment error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(400).json({ message: error.message });
   }
 };
 
 exports.addExpense = async (req, res) => {
   try {
+    logger.info('addExpense', { userId: req.user?.id });
     const task = await Task.findById(req.params.id);
     if (!task) return res.status(404).json({ message: 'Task not found' });
     
@@ -300,12 +332,15 @@ exports.addExpense = async (req, res) => {
     
     res.json(task);
   } catch (error) {
+    logger.error('addExpense error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(400).json({ message: error.message });
   }
 };
 
 exports.addDailyUpdate = async (req, res) => {
   try {
+    logger.info('addDailyUpdate', { userId: req.user?.id });
     const task = await Task.findById(req.params.id);
     
     if (!task) return res.status(404).json({ message: 'Task not found' });
@@ -358,12 +393,15 @@ exports.addDailyUpdate = async (req, res) => {
     
     res.json(task);
   } catch (error) {
+    logger.error('addDailyUpdate error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(400).json({ message: error.message });
   }
 };
 
 exports.duplicateTask = async (req, res) => {
   try {
+    logger.info('duplicateTask', { userId: req.user?.id });
     const originalTask = await Task.findById(req.params.id);
     if (!originalTask) return res.status(404).json({ message: 'Task not found' });
     
@@ -392,6 +430,8 @@ exports.duplicateTask = async (req, res) => {
     
     res.status(201).json(newTask);
   } catch (error) {
+    logger.error('duplicateTask error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(400).json({ message: error.message });
   }
 };

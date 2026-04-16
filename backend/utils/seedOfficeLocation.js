@@ -22,7 +22,7 @@ const seedDefaultOffice = async () => {
       isActive: true,
     });
 
-    console.log('✅ Default office location seeded from .env');
+    
   } catch (err) {
     console.error('Failed to seed default office location:', err.message);
   }

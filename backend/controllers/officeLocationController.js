@@ -1,4 +1,5 @@
 const OfficeLocation = require('../models/OfficeLocation');
+const logger = require('../utils/logger');
 
 const getOfficeLocations = async (req, res) => {
   try {

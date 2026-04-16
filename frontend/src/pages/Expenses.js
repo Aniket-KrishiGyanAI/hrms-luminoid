@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 import Swal from 'sweetalert2';
+import * as XLSX from 'xlsx';
+import ExpenseAnalytics from './ExpenseAnalytics';
 import './ExpensesMobile.css';
 
 const getCurrentBillingMonth = () => {
@@ -83,6 +85,22 @@ const Expenses = () => {
   const [showReimburseModal, setShowReimburseModal] = useState(false);
   const [reimbursingExpenseId, setReimbursingExpenseId] = useState(null);
   const [reimbursementNote, setReimbursementNote] = useState('');
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showDeleted, setShowDeleted] = useState(false);
+  const [deletedExpenses, setDeletedExpenses] = useState([]);
+  const [loadingDeleted, setLoadingDeleted] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState({
+    dateFrom: '',
+    dateTo: '',
+    amountMin: '',
+    amountMax: '',
+    category: 'ALL',
+    searchEmployee: ''
+  });
+  const [sortBy, setSortBy] = useState('date-desc');
+  const [selectedExpenses, setSelectedExpenses] = useState([]);
+  const [expandedExpense, setExpandedExpense] = useState(null);
 
   const swal = {
     success: showSuccess,
@@ -110,10 +128,32 @@ const Expenses = () => {
     }
   }, [selectedMonth]);
 
+  const fetchDeletedExpenses = useCallback(async () => {
+    try {
+      setLoadingDeleted(true);
+      const response = await api.get(`/api/expenses/deleted?billingMonth=${selectedMonth}`);
+      setDeletedExpenses(response.data?.expenses || []);
+    } catch (error) {
+      console.error('Error fetching deleted expenses:', error);
+      setDeletedExpenses([]);
+      if (error.response?.status !== 403) {
+        showError('Failed to load deleted expenses');
+      }
+    } finally {
+      setLoadingDeleted(false);
+    }
+  }, [selectedMonth]);
+
   useEffect(() => { 
     setLoading(true);
     fetchExpenses(); 
   }, [fetchExpenses]);
+
+  useEffect(() => {
+    if (showDeleted) {
+      fetchDeletedExpenses();
+    }
+  }, [showDeleted, fetchDeletedExpenses]);
 
   const resetModal = () => {
     objectUrlsRef.current.forEach(url => window.URL.revokeObjectURL(url));
@@ -181,7 +221,59 @@ const Expenses = () => {
       resetModal();
       fetchExpenses();
     } catch (error) {
-      swal.error(error.response?.data?.message || 'Error saving expense');
+      // Handle duplicate detection
+      if (error.response?.status === 409 && error.response?.data?.isDuplicate) {
+        const duplicates = error.response.data.duplicates;
+        const duplicateList = duplicates.map(dup => 
+          `• ${dup.title} - ₹${dup.amount} on ${dup.date} (${dup.status})`
+        ).join('\n');
+        
+        const result = await Swal.fire({
+          title: '⚠️ Possible Duplicate Detected',
+          html: `
+            <div style="text-align: left;">
+              <p style="margin-bottom: 1rem;">A similar expense already exists:</p>
+              <div style="background: #fef3c7; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; font-family: monospace; font-size: 0.9rem; white-space: pre-line;">${duplicateList}</div>
+              <p style="color: #64748b; font-size: 0.9rem;">Do you want to submit this expense anyway?</p>
+            </div>
+          `,
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#059669',
+          cancelButtonColor: '#64748b',
+          confirmButtonText: 'Yes, Submit Anyway',
+          cancelButtonText: 'Cancel',
+          customClass: {
+            popup: 'duplicate-warning-modal'
+          }
+        });
+        
+        if (result.isConfirmed) {
+          // User confirmed - submit with override flag
+          try {
+            const formData = new FormData();
+            Object.entries(expenseForm).forEach(([k, v]) => formData.append(k, v));
+            formData.append('billingMonth', selectedMonth);
+            formData.append('ignoreDuplicate', 'true'); // Add override flag
+            if (Array.isArray(receiptFile) && receiptFile.length > 0) {
+              receiptFile.forEach(fileObj => formData.append('bills', fileObj.file));
+            }
+            if (editingExpense) {
+              await api.put(`/api/expenses/${editingExpense._id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+              swal.success('Expense updated & resubmitted!');
+            } else {
+              await api.post('/api/expenses', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+              swal.success('Expense submitted successfully!');
+            }
+            resetModal();
+            fetchExpenses();
+          } catch (retryError) {
+            swal.error(retryError.response?.data?.message || 'Error saving expense');
+          }
+        }
+      } else {
+        swal.error(error.response?.data?.message || 'Error saving expense');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -255,20 +347,298 @@ const handleMarkReimbursed = async () => {
     ? expenses 
     : expenses.filter(e => e.status === filterStatus)) || [];
 
-  const totalAmount = filteredExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+  // Apply advanced filters
+  const advancedFilteredExpenses = filteredExpenses.filter(exp => {
+    // Date range filter
+    if (filters.dateFrom && new Date(exp.expenseDate) < new Date(filters.dateFrom)) return false;
+    if (filters.dateTo && new Date(exp.expenseDate) > new Date(filters.dateTo)) return false;
+    
+    // Amount range filter
+    if (filters.amountMin && exp.amount < parseFloat(filters.amountMin)) return false;
+    if (filters.amountMax && exp.amount > parseFloat(filters.amountMax)) return false;
+    
+    // Category filter
+    if (filters.category !== 'ALL' && exp.category !== filters.category) return false;
+    
+    // Employee search filter
+    if (filters.searchEmployee && exp.employeeId) {
+      const employeeName = `${exp.employeeId.firstName} ${exp.employeeId.lastName}`.toLowerCase();
+      if (!employeeName.includes(filters.searchEmployee.toLowerCase())) return false;
+    }
+    
+    return true;
+  });
+
+  // Apply sorting
+  const sortedExpenses = [...advancedFilteredExpenses].sort((a, b) => {
+    switch (sortBy) {
+      case 'date-desc':
+        return new Date(b.expenseDate) - new Date(a.expenseDate);
+      case 'date-asc':
+        return new Date(a.expenseDate) - new Date(b.expenseDate);
+      case 'amount-desc':
+        return b.amount - a.amount;
+      case 'amount-asc':
+        return a.amount - b.amount;
+      case 'status':
+        return a.status.localeCompare(b.status);
+      default:
+        return 0;
+    }
+  });
+
+  const totalAmount = sortedExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
   const stats = {
-    total: filteredExpenses.length,
-    submitted: filteredExpenses.filter(e => e.status === 'SUBMITTED').length,
-    approved: filteredExpenses.filter(e => e.status === 'APPROVED').length,
-    rejected: filteredExpenses.filter(e => e.status === 'REJECTED').length,
-    reimbursed: filteredExpenses.filter(e => e.status === 'REIMBURSED').length,
+    total: sortedExpenses.length,
+    submitted: sortedExpenses.filter(e => e.status === 'SUBMITTED').length,
+    approved: sortedExpenses.filter(e => e.status === 'APPROVED').length,
+    rejected: sortedExpenses.filter(e => e.status === 'REJECTED').length,
+    reimbursed: sortedExpenses.filter(e => e.status === 'REIMBURSED').length,
   };
 
   const amountBreakdown = {
     total: totalAmount,
-    approved: filteredExpenses.filter(e => e.status === 'APPROVED').reduce((sum, e) => sum + (e.amount || 0), 0),
-    submitted: filteredExpenses.filter(e => e.status === 'SUBMITTED').reduce((sum, e) => sum + (e.amount || 0), 0),
-    reimbursed: filteredExpenses.filter(e => e.status === 'REIMBURSED').reduce((sum, e) => sum + (e.amount || 0), 0),
+    approved: sortedExpenses.filter(e => e.status === 'APPROVED').reduce((sum, e) => sum + (e.amount || 0), 0),
+    submitted: sortedExpenses.filter(e => e.status === 'SUBMITTED').reduce((sum, e) => sum + (e.amount || 0), 0),
+    reimbursed: sortedExpenses.filter(e => e.status === 'REIMBURSED').reduce((sum, e) => sum + (e.amount || 0), 0),
+  };
+
+  const handleBulkApprove = async () => {
+    if (selectedExpenses.length === 0) return;
+    const result = await Swal.fire({
+      title: 'Approve Selected Expenses?',
+      text: `${selectedExpenses.length} expense(s) will be approved.`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#059669',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: 'Yes, Approve',
+    });
+    if (!result.isConfirmed) return;
+    try {
+      await Promise.all(selectedExpenses.map(id => 
+        api.put(`/api/expenses/${id}/approve-reject`, { status: 'APPROVED' })
+      ));
+      swal.success(`${selectedExpenses.length} expense(s) approved`);
+      setSelectedExpenses([]);
+      fetchExpenses();
+    } catch (error) {
+      swal.error('Error approving expenses');
+    }
+  };
+
+  const handleBulkReject = async () => {
+    if (selectedExpenses.length === 0) return;
+    const { value: reason } = await Swal.fire({
+      title: 'Reject Selected Expenses',
+      input: 'textarea',
+      inputLabel: 'Rejection Reason',
+      inputPlaceholder: 'Enter reason for rejection...',
+      showCancelButton: true,
+      confirmButtonColor: '#dc2626',
+      confirmButtonText: 'Reject',
+      inputValidator: (value) => !value && 'Please provide a reason'
+    });
+    if (!reason) return;
+    try {
+      await Promise.all(selectedExpenses.map(id => 
+        api.put(`/api/expenses/${id}/approve-reject`, { status: 'REJECTED', rejectionReason: reason })
+      ));
+      swal.success(`${selectedExpenses.length} expense(s) rejected`);
+      setSelectedExpenses([]);
+      fetchExpenses();
+    } catch (error) {
+      swal.error('Error rejecting expenses');
+    }
+  };
+
+  const toggleSelectExpense = (id) => {
+    setSelectedExpenses(prev => 
+      prev.includes(id) ? prev.filter(expId => expId !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    const selectableExpenses = sortedExpenses.filter(e => e.status === 'SUBMITTED');
+    if (selectedExpenses.length === selectableExpenses.length && selectableExpenses.length > 0) {
+      setSelectedExpenses([]);
+    } else {
+      setSelectedExpenses(selectableExpenses.map(e => e._id));
+    }
+  };
+
+  const handleBulkReimburse = async () => {
+    if (selectedExpenses.length === 0) return;
+    const approvedExpenses = selectedExpenses.filter(id => {
+      const exp = sortedExpenses.find(e => e._id === id);
+      return exp && exp.status === 'APPROVED';
+    });
+    if (approvedExpenses.length === 0) {
+      swal.warning('No approved expenses selected');
+      return;
+    }
+    const { value: note } = await Swal.fire({
+      title: 'Mark Selected as Paid',
+      input: 'textarea',
+      inputLabel: 'Payment Note (Optional)',
+      inputPlaceholder: 'e.g., Paid via March 2025 salary, Bank transfer ref #1234',
+      showCancelButton: true,
+      confirmButtonColor: '#6d28d9',
+      confirmButtonText: 'Mark as Paid',
+    });
+    if (note === undefined) return;
+    try {
+      await Promise.all(approvedExpenses.map(id => 
+        api.put(`/api/expenses/${id}/approve-reject`, { 
+          status: 'REIMBURSED',
+          reimbursementNote: note?.trim() || undefined
+        })
+      ));
+      swal.success(`${approvedExpenses.length} expense(s) marked as paid`);
+      setSelectedExpenses([]);
+      fetchExpenses();
+    } catch (error) {
+      swal.error('Error marking expenses as paid');
+    }
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      dateFrom: '',
+      dateTo: '',
+      amountMin: '',
+      amountMax: '',
+      category: 'ALL',
+      searchEmployee: ''
+    });
+  };
+
+  const toggleExpandRow = (expenseId) => {
+    setExpandedExpense(expandedExpense === expenseId ? null : expenseId);
+  };
+
+  const exportToExcel = () => {
+    try {
+      // Prepare data for export based on table structure
+      const exportData = sortedExpenses.map((expense, index) => {
+        const row = {
+          'Sr. No.': index + 1,
+          'Date': new Date(expense.expenseDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+          'Title': expense.title,
+          'Category': expense.category.replace('_', ' '),
+        };
+
+        // Add employee info for managers/HR
+        if (isManagerOrHR && expense.employeeId) {
+          row['Employee'] = `${expense.employeeId.firstName} ${expense.employeeId.lastName}`;
+          row['Department'] = expense.employeeId.department || '-';
+        }
+
+        row['Amount (₹)'] = expense.amount;
+        row['Status'] = getStatusStyle(expense.status).label;
+        row['Description'] = expense.description || '-';
+        row['Bills'] = expense.bills?.length || 0;
+
+        // Add status-specific info
+        if (expense.status === 'REJECTED' && expense.rejectionReason) {
+          row['Rejection Reason'] = expense.rejectionReason;
+        }
+        if (expense.status === 'REIMBURSED') {
+          row['Reimbursement Date'] = expense.reimbursementDate ? new Date(expense.reimbursementDate).toLocaleDateString('en-IN') : '-';
+          if (expense.reimbursementNote) {
+            row['Payment Note'] = expense.reimbursementNote;
+          }
+        }
+        if (expense.approvedBy) {
+          row['Approved By'] = expense.approvedBy.firstName ? `${expense.approvedBy.firstName} ${expense.approvedBy.lastName}` : '-';
+          row['Approved Date'] = expense.approvedDate ? new Date(expense.approvedDate).toLocaleDateString('en-IN') : '-';
+        }
+
+        row['Billing Month'] = expense.billingMonth;
+        row['Submitted Date'] = new Date(expense.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+        return row;
+      });
+
+      // Add summary rows at the end
+      exportData.push({});
+      exportData.push({ 'Sr. No.': '', 'Date': 'SUMMARY', 'Title': '', 'Category': '', 'Employee': '', 'Amount (₹)': '', 'Status': '', 'Description': '' });
+      exportData.push({ 'Sr. No.': '', 'Date': 'Total Expenses:', 'Title': stats.total, 'Category': '', 'Employee': '', 'Amount (₹)': '', 'Status': '', 'Description': '' });
+      exportData.push({ 'Sr. No.': '', 'Date': 'Total Amount:', 'Title': '', 'Category': '', 'Employee': '', 'Amount (₹)': totalAmount, 'Status': '', 'Description': '' });
+      exportData.push({});
+      exportData.push({ 'Sr. No.': '', 'Date': 'Submitted:', 'Title': stats.submitted, 'Category': '', 'Employee': 'Amount:', 'Amount (₹)': amountBreakdown.submitted, 'Status': '', 'Description': '' });
+      exportData.push({ 'Sr. No.': '', 'Date': 'Approved:', 'Title': stats.approved, 'Category': '', 'Employee': 'Amount:', 'Amount (₹)': amountBreakdown.approved, 'Status': '', 'Description': '' });
+      exportData.push({ 'Sr. No.': '', 'Date': 'Rejected:', 'Title': stats.rejected, 'Category': '', 'Employee': 'Amount:', 'Amount (₹)': 0, 'Status': '', 'Description': '' });
+      exportData.push({ 'Sr. No.': '', 'Date': 'Paid:', 'Title': stats.reimbursed, 'Category': '', 'Employee': 'Amount:', 'Amount (₹)': amountBreakdown.reimbursed, 'Status': '', 'Description': '' });
+      exportData.push({});
+      exportData.push({ 'Sr. No.': '', 'Date': 'Export Date:', 'Title': new Date().toLocaleString('en-IN'), 'Category': '', 'Employee': '', 'Amount (₹)': '', 'Status': '', 'Description': '' });
+      exportData.push({ 'Sr. No.': '', 'Date': 'Billing Month:', 'Title': formatMonthLabel(selectedMonth), 'Category': '', 'Employee': '', 'Amount (₹)': '', 'Status': '', 'Description': '' });
+      exportData.push({ 'Sr. No.': '', 'Date': 'Status Filter:', 'Title': filterStatus === 'ALL' ? 'All Statuses' : getStatusStyle(filterStatus).label, 'Category': '', 'Employee': '', 'Amount (₹)': '', 'Status': '', 'Description': '' });
+
+      // Add active filters info
+      if (filters.dateFrom || filters.dateTo) {
+        exportData.push({ 'Sr. No.': '', 'Date': 'Date Range:', 'Title': `${filters.dateFrom || 'Start'} to ${filters.dateTo || 'End'}`, 'Category': '', 'Employee': '', 'Amount (₹)': '', 'Status': '', 'Description': '' });
+      }
+      if (filters.amountMin || filters.amountMax) {
+        exportData.push({ 'Sr. No.': '', 'Date': 'Amount Range:', 'Title': `₹${filters.amountMin || '0'} to ₹${filters.amountMax || '∞'}`, 'Category': '', 'Employee': '', 'Amount (₹)': '', 'Status': '', 'Description': '' });
+      }
+      if (filters.category !== 'ALL') {
+        exportData.push({ 'Sr. No.': '', 'Date': 'Category Filter:', 'Title': filters.category.replace('_', ' '), 'Category': '', 'Employee': '', 'Amount (₹)': '', 'Status': '', 'Description': '' });
+      }
+      if (filters.searchEmployee) {
+        exportData.push({ 'Sr. No.': '', 'Date': 'Employee Filter:', 'Title': filters.searchEmployee, 'Category': '', 'Employee': '', 'Amount (₹)': '', 'Status': '', 'Description': '' });
+      }
+
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(exportData);
+
+      // Set column widths
+      const colWidths = [
+        { wch: 8 },  // Sr. No.
+        { wch: 14 }, // Date
+        { wch: 30 }, // Title
+        { wch: 18 }, // Category
+      ];
+
+      if (isManagerOrHR) {
+        colWidths.push({ wch: 22 }); // Employee
+        colWidths.push({ wch: 18 }); // Department
+      }
+
+      colWidths.push({ wch: 15 }); // Amount
+      colWidths.push({ wch: 12 }); // Status
+      colWidths.push({ wch: 35 }); // Description
+      colWidths.push({ wch: 10 }); // Bills
+      colWidths.push({ wch: 30 }); // Rejection Reason / Payment Note
+      colWidths.push({ wch: 20 }); // Approved By
+      colWidths.push({ wch: 15 }); // Approved Date
+      colWidths.push({ wch: 15 }); // Billing Month
+      colWidths.push({ wch: 20 }); // Submitted Date
+
+      ws['!cols'] = colWidths;
+
+      // Add autofilter to header row (only for data rows, not summary)
+      const dataRowCount = sortedExpenses.length;
+      if (dataRowCount > 0) {
+        const range = { s: { r: 0, c: 0 }, e: { r: dataRowCount, c: Object.keys(exportData[0]).length - 1 } };
+        ws['!autofilter'] = { ref: XLSX.utils.encode_range(range) };
+      }
+
+      // Add sheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, 'Expenses');
+
+      // Generate filename
+      const filename = `Expenses_${formatMonthLabel(selectedMonth).replace(' ', '_')}_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+      // Save file
+      XLSX.writeFile(wb, filename);
+
+      swal.success('Excel file exported successfully!');
+    } catch (error) {
+      console.error('Export error:', error);
+      swal.error('Failed to export Excel file');
+    }
   };
 
   if (loading) {
@@ -398,21 +768,333 @@ const handleMarkReimbursed = async () => {
         </div>
       </div>
 
-      {/* ═══ STATUS FILTER ═══ */}
+      {/* ═══ TABS: EXPENSES vs ANALYTICS vs DELETED ═══ */}
       <div className="filter-tabs">
-        {[{v:'ALL',l:'All'},{v:'SUBMITTED',l:'Submitted'},{v:'APPROVED',l:'Approved'},{v:'REJECTED',l:'Rejected'},{v:'REIMBURSED',l:'Paid'}].map(({v,l}) => (
-          <button
-            key={v}
-            className={`filter-tab ${filterStatus === v ? 'active' : ''}`}
-            onClick={() => setFilterStatus(v)}
-          >
-            {l}
-          </button>
-        ))}
+        <button
+          className={`filter-tab ${!showAnalytics && !showDeleted ? 'active' : ''}`}
+          onClick={() => {
+            setShowAnalytics(false);
+            setShowDeleted(false);
+          }}
+        >
+          <i className="fas fa-list"></i> Expenses
+        </button>
+        <button
+          className={`filter-tab ${showAnalytics ? 'active' : ''}`}
+          onClick={() => {
+            setShowAnalytics(true);
+            setShowDeleted(false);
+          }}
+        >
+          <i className="fas fa-chart-bar"></i> Analytics
+        </button>
+        <button
+          className={`filter-tab ${showDeleted ? 'active' : ''}`}
+          onClick={() => {
+            setShowAnalytics(false);
+            setShowDeleted(true);
+          }}
+        >
+          <i className="fas fa-trash-restore"></i> Deleted
+        </button>
       </div>
 
-      {/* ═══ AMOUNT SUMMARY ═══ */}
-      {filteredExpenses.length > 0 && (
+      {showAnalytics ? (
+        <ExpenseAnalytics 
+          selectedMonth={selectedMonth} 
+          expenses={expenses} 
+          onMonthChange={setSelectedMonth}
+        />
+      ) : showDeleted ? (
+        <>
+          {/* ═══ DELETED EXPENSES VIEW ═══ */}
+          <div className="deleted-expenses-section">
+            <div className="deleted-header">
+              <div className="deleted-header-content">
+                <h3><i className="fas fa-trash-restore"></i> Deleted Expenses</h3>
+                <p>View expenses that have been deleted. {isHROrAdmin ? 'You can restore them if needed.' : 'Read-only view for transparency.'}</p>
+              </div>
+            </div>
+
+            {loadingDeleted ? (
+              <div className="expense-loading">
+                <div className="spinner-border text-primary"></div>
+                <p>Loading deleted expenses...</p>
+              </div>
+            ) : deletedExpenses.length > 0 ? (
+              <div className="deleted-expenses-list">
+                {deletedExpenses.map(expense => {
+                  const statusStyle = getStatusStyle(expense.status);
+                  return (
+                    <div key={expense._id} className="deleted-expense-card">
+                      <div className="deleted-card-header">
+                        <div className="deleted-card-title">
+                          <i className="fas fa-receipt"></i>
+                          <span>{expense.title}</span>
+                          <span className="deleted-badge">
+                            <i className="fas fa-trash"></i> DELETED
+                          </span>
+                        </div>
+                        <div className="deleted-card-amount">₹{expense.amount?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                      </div>
+
+                      <div className="deleted-card-body">
+                        <div className="deleted-info-grid">
+                          <div className="deleted-info-item">
+                            <span className="deleted-info-label"><i className="fas fa-calendar"></i> Expense Date</span>
+                            <span className="deleted-info-value">{new Date(expense.expenseDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
+                          </div>
+                          <div className="deleted-info-item">
+                            <span className="deleted-info-label"><i className="fas fa-tag"></i> Category</span>
+                            <span className="deleted-info-value">{expense.category.replace('_', ' ')}</span>
+                          </div>
+                          <div className="deleted-info-item">
+                            <span className="deleted-info-label"><i className="fas fa-info-circle"></i> Original Status</span>
+                            <span className="deleted-info-value">
+                              <span className="deleted-status-badge" style={{ background: statusStyle.bg, color: statusStyle.text }}>
+                                {statusStyle.label}
+                              </span>
+                            </span>
+                          </div>
+                          {isManagerOrHR && expense.employeeId && (
+                            <div className="deleted-info-item">
+                              <span className="deleted-info-label"><i className="fas fa-user"></i> Employee</span>
+                              <span className="deleted-info-value">{expense.employeeId.firstName} {expense.employeeId.lastName}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {expense.description && (
+                          <div className="deleted-description">
+                            <span className="deleted-info-label"><i className="fas fa-align-left"></i> Description</span>
+                            <p>{expense.description}</p>
+                          </div>
+                        )}
+
+                        <div className="deleted-audit-info">
+                          <div className="deleted-audit-header">
+                            <i className="fas fa-exclamation-circle"></i>
+                            <span>Deletion Information</span>
+                          </div>
+                          <div className="deleted-audit-details">
+                            <div className="deleted-audit-item">
+                              <span className="deleted-audit-label">Deleted By:</span>
+                              <span className="deleted-audit-value">{expense.deletedByName || 'Unknown'}</span>
+                            </div>
+                            <div className="deleted-audit-item">
+                              <span className="deleted-audit-label">Deleted On:</span>
+                              <span className="deleted-audit-value">{new Date(expense.deletedAt).toLocaleString('en-IN', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                            </div>
+                            {expense.deletionReason && (
+                              <div className="deleted-audit-item full-width">
+                                <span className="deleted-audit-label">Reason:</span>
+                                <span className="deleted-audit-value deleted-reason">{expense.deletionReason}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {isHROrAdmin && (
+                          <div className="deleted-card-actions">
+                            <button 
+                              className="btn-restore-expense"
+                              onClick={async () => {
+                                const result = await Swal.fire({
+                                  title: 'Restore Expense?',
+                                  text: 'This will restore the expense back to its original status.',
+                                  icon: 'question',
+                                  showCancelButton: true,
+                                  confirmButtonColor: '#059669',
+                                  cancelButtonColor: '#6b7280',
+                                  confirmButtonText: 'Yes, Restore',
+                                  cancelButtonText: 'Cancel',
+                                });
+                                if (result.isConfirmed) {
+                                  try {
+                                    await api.post(`/api/expenses/${expense._id}/restore`);
+                                    swal.success('Expense restored successfully');
+                                    fetchDeletedExpenses();
+                                    fetchExpenses();
+                                  } catch (error) {
+                                    swal.error(error.response?.data?.message || 'Error restoring expense');
+                                  }
+                                }
+                              }}
+                            >
+                              <i className="fas fa-undo"></i> Restore Expense
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="empty-state">
+                <div className="empty-icon">
+                  <i className="fas fa-trash-restore"></i>
+                </div>
+                <h3>No Deleted Expenses</h3>
+                <p>No expenses have been deleted for {formatMonthLabel(selectedMonth)}</p>
+              </div>
+            )}
+          </div>
+        </>
+      ) : (
+        <>
+          {/* ═══ STATUS FILTER ═══ */}
+          <div className="filter-tabs" style={{ marginTop: '1rem' }}>
+            {[{v:'ALL',l:'All'},{v:'SUBMITTED',l:'Submitted'},{v:'APPROVED',l:'Approved'},{v:'REJECTED',l:'Rejected'},{v:'REIMBURSED',l:'Paid'}].map(({v,l}) => (
+              <button
+                key={v}
+                className={`filter-tab ${filterStatus === v ? 'active' : ''}`}
+                onClick={() => setFilterStatus(v)}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+
+          {/* ═══ ADVANCED FILTERS & SORTING ═══ */}
+          <div className="filter-controls">
+            <div className="filter-controls-header">
+              <button className="btn-toggle-filters" onClick={() => setShowFilters(!showFilters)}>
+                <i className={`fas fa-filter`}></i>
+                {showFilters ? 'Hide Filters' : 'Show Filters'}
+                {(filters.dateFrom || filters.dateTo || filters.amountMin || filters.amountMax || filters.category !== 'ALL' || filters.searchEmployee) && (
+                  <span className="filter-badge">Active</span>
+                )}
+              </button>
+              <div className="filter-actions-group">
+                <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="sort-select">
+                  <option value="date-desc">Date (Newest)</option>
+                  <option value="date-asc">Date (Oldest)</option>
+                  <option value="amount-desc">Amount (High to Low)</option>
+                  <option value="amount-asc">Amount (Low to High)</option>
+                  <option value="status">Status</option>
+                </select>
+                {sortedExpenses.length > 0 && (
+                  <button className="btn-export-excel" onClick={exportToExcel}>
+                    <i className="fas fa-file-excel"></i> Export to Excel
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {showFilters && (
+              <div className="advanced-filters">
+                <div className="filter-row">
+                  <div className="filter-field">
+                    <label>Date From</label>
+                    <input
+                      type="date"
+                      value={filters.dateFrom}
+                      onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
+                    />
+                  </div>
+                  <div className="filter-field">
+                    <label>Date To</label>
+                    <input
+                      type="date"
+                      value={filters.dateTo}
+                      onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
+                    />
+                  </div>
+                  <div className="filter-field">
+                    <label>Min Amount</label>
+                    <input
+                      type="number"
+                      placeholder="0"
+                      value={filters.amountMin}
+                      onChange={(e) => setFilters({ ...filters, amountMin: e.target.value })}
+                    />
+                  </div>
+                  <div className="filter-field">
+                    <label>Max Amount</label>
+                    <input
+                      type="number"
+                      placeholder="999999"
+                      value={filters.amountMax}
+                      onChange={(e) => setFilters({ ...filters, amountMax: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="filter-row">
+                  <div className="filter-field">
+                    <label>Category</label>
+                    <select value={filters.category} onChange={(e) => setFilters({ ...filters, category: e.target.value })}>
+                      <option value="ALL">All Categories</option>
+                      <option value="TRAVEL">Travel</option>
+                      <option value="MEALS">Meals</option>
+                      <option value="ACCOMMODATION">Accommodation</option>
+                      <option value="TRANSPORT">Transport</option>
+                      <option value="OFFICE_SUPPLIES">Office Supplies</option>
+                      <option value="TRAINING">Training</option>
+                      <option value="OTHER">Other</option>
+                    </select>
+                  </div>
+                  {isManagerOrHR && (
+                    <div className="filter-field">
+                      <label>Search Employee</label>
+                      <input
+                        type="text"
+                        placeholder="Employee name..."
+                        value={filters.searchEmployee}
+                        onChange={(e) => setFilters({ ...filters, searchEmployee: e.target.value })}
+                      />
+                    </div>
+                  )}
+                  <div className="filter-field">
+                    <button className="btn-clear-filters" onClick={clearFilters}>
+                      <i className="fas fa-times"></i> Clear Filters
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ═══ BULK OPERATIONS ═══ */}
+          {isManagerOrHR && selectedExpenses.length > 0 && (
+            <div className="bulk-actions">
+              <div className="bulk-actions-info">
+                <input
+                  type="checkbox"
+                  checked={selectedExpenses.length === sortedExpenses.filter(e => e.status === 'SUBMITTED').length && sortedExpenses.filter(e => e.status === 'SUBMITTED').length > 0}
+                  onChange={toggleSelectAll}
+                  className="bulk-checkbox"
+                />
+                <span>{selectedExpenses.length} selected</span>
+              </div>
+              <div className="bulk-actions-buttons">
+                {selectedExpenses.some(id => {
+                  const exp = sortedExpenses.find(e => e._id === id);
+                  return exp && exp.status === 'SUBMITTED';
+                }) && (
+                  <>
+                    <button className="btn-bulk-approve" onClick={handleBulkApprove}>
+                      <i className="fas fa-check"></i> Approve Selected
+                    </button>
+                    <button className="btn-bulk-reject" onClick={handleBulkReject}>
+                      <i className="fas fa-times"></i> Reject Selected
+                    </button>
+                  </>
+                )}
+                {isHROrAdmin && selectedExpenses.some(id => {
+                  const exp = sortedExpenses.find(e => e._id === id);
+                  return exp && exp.status === 'APPROVED';
+                }) && (
+                  <button className="btn-bulk-reimburse" onClick={handleBulkReimburse}>
+                    <i className="fas fa-wallet"></i> Mark Selected as Paid
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ═══ AMOUNT SUMMARY ═══ */}
+          {sortedExpenses.length > 0 && (
         <div className="summary-section">
           <div className="summary-card">
             <span className="summary-label">Total Amount</span>
@@ -434,159 +1116,498 @@ const handleMarkReimbursed = async () => {
               </div>
             </div>
           )}
-        </div>
-      )}
+            </div>
+          )}
 
-      {/* ═══ EXPENSES LIST ═══ */}
-      <div className="expenses-list-wrapper">
-        {filteredExpenses.length > 0 ? (
-          <div className="expenses-list">
-            {filteredExpenses.map(expense => {
-              const statusStyle = getStatusStyle(expense.status);
-              const categoryIcon = getCategoryIcon(expense.category);
-              return (
-                <div key={expense._id} className="expense-card">
-                  {/* Card Header */}
-                  <div className="expense-card-header">
-                    <div className="expense-title-section">
-                      <div className="category-icon" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
-                        <i className={`fas ${categoryIcon}`}></i>
-                      </div>
-                      <div className="title-content">
-                        <h3 className="expense-title">{expense.title}</h3>
-                        <p className="expense-date">
-                          <i className="fas fa-calendar"></i>
-                          {new Date(expense.expenseDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="expense-amount">₹{expense.amount?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
-                  </div>
-
-                  {/* Card Body */}
-                  {isManagerOrHR && expense.employeeId && (
-                    <div className="expense-employee-info">
-                      <i className="fas fa-user-tie"></i>
-                      <span>{expense.employeeId?.firstName} {expense.employeeId?.lastName}</span>
-                      {expense.employeeId?.department && <span className="department-badge">{expense.employeeId.department}</span>}
-                    </div>
-                  )}
-                  {expense.description && (
-                    <div className="expense-description">{expense.description}</div>
-                  )}
-
-                  {/* ── TIMELINE ── */}
-                  {expense.timeline && expense.timeline.length > 0 && (
-                    <div className="expense-timeline">
-                      <div className="timeline-title"><i className="fas fa-history"></i> History</div>
-                      <div className="timeline-list">
-                        {expense.timeline.map((entry, idx) => {
-                          const cfg = timelineConfig[entry.status] || timelineConfig.SUBMITTED;
-                          return (
-                            <div key={idx} className="timeline-item">
-                              <div className="timeline-dot" style={{ background: cfg.bg, border: `2px solid ${cfg.color}` }}>
-                                <i className={`fas ${cfg.icon}`} style={{ color: cfg.color, fontSize: '0.65rem' }}></i>
+          {/* ═══ EXPENSES LIST ═══ */}
+          <div className="expenses-list-wrapper">
+        {sortedExpenses.length > 0 ? (
+          <>
+            {/* Desktop Table View */}
+            <div className="expenses-table-desktop">
+              <table className="expenses-table">
+                <thead>
+                  <tr>
+                    {isManagerOrHR && <th className="th-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={selectedExpenses.length === sortedExpenses.filter(e => e.status === 'SUBMITTED').length && sortedExpenses.filter(e => e.status === 'SUBMITTED').length > 0}
+                        onChange={toggleSelectAll}
+                      />
+                    </th>}
+                    <th>Date</th>
+                    <th>Title</th>
+                    <th>Category</th>
+                    {isManagerOrHR && <th>Employee</th>}
+                    <th className="th-amount">Amount</th>
+                    <th>Status</th>
+                    <th className="th-actions">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedExpenses.map(expense => {
+                    const statusStyle = getStatusStyle(expense.status);
+                    const isExpanded = expandedExpense === expense._id;
+                    return (
+                      <React.Fragment key={expense._id}>
+                        <tr className="expense-row">
+                          {isManagerOrHR && <td className="td-checkbox">
+                            {(expense.status === 'SUBMITTED' || (isHROrAdmin && expense.status === 'APPROVED')) && (
+                              <input
+                                type="checkbox"
+                                checked={selectedExpenses.includes(expense._id)}
+                                onChange={() => toggleSelectExpense(expense._id)}
+                              />
+                            )}
+                          </td>}
+                          <td className="td-date">
+                            {new Date(expense.expenseDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </td>
+                          <td className="td-title">
+                            <div className="table-title-cell">
+                              <div className="table-title">
+                                {expense.title}
+                                {isManagerOrHR && expense.hasPotentialDuplicates && (
+                                  <span className="duplicate-badge" title={`${expense.duplicateCount} potential duplicate(s) found`}>
+                                    <i className="fas fa-exclamation-triangle"></i> Duplicate?
+                                  </span>
+                                )}
                               </div>
-                              <div className="timeline-content">
-                                <div className="timeline-header">
-                                  <span className="timeline-status" style={{ color: cfg.color, fontWeight: 600 }}>{entry.status}</span>
-                                  <span className="timeline-actor">
-                                    {entry.actorName || `${entry.actor?.firstName || ''} ${entry.actor?.lastName || ''}`.trim()}
-                                  </span>
-                                  <span className="timeline-time">
-                                    {new Date(entry.timestamp).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                  </span>
-                                </div>
-                                {entry.note && (
-                                  <div className="timeline-note"
-                                    style={{ color: entry.status === 'REJECTED' ? '#b91c1c' : '#6b7280' }}>
-                                    {entry.status === 'REJECTED' && <i className="fas fa-exclamation-circle" style={{ marginRight: 4 }}></i>}
-                                    {entry.note}
+                              {expense.description && <div className="table-desc">{expense.description}</div>}
+                            </div>
+                          </td>
+                          <td className="td-category">
+                            <span className="category-tag">{expense.category.replace('_', ' ')}</span>
+                          </td>
+                          {isManagerOrHR && <td className="td-employee">
+                            {expense.employeeId && (
+                              <div className="employee-cell">
+                                <span className="employee-name">{expense.employeeId.firstName} {expense.employeeId.lastName}</span>
+                                {expense.employeeId.department && <span className="employee-dept">{expense.employeeId.department}</span>}
+                              </div>
+                            )}
+                          </td>}
+                          <td className="td-amount">
+                            ₹{expense.amount?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="td-status">
+                            <span className="table-status-badge" style={{ background: statusStyle.bg, color: statusStyle.text }}>
+                              {statusStyle.label}
+                            </span>
+                          </td>
+                          <td className="td-actions">
+                            <div className="table-actions">
+                              <button className="table-action-btn view-details" onClick={() => toggleExpandRow(expense._id)} title="View Details">
+                                <i className={`fas fa-chevron-${isExpanded ? 'up' : 'down'}`}></i> {isExpanded ? 'Hide' : 'Details'}
+                              </button>
+                              {isEmployee && canOperate && expense.status === 'REJECTED' && (
+                                <>
+                                  <button className="table-action-btn edit" onClick={() => openEdit(expense)} title="Edit">
+                                    Edit
+                                  </button>
+                                  <button className="table-action-btn delete" onClick={() => handleDelete(expense._id)} title="Delete">
+                                    Delete
+                                  </button>
+                                </>
+                              )}
+                              {isEmployee && canOperate && expense.status === 'SUBMITTED' && (
+                                <button className="table-action-btn delete" onClick={() => handleDelete(expense._id)} title="Delete">
+                                  Delete
+                                </button>
+                              )}
+                              {isManagerOrHR && expense.status === 'SUBMITTED' && (
+                                <>
+                                  <button className="table-action-btn approve" onClick={() => handleApproveReject(expense._id, 'APPROVED')} title="Approve">
+                                    Approve
+                                  </button>
+                                  <button className="table-action-btn reject" onClick={() => {
+                                    setRejectingExpenseId(expense._id);
+                                    setShowRejectModal(true);
+                                  }} title="Reject">
+                                    Reject
+                                  </button>
+                                </>
+                              )}
+                              {isHROrAdmin && expense.status === 'APPROVED' && (
+                                <button className="table-action-btn reimburse" onClick={() => {
+                                  setReimbursingExpenseId(expense._id);
+                                  setShowReimburseModal(true);
+                                }} title="Mark as Paid">
+                                  Mark Paid
+                                </button>
+                              )}
+                              {isHROrAdmin && (
+                                <button 
+                                  className="table-action-btn admin-delete" 
+                                  onClick={async () => {
+                                    const { value: reason } = await Swal.fire({
+                                      title: 'Delete Expense?',
+                                      input: 'textarea',
+                                      inputLabel: 'Deletion Reason (Required)',
+                                      inputPlaceholder: 'e.g., Duplicate entry, Fraudulent claim, Data error',
+                                      showCancelButton: true,
+                                      confirmButtonColor: '#dc2626',
+                                      confirmButtonText: 'Delete',
+                                      inputValidator: (value) => !value && 'Please provide a reason'
+                                    });
+                                    if (reason) {
+                                      try {
+                                        await api.delete(`/api/expenses/${expense._id}`, {
+                                          data: { deletionReason: reason }
+                                        });
+                                        swal.success('Expense deleted successfully');
+                                        fetchExpenses();
+                                      } catch (error) {
+                                        swal.error(error.response?.data?.message || 'Error deleting expense');
+                                      }
+                                    }
+                                  }} 
+                                  title="Delete (Admin)"
+                                >
+                                  <i className="fas fa-trash-alt"></i> Delete
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr className="expense-details-row">
+                            <td colSpan={isManagerOrHR ? 8 : 7} className="expense-details-cell">
+                              <div className="expense-details-content">
+                                {/* Duplicate Warning for Managers/HR */}
+                                {isManagerOrHR && expense.hasPotentialDuplicates && (
+                                  <div className="details-section-inline duplicate-warning-inline">
+                                    <h4><i className="fas fa-exclamation-triangle"></i> Potential Duplicate Detected</h4>
+                                    <p className="duplicate-warning-text">
+                                      This expense appears similar to {expense.duplicateCount} other expense(s) from the same employee:
+                                    </p>
+                                    <div className="duplicate-list">
+                                      {expense.potentialDuplicates?.map((dup, idx) => (
+                                        <div key={idx} className="duplicate-item">
+                                          <div className="duplicate-item-header">
+                                            <span className="duplicate-item-title">{dup.title}</span>
+                                            <span className="duplicate-item-status" style={{ 
+                                              background: getStatusStyle(dup.status).bg, 
+                                              color: getStatusStyle(dup.status).text 
+                                            }}>
+                                              {getStatusStyle(dup.status).label}
+                                            </span>
+                                          </div>
+                                          <div className="duplicate-item-details">
+                                            <span><i className="fas fa-rupee-sign"></i> ₹{dup.amount?.toLocaleString('en-IN')}</span>
+                                            <span><i className="fas fa-calendar"></i> {new Date(dup.date).toLocaleDateString('en-IN')}</span>
+                                            <span><i className="fas fa-folder"></i> {dup.billingMonth}</span>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                    <p className="duplicate-warning-note">
+                                      <i className="fas fa-info-circle"></i> Review carefully before approving. This may be a legitimate expense or an accidental duplicate.
+                                    </p>
+                                  </div>
+                                )}
+
+                                {/* Bills Section */}
+                                {expense.bills && expense.bills.length > 0 && (
+                                  <div className="details-section-inline">
+                                    <h4><i className="fas fa-paperclip"></i> Bills & Receipts ({expense.bills.length})</h4>
+                                    <div className="inline-bills-grid">
+                                      {expense.bills.map((bill, idx) => (
+                                        <div key={idx} className="inline-bill-card">
+                                          <div className="inline-bill-icon">
+                                            <i className={`fas ${bill.filePath?.match(/\.pdf$/i) ? 'fa-file-pdf' : 'fa-image'}`}></i>
+                                          </div>
+                                          <span className="inline-bill-name">{bill.fileName}</span>
+                                          <button
+                                            className="inline-bill-view"
+                                            onClick={async () => {
+                                              try {
+                                                const res = await api.get(`/api/expenses/${expense._id}/bills/${idx}/view`, { responseType: 'blob' });
+                                                const url = URL.createObjectURL(res.data);
+                                                window.open(url, '_blank');
+                                              } catch (e) {
+                                                Swal.fire('Error', 'Could not open bill', 'error');
+                                              }
+                                            }}
+                                          >
+                                            <i className="fas fa-external-link-alt"></i>
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Timeline Section */}
+                                {expense.timeline && expense.timeline.length > 0 && (
+                                  <div className="details-section-inline">
+                                    <h4><i className="fas fa-history"></i> Timeline & History</h4>
+                                    <div className="inline-timeline">
+                                      {expense.timeline.map((entry, idx) => {
+                                        const cfg = timelineConfig[entry.status] || timelineConfig.SUBMITTED;
+                                        return (
+                                          <div key={idx} className="inline-timeline-item">
+                                            <div className="inline-timeline-dot" style={{ background: cfg.color }}></div>
+                                            <div className="inline-timeline-content">
+                                              <div className="inline-timeline-header">
+                                                <span className="inline-timeline-status" style={{ color: cfg.color }}>
+                                                  <i className={`fas ${cfg.icon}`}></i> {entry.status}
+                                                </span>
+                                                <span className="inline-timeline-time">{new Date(entry.timestamp).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                                              </div>
+                                              <div className="inline-timeline-actor">By: {entry.actorName}</div>
+                                              {entry.note && <div className="inline-timeline-note">{entry.note}</div>}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Rejection Reason */}
+                                {expense.status === 'REJECTED' && expense.rejectionReason && (
+                                  <div className="details-section-inline rejection-inline">
+                                    <h4><i className="fas fa-exclamation-circle"></i> Rejection Reason</h4>
+                                    <p className="inline-rejection-text">{expense.rejectionReason}</p>
+                                  </div>
+                                )}
+
+                                {/* Payment Note */}
+                                {expense.status === 'REIMBURSED' && expense.reimbursementNote && (
+                                  <div className="details-section-inline payment-inline">
+                                    <h4><i className="fas fa-check-circle"></i> Payment Note</h4>
+                                    <p className="inline-payment-text">{expense.reimbursementNote}</p>
                                   </div>
                                 )}
                               </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Bills Preview */}
-                  {expense.bills && expense.bills.length > 0 && (
-                    <div className="bills-preview">
-                      <div className="bills-preview-header">
-                        <i className="fas fa-paperclip"></i>
-                        <span>{expense.bills.length} bill{expense.bills.length > 1 ? 's' : ''}</span>
-                      </div>
-                      <div className="bills-thumbs">
-                        {expense.bills.slice(0, 3).map((bill, idx) => (
-                          <button
-                            key={idx}
-                            className="bill-thumb"
-                            onClick={() => window.open(`/api/expenses/${expense._id}/bills/${idx}/view`, '_blank')}
-                            title={bill.fileName}
-                          >
-                            <i className={`fas ${bill.filePath?.match(/\.pdf$/i) ? 'fa-file-pdf' : 'fa-image'}`}></i>
-                          </button>
-                        ))}
-                        {expense.bills.length > 3 && (
-                          <div className="bill-more">+{expense.bills.length - 3}</div>
+                            </td>
+                          </tr>
                         )}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Accordion View */}
+            <div className="expenses-accordion-mobile">
+              {sortedExpenses.map(expense => {
+                const statusStyle = getStatusStyle(expense.status);
+                const categoryIcon = getCategoryIcon(expense.category);
+                const isExpanded = expandedExpense === expense._id;
+                
+                return (
+                  <div key={expense._id} className={`accordion-item ${isExpanded ? 'expanded' : ''}`}>
+                    {/* Accordion Header */}
+                    <div className="accordion-header" onClick={() => setExpandedExpense(isExpanded ? null : expense._id)}>
+                      <div className="accordion-header-left">
+                        <div className="accordion-icon" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+                          <i className={`fas ${categoryIcon}`}></i>
+                        </div>
+                        <div className="accordion-info">
+                          <div className="accordion-title">{expense.title}</div>
+                          <div className="accordion-meta">
+                            <span className="accordion-date">
+                              <i className="fas fa-calendar"></i>
+                              {new Date(expense.expenseDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                            </span>
+                            <span className="accordion-category">{expense.category}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="accordion-header-right">
+                        <div className="accordion-amount">₹{expense.amount?.toLocaleString('en-IN')}</div>
+                        <span className="accordion-status" style={{ background: statusStyle.bg, color: statusStyle.text }}>
+                          <i className={`fas ${statusStyle.icon}`}></i>
+                        </span>
+                        <i className={`fas fa-chevron-${isExpanded ? 'up' : 'down'} accordion-toggle`}></i>
                       </div>
                     </div>
-                  )}
 
-                  {/* Card Footer */}
-                  <div className="expense-card-footer">
-                    <div className="status-badge" style={{ background: statusStyle.bg, color: statusStyle.text, border: `1.5px solid ${statusStyle.border}` }}>
-                      <i className={`fas ${statusStyle.icon}`}></i>
-                      {statusStyle.label}
-                    </div>
+                    {/* Accordion Content */}
+                    {isExpanded && (
+                      <div className="accordion-content">
+                        {/* Duplicate Warning for Managers/HR */}
+                        {isManagerOrHR && expense.hasPotentialDuplicates && (
+                          <div className="accordion-detail full-width duplicate-warning-mobile">
+                            <span className="detail-label"><i className="fas fa-exclamation-triangle"></i> Potential Duplicate</span>
+                            <div className="duplicate-warning-box">
+                              <p>This expense appears similar to {expense.duplicateCount} other expense(s):</p>
+                              {expense.potentialDuplicates?.map((dup, idx) => (
+                                <div key={idx} className="duplicate-item-mobile">
+                                  <div className="duplicate-mobile-title">{dup.title}</div>
+                                  <div className="duplicate-mobile-info">
+                                    <span>₹{dup.amount?.toLocaleString('en-IN')}</span>
+                                    <span>{new Date(dup.date).toLocaleDateString('en-IN')}</span>
+                                    <span className="duplicate-mobile-status" style={{ 
+                                      background: getStatusStyle(dup.status).bg, 
+                                      color: getStatusStyle(dup.status).text 
+                                    }}>
+                                      {getStatusStyle(dup.status).label}
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
 
-                    <div className="card-actions">
-                      {isEmployee && canOperate && expense.status === 'REJECTED' && (
-                        <>
-                          <button className="action-btn edit" onClick={() => openEdit(expense)} title="Edit & Resubmit">
-                            <i className="fas fa-edit"></i>
-                          </button>
-                          <button className="action-btn delete" onClick={() => handleDelete(expense._id)} title="Delete">
-                            <i className="fas fa-trash"></i>
-                          </button>
-                        </>
-                      )}
-                      {isEmployee && canOperate && expense.status === 'SUBMITTED' && (
-                        <button className="action-btn delete" onClick={() => handleDelete(expense._id)} title="Delete">
-                          <i className="fas fa-trash"></i>
-                        </button>
-                      )}
-                      {isManagerOrHR && expense.status === 'SUBMITTED' && (
-                        <>
-                          <button className="action-btn approve" onClick={() => handleApproveReject(expense._id, 'APPROVED')} title="Approve">
-                            <i className="fas fa-check"></i>
-                          </button>
-                          <button className="action-btn reject" onClick={() => {
-                            setRejectingExpenseId(expense._id);
-                            setShowRejectModal(true);
-                          }} title="Reject">
-                            <i className="fas fa-times"></i>
-                          </button>
-                        </>
-                      )}
-                      {isHROrAdmin && expense.status === 'APPROVED' && (
-                        <button className="action-btn-reimburse" onClick={() => {
-                          setReimbursingExpenseId(expense._id);
-                          setShowReimburseModal(true);
-                        }} title="Mark as Paid">
-                          <i className="fas fa-wallet"></i> Mark as Paid
-                        </button>
-                      )}
-                    </div>
+                        {isManagerOrHR && expense.employeeId && (
+                          <div className="accordion-detail">
+                            <span className="detail-label"><i className="fas fa-user"></i> Employee</span>
+                            <span className="detail-value">{expense.employeeId.firstName} {expense.employeeId.lastName}</span>
+                          </div>
+                        )}
+                        {expense.employeeId?.department && (
+                          <div className="accordion-detail">
+                            <span className="detail-label"><i className="fas fa-building"></i> Department</span>
+                            <span className="detail-value">{expense.employeeId.department}</span>
+                          </div>
+                        )}
+                        {expense.description && (
+                          <div className="accordion-detail full-width">
+                            <span className="detail-label"><i className="fas fa-align-left"></i> Description</span>
+                            <span className="detail-value">{expense.description}</span>
+                          </div>
+                        )}
+                        <div className="accordion-detail">
+                          <span className="detail-label"><i className="fas fa-info-circle"></i> Status</span>
+                          <span className="detail-value">
+                            <span className="mobile-status-badge" style={{ background: statusStyle.bg, color: statusStyle.text, border: `1.5px solid ${statusStyle.border}` }}>
+                              <i className={`fas ${statusStyle.icon}`}></i>
+                              {statusStyle.label}
+                            </span>
+                          </span>
+                        </div>
+
+                        {/* Bills */}
+                        {expense.bills && expense.bills.length > 0 && (
+                          <div className="accordion-detail full-width">
+                            <span className="detail-label"><i className="fas fa-paperclip"></i> Bills ({expense.bills.length})</span>
+                            <div className="accordion-bills">
+                              {expense.bills.map((bill, idx) => (
+                                <button
+                                  key={idx}
+                                  className="accordion-bill-btn"
+                                  onClick={async () => {
+                                    try {
+                                      const res = await api.get(`/api/expenses/${expense._id}/bills/${idx}/view`, { responseType: 'blob' });
+                                      const url = URL.createObjectURL(res.data);
+                                      window.open(url, '_blank');
+                                    } catch (e) {
+                                      Swal.fire('Error', 'Could not open bill', 'error');
+                                    }
+                                  }}
+                                >
+                                  <i className={`fas ${bill.filePath?.match(/\.pdf$/i) ? 'fa-file-pdf' : 'fa-image'}`}></i>
+                                  {bill.fileName.substring(0, 15)}...
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Timeline */}
+                        {expense.timeline && expense.timeline.length > 0 && (
+                          <div className="accordion-detail full-width">
+                            <span className="detail-label"><i className="fas fa-history"></i> History</span>
+                            <div className="accordion-timeline">
+                              {expense.timeline.map((entry, idx) => {
+                                const cfg = timelineConfig[entry.status] || timelineConfig.SUBMITTED;
+                                return (
+                                  <div key={idx} className="timeline-entry">
+                                    <div className="timeline-dot" style={{ background: cfg.color }}></div>
+                                    <div className="timeline-info">
+                                      <span className="timeline-status" style={{ color: cfg.color }}>{entry.status}</span>
+                                      <span className="timeline-actor">{entry.actorName}</span>
+                                      <span className="timeline-time">{new Date(entry.timestamp).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                                      {entry.note && <div className="timeline-note">{entry.note}</div>}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Actions */}
+                        <div className="accordion-actions">
+                          {isEmployee && canOperate && expense.status === 'REJECTED' && (
+                            <>
+                              <button className="accordion-action-btn edit" onClick={() => openEdit(expense)}>
+                                <i className="fas fa-edit"></i> Edit
+                              </button>
+                              <button className="accordion-action-btn delete" onClick={() => handleDelete(expense._id)}>
+                                <i className="fas fa-trash"></i> Delete
+                              </button>
+                            </>
+                          )}
+                          {isEmployee && canOperate && expense.status === 'SUBMITTED' && (
+                            <button className="accordion-action-btn delete" onClick={() => handleDelete(expense._id)}>
+                              <i className="fas fa-trash"></i> Delete
+                            </button>
+                          )}
+                          {isManagerOrHR && expense.status === 'SUBMITTED' && (
+                            <>
+                              <button className="accordion-action-btn approve" onClick={() => handleApproveReject(expense._id, 'APPROVED')}>
+                                <i className="fas fa-check"></i> Approve
+                              </button>
+                              <button className="accordion-action-btn reject" onClick={() => {
+                                setRejectingExpenseId(expense._id);
+                                setShowRejectModal(true);
+                              }}>
+                                <i className="fas fa-times"></i> Reject
+                              </button>
+                            </>
+                          )}
+                          {isHROrAdmin && expense.status === 'APPROVED' && (
+                            <button className="accordion-action-btn reimburse" onClick={() => {
+                              setReimbursingExpenseId(expense._id);
+                              setShowReimburseModal(true);
+                            }}>
+                              <i className="fas fa-wallet"></i> Mark as Paid
+                            </button>
+                          )}
+                          {isHROrAdmin && (
+                            <button 
+                              className="accordion-action-btn admin-delete" 
+                              onClick={async () => {
+                                const { value: reason } = await Swal.fire({
+                                  title: 'Delete Expense?',
+                                  input: 'textarea',
+                                  inputLabel: 'Deletion Reason (Required)',
+                                  inputPlaceholder: 'e.g., Duplicate entry, Fraudulent claim',
+                                  showCancelButton: true,
+                                  confirmButtonColor: '#dc2626',
+                                  confirmButtonText: 'Delete',
+                                  inputValidator: (value) => !value && 'Please provide a reason'
+                                });
+                                if (reason) {
+                                  try {
+                                    await api.delete(`/api/expenses/${expense._id}`, {
+                                      data: { deletionReason: reason }
+                                    });
+                                    swal.success('Expense deleted');
+                                    fetchExpenses();
+                                  } catch (error) {
+                                    swal.error(error.response?.data?.message || 'Error');
+                                  }
+                                }
+                              }}
+                            >
+                              <i className="fas fa-trash-alt"></i> Admin Delete
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          </>
         ) : (
           <div className="empty-state">
             <div className="empty-icon">
@@ -606,7 +1627,9 @@ const handleMarkReimbursed = async () => {
             )}
           </div>
         )}
-      </div>
+          </div>
+        </>
+      )}
 
       {/* ═══ MODAL ═══ */}
       {showModal && (
@@ -654,13 +1677,13 @@ const handleMarkReimbursed = async () => {
                       value={expenseForm.category}
                       onChange={(e) => setExpenseForm({ ...expenseForm, category: e.target.value })}
                     >
-                      <option value="TRAVEL">✈️ Travel</option>
-                      <option value="MEALS">🍽️ Meals</option>
-                      <option value="ACCOMMODATION">🏨 Accommodation</option>
-                      <option value="TRANSPORT">🚗 Transport</option>
-                      <option value="OFFICE_SUPPLIES">📦 Office Supplies</option>
-                      <option value="TRAINING">🎓 Training</option>
-                      <option value="OTHER">📋 Other</option>
+                      <option value="TRAVEL">Travel</option>
+                      <option value="MEALS">Meals</option>
+                      <option value="ACCOMMODATION">Accommodation</option>
+                      <option value="TRANSPORT">Transport</option>
+                      <option value="OFFICE_SUPPLIES">Office Supplies</option>
+                      <option value="TRAINING">Training</option>
+                      <option value="OTHER">Other</option>
                     </select>
                   </div>
                 </div>
@@ -919,6 +1942,8 @@ const handleMarkReimbursed = async () => {
           </div>
         </div>
       )}
+
+
     </div>
   );
 };

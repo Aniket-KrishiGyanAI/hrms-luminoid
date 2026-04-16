@@ -4,6 +4,9 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const compression = require('compression');
+const { initCache } = require('./config/cache');
+const logger = require('./utils/logger');
 
 const authRoutes = require('./routes/auth');
 const leaveTypeRoutes = require('./routes/leaveTypes');
@@ -34,10 +37,13 @@ const fieldClientRoutes = require('./routes/fieldClients');
 const fieldVisitRoutes = require('./routes/fieldVisits');
 const visitPlanRoutes = require('./routes/visitPlans');
 const fieldReportRoutes = require('./routes/fieldReports');
-const journeyRoutes = require('./routes/journey');
 const fpoFormRoutes = require('./routes/fpoForms');
+const consentRoutes = require('./routes/consent');
+const attendancePolicyRoutes = require('./routes/attendancePolicy');
 
 const seedDefaultOffice = require('./utils/seedOfficeLocation');
+const sanitizeInput = require('./middleware/sanitize');
+const { performanceMonitor, getPerformanceStats } = require('./middleware/performanceMonitor');
 
 // Initialize cron jobs
 require('./utils/cronJobs');
@@ -54,22 +60,100 @@ if (!fs.existsSync(receiptsDir)) {
 
 const app = express();
 
-// Middleware
+// Enable gzip compression
+app.use(compression());
+
+// Rate limiting configuration with separate limits for different endpoints
+const rateLimit = new Map();
+
+// Clean up old entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, record] of rateLimit.entries()) {
+    if (now > record.resetTime + 60000) { // 1 minute after reset
+      rateLimit.delete(key);
+    }
+  }
+}, 5 * 60 * 1000);
+
+const rateLimitMiddleware = (maxRequests, windowMs, identifier = 'ip') => (req, res, next) => {
+  // Use email for login attempts, IP for other requests
+  const key = identifier === 'email' && req.body.email 
+    ? `${req.body.email}:${req.path}` 
+    : `${req.ip}:${req.path}`;
+  
+  const now = Date.now();
+  const record = rateLimit.get(key) || { count: 0, resetTime: now + windowMs };
+  
+  if (now > record.resetTime) {
+    record.count = 0;
+    record.resetTime = now + windowMs;
+  }
+  
+  record.count++;
+  rateLimit.set(key, record);
+  
+  if (record.count > maxRequests) {
+    const retryAfter = Math.ceil((record.resetTime - now) / 1000);
+    res.set('Retry-After', retryAfter);
+    return res.status(429).json({ 
+      message: 'Too many requests, please try again later',
+      retryAfter: retryAfter
+    });
+  }
+  
+  // Add rate limit headers
+  res.set('X-RateLimit-Limit', maxRequests);
+  res.set('X-RateLimit-Remaining', Math.max(0, maxRequests - record.count));
+  res.set('X-RateLimit-Reset', new Date(record.resetTime).toISOString());
+  
+  next();
+};
+
+// CORS configuration
+const allowedOrigins = process.env.NODE_ENV === 'production'
+  ? (process.env.CORS_ORIGINS || '').split(',').filter(Boolean)
+  : ['http://localhost:3000', 'http://localhost:5000'];
+
 app.use(cors({
-  origin: true,
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true);
+    
+    if (process.env.NODE_ENV === 'development') {
+      return callback(null, true);
+    }
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma', 'Expires']
 }));
 app.use(express.json());
+app.use(sanitizeInput); // Prevent NoSQL injection
+app.use(performanceMonitor); // Track request performance
 app.set('trust proxy', true);
 
-// Serve static files from uploads directory
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Serve static files from uploads directory with caching
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+  maxAge: '7d',
+  etag: true,
+  lastModified: true
+}));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Server is running' });
+  res.json({ 
+    status: 'ok', 
+    message: 'Server is running',
+    performance: getPerformanceStats(),
+    cache: process.env.REDIS_URL ? 'enabled' : 'disabled'
+  });
 });
 
 // ── Email Preview Endpoints (development only) ──
@@ -153,8 +237,7 @@ app.get('/api/preview/expense-reminder', (req, res) => {
   `);
 });
 
-// Routes
-app.use('/api/auth', authRoutes);
+// Routes - rate limiting applied selectively
 app.use('/api/leave-types', leaveTypeRoutes);
 app.use('/api/leave-balances', leaveBalanceRoutes);
 app.use('/api/leave-requests', leaveRequestRoutes);
@@ -183,13 +266,15 @@ app.use('/api/field-clients', fieldClientRoutes);
 app.use('/api/field-visits', fieldVisitRoutes);
 app.use('/api/visit-plans', visitPlanRoutes);
 app.use('/api/field-reports', fieldReportRoutes);
-app.use('/api/journey', journeyRoutes);
 app.use('/api/fpo-forms', fpoFormRoutes);
+app.use('/api/consent', consentRoutes);
+app.use('/api/attendance-policy', attendancePolicyRoutes);
+app.use('/api/auth', authRoutes); // Auth routes without rate limiting
 app.use('/uploads/visit-photos', express.static(require('path').join(__dirname, 'uploads/visit-photos')));
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  logger.error('Server error:', { error: err.message, stack: err.stack });
   res.status(500).json({ message: 'Something went wrong!' });
 });
 
@@ -201,14 +286,15 @@ app.use('*', (req, res) => {
 // Database connection
 mongoose.connect(process.env.MONGODB_URI)
   .then(async () => {
-    console.log('Connected to MongoDB');
+    logger.info('Connected to MongoDB');
     await seedDefaultOffice();
+    await initCache();
   })
-  .catch(err => console.error('MongoDB connection error:', err));
+  .catch(err => logger.error('MongoDB connection error:', { error: err.message }));
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Local: http://localhost:${PORT}`);
-  console.log(`Network: http://192.168.1.60:${PORT}`);
+  logger.info(`Server running on port ${PORT}`);
+  logger.info(`Local: http://localhost:${PORT}`);
+  logger.info(`Network: http://192.168.1.60:${PORT}`);
 });

@@ -1,9 +1,11 @@
 const WorkLog = require('../models/WorkLog');
 const User = require('../models/User');
 const ExcelJS = require('exceljs');
+const logger = require('../utils/logger');
 
 exports.createWorkLog = async (req, res) => {
   try {
+    logger.info('createWorkLog', { userId: req.user?.id });
     const { workDone, hoursSpent, category, date, project } = req.body;
     
     // Check for duplicate
@@ -37,12 +39,15 @@ exports.createWorkLog = async (req, res) => {
     await workLog.save();
     res.status(201).json(workLog);
   } catch (error) {
+    logger.error('createWorkLog error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ message: 'Error creating work log' });
   }
 };
 
 exports.createBulkWorkLog = async (req, res) => {
   try {
+    logger.info('createBulkWorkLog', { userId: req.user?.id });
     const { logs } = req.body;
     const workLogs = [];
     
@@ -73,12 +78,15 @@ exports.createBulkWorkLog = async (req, res) => {
     const created = await WorkLog.insertMany(workLogs);
     res.status(201).json(created);
   } catch (error) {
+    logger.error('createBulkWorkLog error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ message: 'Error creating bulk work logs' });
   }
 };
 
 exports.getMyWorkLogs = async (req, res) => {
   try {
+    logger.info('getMyWorkLogs', { userId: req.user?.id });
     const { page = 1, limit = 20 } = req.query;
     const skip = (page - 1) * limit;
     
@@ -92,12 +100,15 @@ exports.getMyWorkLogs = async (req, res) => {
     
     res.json({ logs, total, page: parseInt(page), pages: Math.ceil(total / limit) });
   } catch (error) {
+    logger.error('getMyWorkLogs error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ message: 'Error fetching work logs' });
   }
 };
 
 exports.getAllWorkLogs = async (req, res) => {
   try {
+    logger.info('getAllWorkLogs', { userId: req.user?.id });
     if (!['ADMIN', 'HR', 'MANAGER'].includes(req.user.role)) {
       return res.status(403).json({ message: 'Not authorized' });
     }
@@ -127,12 +138,15 @@ exports.getAllWorkLogs = async (req, res) => {
     
     res.json({ logs, total, stats, page: parseInt(page), pages: Math.ceil(total / limit) });
   } catch (error) {
+    logger.error('getAllWorkLogs error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ message: 'Error fetching work logs' });
   }
 };
 
 exports.exportWorkLogs = async (req, res) => {
   try {
+    logger.info('exportWorkLogs', { userId: req.user?.id });
     if (!['ADMIN', 'HR', 'MANAGER'].includes(req.user.role)) {
       return res.status(403).json({ message: 'Not authorized' });
     }
@@ -196,12 +210,15 @@ exports.exportWorkLogs = async (req, res) => {
     await workbook.xlsx.write(res);
     res.end();
   } catch (error) {
+    logger.error('exportWorkLogs error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ message: 'Error exporting work logs' });
   }
 };
 
 exports.checkTodayLog = async (req, res) => {
   try {
+    logger.info('checkTodayLog', { userId: req.user?.id });
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
@@ -214,12 +231,15 @@ exports.checkTodayLog = async (req, res) => {
     
     res.json({ hasLoggedToday: !!log });
   } catch (error) {
+    logger.error('checkTodayLog error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ message: 'Error checking log' });
   }
 };
 
 exports.updateWorkLog = async (req, res) => {
   try {
+    logger.info('updateWorkLog', { userId: req.user?.id });
     const workLog = await WorkLog.findById(req.params.id).populate('userId');
     if (!workLog) {
       return res.status(404).json({ message: 'Work log not found' });
@@ -255,12 +275,15 @@ exports.updateWorkLog = async (req, res) => {
     
     res.json(updated);
   } catch (error) {
+    logger.error('updateWorkLog error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ message: 'Error updating work log' });
   }
 };
 
 exports.deleteWorkLog = async (req, res) => {
   try {
+    logger.info('deleteWorkLog', { userId: req.user?.id });
     const workLog = await WorkLog.findById(req.params.id);
     if (!workLog) {
       return res.status(404).json({ message: 'Work log not found' });
@@ -285,12 +308,15 @@ exports.deleteWorkLog = async (req, res) => {
     await WorkLog.findByIdAndDelete(req.params.id);
     res.json({ message: 'Work log deleted successfully' });
   } catch (error) {
+    logger.error('deleteWorkLog error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ message: 'Error deleting work log' });
   }
 };
 
 exports.addComment = async (req, res) => {
   try {
+    logger.info('addComment', { userId: req.user?.id });
     if (!['ADMIN', 'HR', 'MANAGER'].includes(req.user.role)) {
       return res.status(403).json({ message: 'Not authorized' });
     }
@@ -308,12 +334,15 @@ exports.addComment = async (req, res) => {
     
     res.json(workLog);
   } catch (error) {
+    logger.error('addComment error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ message: 'Error adding comment' });
   }
 };
 
 exports.getWorkLogById = async (req, res) => {
   try {
+    logger.info('getWorkLogById', { userId: req.user?.id });
     const workLog = await WorkLog.findById(req.params.id)
       .populate('userId', 'firstName lastName email department')
       .populate('comments.userId', 'firstName lastName');
@@ -332,6 +361,8 @@ exports.getWorkLogById = async (req, res) => {
     
     res.json(workLog);
   } catch (error) {
+    logger.error('getWorkLogById error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ message: 'Error fetching work log' });
   }
 };

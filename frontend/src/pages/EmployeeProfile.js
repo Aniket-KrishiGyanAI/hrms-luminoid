@@ -257,6 +257,11 @@ const EmployeeProfile = () => {
           color: #334155;
           margin-bottom: 6px;
           font-size: 0.85rem;
+          display: block;
+        }
+        .employee-profile-page .form-label i {
+          margin-right: 0.4rem;
+          color: #10b981;
         }
         .employee-profile-page .form-control,
         .employee-profile-page .form-select {
@@ -278,12 +283,10 @@ const EmployeeProfile = () => {
           margin-bottom: 18px;
           padding-bottom: 10px;
           border-bottom: 2px solid #d1fae5;
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
         }
         .employee-profile-page .section-title i {
           color: #10b981;
+          margin-right: 0.5rem;
         }
         .employee-profile-page .btn-save {
           background: linear-gradient(135deg, #064e3b 0%, #10b981 100%);
@@ -388,7 +391,7 @@ const EmployeeProfile = () => {
 
         <Card className="profile-info-card mb-4">
           <Card.Body className="p-4">
-            <h5 className="section-title"><i className="fas fa-user-edit me-2 text-primary"></i>Basic Information</h5>
+            <h5 className="section-title"><i className="fas fa-user-edit"></i>Basic Information</h5>
             <Row className="g-3">
               <Col md={4}>
                 <Form.Group>
@@ -421,7 +424,7 @@ const EmployeeProfile = () => {
           <Tab eventKey="personal" title={<><i className="fas fa-user me-2"></i>Personal Info</>}>
             <Card className="profile-info-card">
               <Card.Body className="p-4">
-                <h5 className="section-title"><i className="fas fa-address-card me-2 text-primary"></i>Personal Details</h5>
+                <h5 className="section-title"><i className="fas fa-address-card"></i>Personal Details</h5>
                 <Row>
                   <Col md={6}>
                     <Form.Group className="mb-3">
@@ -493,7 +496,7 @@ const EmployeeProfile = () => {
                     </Form.Group>
                   </Col>
                 </Row>
-                <h5 className="section-title mt-4"><i className="fas fa-map-marker-alt me-2 text-primary"></i>Address Information</h5>
+                <h5 className="section-title mt-4"><i className="fas fa-map-marker-alt"></i>Address Information</h5>
                 <Row>
                   <Col md={12}>
                     <Form.Group className="mb-3">
@@ -546,7 +549,7 @@ const EmployeeProfile = () => {
           <Tab eventKey="professional" title={<><i className="fas fa-briefcase me-2"></i>Professional Info</>}>
             <Card className="profile-info-card">
               <Card.Body className="p-4">
-                <h5 className="section-title"><i className="fas fa-id-card me-2 text-primary"></i>Professional Details</h5>
+                <h5 className="section-title"><i className="fas fa-id-card"></i>Professional Details</h5>
                 <Row>
                   <Col md={6}>
                     <Form.Group className="mb-3">
@@ -642,7 +645,7 @@ const EmployeeProfile = () => {
           <Tab eventKey="bank" title={<><i className="fas fa-university me-2"></i>Bank Details</>}>
             <Card className="profile-info-card">
               <Card.Body className="p-4">
-                <h5 className="section-title"><i className="fas fa-piggy-bank me-2 text-primary"></i>Banking Information</h5>
+                <h5 className="section-title"><i className="fas fa-piggy-bank"></i>Banking Information</h5>
                 <Row>
                   <Col md={6}>
                     <Form.Group className="mb-3">

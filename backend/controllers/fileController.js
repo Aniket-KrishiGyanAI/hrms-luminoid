@@ -1,6 +1,7 @@
 const File = require('../models/File');
 const DocumentAcknowledgment = require('../models/DocumentAcknowledgment');
 const s3 = require('../config/s3');
+const logger = require('../utils/logger');
 
 const getFiles = async (req, res) => {
   try {
@@ -16,7 +17,8 @@ const getFiles = async (req, res) => {
         { type: 'ORGANIZATION', isPublic: true },
         { type: 'ORGANIZATION', 'visibility.type': 'ROLES', 'visibility.roles': req.user.role },
         { type: 'ORGANIZATION', 'visibility.type': 'SPECIFIC_EMPLOYEES', 'visibility.employees': req.user.id },
-        { type: 'EMPLOYEE', targetUserId: req.user.id }
+        { type: 'EMPLOYEE', targetUserId: new mongoose.Types.ObjectId(req.user.id) },
+        { type: 'HR_DOCUMENT', targetUserId: new mongoose.Types.ObjectId(req.user.id) }
       ];
       if (isValidObjectId(req.user.department)) {
         orConditions.push({ type: 'ORGANIZATION', 'visibility.type': 'DEPARTMENTS', 'visibility.departments': req.user.department });
@@ -29,7 +31,8 @@ const getFiles = async (req, res) => {
         { type: 'ORGANIZATION', isPublic: true },
         { type: 'ORGANIZATION', 'visibility.type': 'ROLES', 'visibility.roles': 'MANAGER' },
         { type: 'ORGANIZATION', 'visibility.type': 'SPECIFIC_EMPLOYEES', 'visibility.employees': req.user.id },
-        { type: 'EMPLOYEE' }
+        { type: 'EMPLOYEE' },
+        { type: 'HR_DOCUMENT', targetUserId: req.user.id }
       ];
       if (isValidObjectId(req.user.department)) {
         orConditions.push({ type: 'ORGANIZATION', 'visibility.type': 'DEPARTMENTS', 'visibility.departments': req.user.department });
@@ -77,8 +80,7 @@ const uploadFile = async (req, res) => {
 
     // Employee validation
     if (req.user.role === 'EMPLOYEE') {
-      // Employee can only upload EMPLOYEE type for themselves
-      if (req.body.type !== 'EMPLOYEE') {
+      if (!['EMPLOYEE'].includes(req.body.type)) {
         return res.status(403).json({ message: 'Employees can only upload employee documents' });
       }
       
@@ -128,6 +130,9 @@ const uploadFile = async (req, res) => {
       size: req.file.size,
       mimeType: req.file.mimetype,
       type: req.body.type,
+      subType: req.body.subType || null,
+      month: req.body.month ? Number(req.body.month) : null,
+      year: req.body.year ? Number(req.body.year) : null,
       category: req.body.category,
       uploadedBy: req.user.id,
       targetUserId: req.body.targetUserId,
@@ -136,7 +141,8 @@ const uploadFile = async (req, res) => {
       description: req.body.description,
       requiresAcknowledgment: req.body.requiresAcknowledgment === 'true',
       folderId: req.body.folderId || null,
-      expiryDate: req.body.expiryDate || null
+      expiryDate: req.body.expiryDate || null,
+      isHRGenerated: req.body.type === 'HR_DOCUMENT'
     });
 
     await file.save();
@@ -149,19 +155,19 @@ const uploadFile = async (req, res) => {
 
 const downloadFile = async (req, res) => {
   try {
-    // console.log('Download request for file ID:', req.params.id);
+    // 
     
     const file = await File.findById(req.params.id);
     if (!file) {
-      // console.log('File not found:', req.params.id);
+      // 
       return res.status(404).json({ message: 'File not found' });
     }
 
-    // console.log('File found:', file.name, 'S3 Key:', file.s3Key);
+    // 
 
-    if (req.user.role === 'EMPLOYEE' && file.type === 'EMPLOYEE' && 
+    if (req.user.role === 'EMPLOYEE' && ['EMPLOYEE', 'HR_DOCUMENT'].includes(file.type) &&
         file.targetUserId.toString() !== req.user.id) {
-      // console.log('Access denied for user:', req.user.id, 'file target:', file.targetUserId);
+      // 
       return res.status(403).json({ message: 'Access denied' });
     }
 
@@ -171,11 +177,11 @@ const downloadFile = async (req, res) => {
       Expires: 3600
     };
 
-    // console.log('Generating signed URL with params:', downloadParams);
+    // 
 
     try {
       const signedUrl = s3.getSignedUrl('getObject', downloadParams);
-      // console.log('Signed URL generated successfully');
+      // 
       
       res.json({ downloadUrl: signedUrl, fileName: file.originalName });
     } catch (s3Error) {

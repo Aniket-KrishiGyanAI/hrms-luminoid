@@ -21,6 +21,11 @@
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+  margin-top: 20px;
+}
+
+.notification-bell svg {
+  margin-top: 0;
 }
 
 .notification-bell:hover {
@@ -56,8 +61,8 @@
 /* Badge Count */
 .notification-badge-count {
   position: absolute;
-  top: -6px;
-  right: -6px;
+  top: 2px;
+  right: 2px;
   min-width: 20px;
   height: 20px;
   padding: 0 6px;

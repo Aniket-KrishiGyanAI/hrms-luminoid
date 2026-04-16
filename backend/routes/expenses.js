@@ -1,55 +1,37 @@
 const express = require("express");
-const path = require("path");
-const multer = require("multer");
 const {
   getExpenses,
+  getDeletedExpenses,
   createExpense,
   updateExpense,
   deleteExpense,
+  restoreExpense,
   approveRejectExpense,
   uploadBills,
   deleteBill,
   serveBill,
 } = require("../controllers/expenseController");
+const { getExpenseAnalytics } = require("../controllers/expenseAnalyticsController");
 const { auth, authorize } = require("../middleware/auth");
+const { uploadReceipt } = require("../utils/s3Utils");
 
 const router = express.Router();
 
-const ALLOWED_MIMETYPES = ['image/jpeg', 'image/png', 'application/pdf'];
-const ALLOWED_EXTENSIONS = /\.(jpeg|jpg|png|pdf)$/i;
+// Analytics route MUST come before /:id routes to avoid conflicts
+router.get("/analytics", auth, getExpenseAnalytics);
+router.get("/deleted", auth, getDeletedExpenses);
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, "uploads/receipts/"),
-  filename: (req, file, cb) => {
-    // Sanitize: strip any path separators from original filename
-    const safeName = path.basename(file.originalname).replace(/[^a-zA-Z0-9._-]/g, '_');
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, "receipt-" + uniqueSuffix + "-" + safeName);
-  },
-});
-
-const upload = multer({
-  storage,
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (
-      ALLOWED_MIMETYPES.includes(file.mimetype) &&
-      ALLOWED_EXTENSIONS.test(file.originalname)
-    ) {
-      cb(null, true);
-    } else {
-      cb(new Error("Only JPEG, PNG, and PDF files are allowed!"));
-    }
-  },
-});
-
+// Main CRUD routes
 router.get("/", auth, getExpenses);
-router.post("/", auth, upload.array("bills", 10), createExpense);
-router.put("/:id", auth, upload.array("bills", 10), updateExpense);
-router.post("/:id/upload-bills", auth, upload.array("bills", 10), uploadBills);
-router.delete("/:id", auth, deleteExpense);
+router.post("/", auth, uploadReceipt.array("bills", 10), createExpense);
+
+// ID-specific routes
 router.get("/:id/bills/:billIndex/view", auth, serveBill);
 router.delete("/:id/bills/:billIndex", auth, deleteBill);
+router.post("/:id/upload-bills", auth, uploadReceipt.array("bills", 10), uploadBills);
+router.post("/:id/restore", auth, authorize("HR", "ADMIN"), restoreExpense);
+router.put("/:id", auth, uploadReceipt.array("bills", 10), updateExpense);
+router.delete("/:id", auth, deleteExpense);
 router.put(
   "/:id/approve-reject",
   auth,

@@ -5,13 +5,13 @@ const Attendance = require('../models/Attendance');
 
 async function fixMissingDurations() {
   try {
-    console.log('Connecting to MongoDB...');
+    
     const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
     if (!mongoUri) {
       throw new Error('MONGODB_URI or MONGO_URI not found in environment variables');
     }
     await mongoose.connect(mongoUri);
-    console.log('Connected successfully\n');
+    
 
     // Find records with both checkIn and checkOut but totalHours is 0 or null
     const records = await Attendance.find({
@@ -24,10 +24,10 @@ async function fixMissingDurations() {
       ]
     });
 
-    console.log(`Found ${records.length} records with missing duration\n`);
+    
 
     if (records.length === 0) {
-      console.log('✅ No records need fixing!');
+      
       process.exit(0);
     }
 
@@ -64,7 +64,7 @@ async function fixMissingDurations() {
 
         await record.save();
         
-        console.log(`✅ Fixed: ${record.userId} on ${record.date.toISOString().split('T')[0]} - Duration: ${totalHours.toFixed(2)}h`);
+        .split('T')[0]} - Duration: ${totalHours.toFixed(2)}h`);
         fixed++;
       } catch (error) {
         console.error(`❌ Error fixing record ${record._id}:`, error.message);
@@ -72,11 +72,11 @@ async function fixMissingDurations() {
       }
     }
 
-    console.log(`\n📊 Summary:`);
-    console.log(`   Fixed: ${fixed}`);
-    console.log(`   Errors: ${errors}`);
-    console.log(`   Total: ${records.length}`);
-    console.log('\n✅ Duration fix completed!');
+    
+    
+    
+    
+    
     
     process.exit(0);
   } catch (error) {

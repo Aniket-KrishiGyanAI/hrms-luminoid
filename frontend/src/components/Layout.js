@@ -122,21 +122,13 @@ const Layout = ({ children }) => {
   const getMenuItems = () => {
     const items = [
       { path: '/dashboard', label: 'Dashboard', icon: MdDashboard, roles: ['EMPLOYEE', 'MANAGER', 'HR', 'ADMIN'] },
-      { path: '/attendance', label: 'Attendance', icon: MdAccessTime, roles: ['EMPLOYEE', 'MANAGER', 'HR', 'ADMIN'] }
+      { path: '/attendance', label: 'Attendance', icon: MdAccessTime, roles: ['EMPLOYEE', 'MANAGER', 'HR', 'ADMIN'] },
+      { path: '/leave-management', label: 'Leave Management', icon: MdCalendarToday, roles: ['EMPLOYEE', 'MANAGER', 'HR', 'ADMIN'] }
     ];
-
-    if (user?.role === 'EMPLOYEE') {
-      items.push(
-        { path: '/apply-leave', label: 'Apply Leave', icon: MdAddCircle, roles: ['EMPLOYEE'] },
-        { path: '/my-leaves', label: 'My Leaves', icon: MdEventAvailable, roles: ['EMPLOYEE'] }
-      );
-    }
 
     if (['MANAGER', 'HR', 'ADMIN'].includes(user?.role)) {
       items.push(
-        { path: '/approvals', label: 'Pending Approvals', icon: MdCheckCircle, roles: ['MANAGER', 'HR', 'ADMIN'] },
-        { path: '/team-calendar', label: 'Team Calendar', icon: MdCalendarToday, roles: ['MANAGER', 'HR', 'ADMIN'] },
-        { path: '/employee-directory', label: 'Employee Directory', icon: MdPeople, roles: ['MANAGER', 'HR', 'ADMIN'] }
+        { path: '/organization', label: 'Organization', icon: MdPeople, roles: ['MANAGER', 'HR', 'ADMIN'] }
       );
     }
 
@@ -145,12 +137,6 @@ const Layout = ({ children }) => {
         { path: '/leave-types', label: 'Leave Types', icon: MdSettings, roles: ['HR', 'ADMIN'] },
         { path: '/announcements', label: 'Announcements', icon: MdCampaign, roles: ['HR', 'ADMIN'] },
         { path: '/reports', label: 'Reports', icon: MdBarChart, roles: ['HR', 'ADMIN'] }
-      );
-    }
-
-    if (user?.role === 'ADMIN') {
-      items.push(
-        { path: '/departments', label: 'Departments', icon: MdAccountTree, roles: ['ADMIN'] }
       );
     }
 
@@ -354,7 +340,7 @@ const Layout = ({ children }) => {
                   >
                     <IconComponent size={17} />
                     <span>{item.label}</span>
-                    {item.path === '/approvals' && pendingCount > 0 && (
+                    {item.path === '/leave-management' && pendingCount > 0 && (
                       <Badge bg="warning" pill style={{fontSize: '0.55rem', marginLeft: 'auto', padding: '0.15rem 0.4rem'}}>{pendingCount}</Badge>
                     )}
                   </a>
@@ -399,7 +385,7 @@ const Layout = ({ children }) => {
                 {notifications.map((notif) => (
                   <div 
                     key={notif._id} 
-                    onClick={() => { navigate('/approvals'); setShowNotifications(false); }}
+                    onClick={() => { navigate('/leave-management?tab=approvals'); setShowNotifications(false); }}
                     className="notification-card"
                   >
                     <div className="d-flex align-items-start gap-3">
@@ -436,7 +422,7 @@ const Layout = ({ children }) => {
                     <MdCheckCircle size={20} className="me-2" />
                     Mark All as Read
                   </button>
-                  <button className="btn btn-view-all" onClick={() => { navigate('/approvals'); setShowNotifications(false); }}>
+                  <button className="btn btn-view-all" onClick={() => { navigate('/leave-management?tab=approvals'); setShowNotifications(false); }}>
                     View All Approvals ({pendingCount})
                   </button>
                 </div>
@@ -514,7 +500,7 @@ const Layout = ({ children }) => {
                           {notifications.map((notif) => (
                             <Dropdown.Item 
                               key={notif._id} 
-                              onClick={() => navigate('/approvals')}
+                              onClick={() => navigate('/leave-management?tab=approvals')}
                               className="notification-item"
                             >
                               <div className="d-flex align-items-start">
@@ -557,7 +543,7 @@ const Layout = ({ children }) => {
                               Mark All as Read
                             </Button>
                           </div>
-                          <Dropdown.Item onClick={() => navigate('/approvals')} className="text-center fw-semibold" style={{color: '#f59e0b'}}>
+                          <Dropdown.Item onClick={() => navigate('/leave-management?tab=approvals')} className="text-center fw-semibold" style={{color: '#f59e0b'}}>
                             View All Approvals ({pendingCount})
                           </Dropdown.Item>
                         </>
@@ -625,7 +611,7 @@ const Layout = ({ children }) => {
                     <Dropdown.Item onClick={() => navigate('/attendance')}>
                       <MdAccessTime size={18} className="me-2" />Attendance
                     </Dropdown.Item>
-                    <Dropdown.Item onClick={() => navigate('/my-leaves')}>
+                    <Dropdown.Item onClick={() => navigate('/leave-management?tab=my-leaves')}>
                       <MdEventAvailable size={18} className="me-2" />My Leaves
                     </Dropdown.Item>
                     <Dropdown.Divider />

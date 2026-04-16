@@ -22,10 +22,24 @@ const dailyUpdateSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
+  title: {
+    type: String,
+    trim: true
+  },
   content: {
     type: String,
     required: true,
     trim: true
+  },
+  category: {
+    type: String,
+    enum: ['announcement', 'policy', 'achievement', 'event', 'training', 'spotlight', 'general'],
+    default: 'general'
+  },
+  priority: {
+    type: String,
+    enum: ['low', 'medium', 'high'],
+    default: 'low'
   },
   tags: [{
     type: String,
@@ -56,6 +70,8 @@ const dailyUpdateSchema = new mongoose.Schema({
 
 // Index for better query performance
 dailyUpdateSchema.index({ userId: 1, createdAt: -1 });
+dailyUpdateSchema.index({ category: 1 });
 dailyUpdateSchema.index({ tags: 1 });
+dailyUpdateSchema.index({ isPinned: -1, createdAt: -1 });
 
 module.exports = mongoose.model('DailyUpdate', dailyUpdateSchema);

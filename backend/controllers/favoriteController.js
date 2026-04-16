@@ -1,4 +1,5 @@
 const Favorite = require('../models/Favorite');
+const logger = require('../utils/logger');
 
 const getFavorites = async (req, res) => {
   try {

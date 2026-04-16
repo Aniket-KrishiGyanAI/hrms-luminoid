@@ -1,6 +1,7 @@
 const FieldReport = require('../models/FieldReport');
 const FieldVisit = require('../models/FieldVisit');
 const VisitPlan = require('../models/VisitPlan');
+const logger = require('../utils/logger');
 
 // Core report generation logic — reused by cron and on-demand
 const generateDailyReport = async (employeeId, date) => {
@@ -59,6 +60,7 @@ exports.generateDailyReport = generateDailyReport;
 
 exports.getMyReports = async (req, res) => {
   try {
+    logger.info('getMyReports', { userId: req.user?.id });
     const { startDate, endDate } = req.query;
     const filter = { employeeId: req.user.id };
     if (startDate || endDate) {
@@ -71,12 +73,15 @@ exports.getMyReports = async (req, res) => {
       .sort('-date');
     res.json(reports);
   } catch (error) {
+    logger.error('getMyReports error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ message: error.message });
   }
 };
 
 exports.getReports = async (req, res) => {
   try {
+    logger.info('getReports', { userId: req.user?.id });
     const { employeeId, startDate, endDate } = req.query;
     const filter = {};
     if (employeeId) filter.employeeId = employeeId;
@@ -108,12 +113,15 @@ exports.getReports = async (req, res) => {
       .sort('-date');
     res.json(reports);
   } catch (error) {
+    logger.error('getReports error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ message: error.message });
   }
 };
 
 exports.getDailyReport = async (req, res) => {
   try {
+    logger.info('getDailyReport', { userId: req.user?.id });
     const { date, employeeId } = req.params;
     const targetEmployee = employeeId || req.user.id;
     const start = new Date(date); start.setHours(0, 0, 0, 0);
@@ -132,12 +140,15 @@ exports.getDailyReport = async (req, res) => {
 
     res.json(report);
   } catch (error) {
+    logger.error('getDailyReport error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ message: error.message });
   }
 };
 
 exports.getTeamSummary = async (req, res) => {
   try {
+    logger.info('getTeamSummary', { userId: req.user?.id });
     const { date } = req.query;
     const start = new Date(date || new Date()); start.setHours(0, 0, 0, 0);
     const end = new Date(date || new Date()); end.setHours(23, 59, 59, 999);
@@ -153,12 +164,15 @@ exports.getTeamSummary = async (req, res) => {
       .populate('employeeId', 'firstName lastName department');
     res.json(reports);
   } catch (error) {
+    logger.error('getTeamSummary error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ message: error.message });
   }
 };
 
 exports.getMonthlyStats = async (req, res) => {
   try {
+    logger.info('getMonthlyStats', { userId: req.user?.id });
     const { month, year, employeeId } = req.query;
     const targetYear = parseInt(year) || new Date().getFullYear();
     const targetMonth = parseInt(month) || new Date().getMonth() + 1;
@@ -209,6 +223,8 @@ exports.getMonthlyStats = async (req, res) => {
     
     res.json(summary);
   } catch (error) {
+    logger.error('getMonthlyStats error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ message: error.message });
   }
 };

@@ -162,13 +162,13 @@ const Reports = () => {
     <div className="fade-in-up">
       {/* Page Header */}
       <div style={{
-        background: 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
-        color: '#334155',
+        background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+        color: 'white',
         padding: '2rem',
         borderRadius: '12px',
         marginBottom: '2rem',
-        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-        border: '1px solid #e2e8f0'
+        boxShadow: '0 4px 14px rgba(5, 150, 105, 0.3)',
+        border: 'none'
       }}>
         <div className="d-flex align-items-center justify-content-between">
           <div>
@@ -176,12 +176,12 @@ const Reports = () => {
               <i className="fas fa-chart-line me-3"></i>
               Reports & Analytics
             </h1>
-            <p className="text-muted mb-0">
+            <p className="mb-0" style={{ color: 'rgba(255, 255, 255, 0.9)' }}>
               Comprehensive insights into leave management and employee statistics
             </p>
           </div>
-          <div className="text-muted">
-            <i className="fas fa-chart-bar" style={{ fontSize: '3rem', opacity: 0.3 }}></i>
+          <div>
+            <i className="fas fa-chart-bar" style={{ fontSize: '3rem', opacity: 0.2, color: 'white' }}></i>
           </div>
         </div>
       </div>
@@ -189,46 +189,114 @@ const Reports = () => {
       {/* Summary Cards */}
       <Row className="mb-4">
         <Col md={3}>
-          <Card className="analytics-card h-100">
-            <Card.Body className="analytics-body text-center">
-              <div className="analytics-icon mx-auto mb-3" style={{backgroundColor: '#6366f1'}}>
+          <Card className="h-100" style={{
+            background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+            border: '1.5px solid #e2e8f0',
+            borderRadius: '12px',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+            transition: 'all 0.3s'
+          }}>
+            <Card.Body className="text-center">
+              <div className="mx-auto mb-3" style={{
+                width: '52px',
+                height: '52px',
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '1.35rem',
+                background: '#eff6ff',
+                color: '#0284c7',
+                boxShadow: '0 3px 10px rgba(0,0,0,0.12)'
+              }}>
                 <i className="fas fa-users"></i>
               </div>
-              <div className="metric-value">{reportData?.totalEmployees || 0}</div>
-              <p className="metric-label mb-0">Total Employees</p>
+              <div style={{ fontSize: '1.75rem', fontWeight: '700', color: '#1f2937' }}>{reportData?.totalEmployees || 0}</div>
+              <p className="mb-0" style={{ fontSize: '0.75rem', color: '#6b7280', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Employees</p>
             </Card.Body>
           </Card>
         </Col>
         <Col md={3}>
-          <Card className="analytics-card h-100">
-            <Card.Body className="analytics-body text-center">
-              <div className="analytics-icon mx-auto mb-3" style={{backgroundColor: '#06b6d4'}}>
+          <Card className="h-100" style={{
+            background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+            border: '1.5px solid #e2e8f0',
+            borderRadius: '12px',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+            transition: 'all 0.3s'
+          }}>
+            <Card.Body className="text-center">
+              <div className="mx-auto mb-3" style={{
+                width: '52px',
+                height: '52px',
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '1.35rem',
+                background: '#fef3c7',
+                color: '#ca8a04',
+                boxShadow: '0 3px 10px rgba(0,0,0,0.12)'
+              }}>
                 <i className="fas fa-clock"></i>
               </div>
-              <div className="metric-value">{reportData?.pendingApprovals || 0}</div>
-              <p className="metric-label mb-0">Pending Approvals</p>
+              <div style={{ fontSize: '1.75rem', fontWeight: '700', color: '#1f2937' }}>{reportData?.pendingApprovals || 0}</div>
+              <p className="mb-0" style={{ fontSize: '0.75rem', color: '#6b7280', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Pending Approvals</p>
             </Card.Body>
           </Card>
         </Col>
         <Col md={3}>
-          <Card className="analytics-card h-100">
-            <Card.Body className="analytics-body text-center">
-              <div className="analytics-icon mx-auto mb-3" style={{backgroundColor: '#10b981'}}>
+          <Card className="h-100" style={{
+            background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+            border: '1.5px solid #e2e8f0',
+            borderRadius: '12px',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+            transition: 'all 0.3s'
+          }}>
+            <Card.Body className="text-center">
+              <div className="mx-auto mb-3" style={{
+                width: '52px',
+                height: '52px',
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '1.35rem',
+                background: '#dcfce7',
+                color: '#16a34a',
+                boxShadow: '0 3px 10px rgba(0,0,0,0.12)'
+              }}>
                 <i className="fas fa-calendar-check"></i>
               </div>
-              <div className="metric-value">{reportData?.leaveStats?.find(s => s._id === 'HR_APPROVED')?.count || 0}</div>
-              <p className="metric-label mb-0">Approved Leaves</p>
+              <div style={{ fontSize: '1.75rem', fontWeight: '700', color: '#1f2937' }}>{reportData?.leaveStats?.find(s => s._id === 'HR_APPROVED')?.count || 0}</div>
+              <p className="mb-0" style={{ fontSize: '0.75rem', color: '#6b7280', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Approved Leaves</p>
             </Card.Body>
           </Card>
         </Col>
         <Col md={3}>
-          <Card className="analytics-card h-100">
-            <Card.Body className="analytics-body text-center">
-              <div className="analytics-icon mx-auto mb-3" style={{backgroundColor: '#ef4444'}}>
+          <Card className="h-100" style={{
+            background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+            border: '1.5px solid #e2e8f0',
+            borderRadius: '12px',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+            transition: 'all 0.3s'
+          }}>
+            <Card.Body className="text-center">
+              <div className="mx-auto mb-3" style={{
+                width: '52px',
+                height: '52px',
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '1.35rem',
+                background: '#fee2e2',
+                color: '#dc2626',
+                boxShadow: '0 3px 10px rgba(0,0,0,0.12)'
+              }}>
                 <i className="fas fa-calendar-times"></i>
               </div>
-              <div className="metric-value">{reportData?.leaveStats?.find(s => s._id === 'REJECTED')?.count || 0}</div>
-              <p className="metric-label mb-0">Rejected Leaves</p>
+              <div style={{ fontSize: '1.75rem', fontWeight: '700', color: '#1f2937' }}>{reportData?.leaveStats?.find(s => s._id === 'REJECTED')?.count || 0}</div>
+              <p className="mb-0" style={{ fontSize: '0.75rem', color: '#6b7280', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Rejected Leaves</p>
             </Card.Body>
           </Card>
         </Col>
@@ -237,9 +305,20 @@ const Reports = () => {
       {/* Statistics Cards */}
       <Row className="mb-4">
         <Col md={6}>
-          <Card className="modern-card h-100">
-            <Card.Header className="d-flex align-items-center">
-              <i className="fas fa-chart-pie me-2 text-primary"></i>
+          <Card className="h-100" style={{
+            background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+            border: '1.5px solid #e2e8f0',
+            borderRadius: '12px',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)'
+          }}>
+            <Card.Header style={{
+              background: 'transparent',
+              borderBottom: '2px solid #e2e8f0',
+              padding: '1rem 1.5rem',
+              fontWeight: '700',
+              color: '#1f2937'
+            }} className="d-flex align-items-center">
+              <i className="fas fa-chart-pie me-2" style={{ color: '#059669' }}></i>
               Leave Status Statistics
             </Card.Header>
             <Card.Body>
@@ -278,9 +357,20 @@ const Reports = () => {
           </Card>
         </Col>
         <Col md={6}>
-          <Card className="modern-card h-100">
-            <Card.Header className="d-flex align-items-center">
-              <i className="fas fa-chart-line me-2 text-info"></i>
+          <Card className="h-100" style={{
+            background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+            border: '1.5px solid #e2e8f0',
+            borderRadius: '12px',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)'
+          }}>
+            <Card.Header style={{
+              background: 'transparent',
+              borderBottom: '2px solid #e2e8f0',
+              padding: '1rem 1.5rem',
+              fontWeight: '700',
+              color: '#1f2937'
+            }} className="d-flex align-items-center">
+              <i className="fas fa-chart-line me-2" style={{ color: '#059669' }}></i>
               Monthly Leave Trends
             </Card.Header>
             <Card.Body>
@@ -323,9 +413,20 @@ const Reports = () => {
       </Row>
 
       {/* Leave Type Usage */}
-      <Card className="modern-card mb-4">
-        <Card.Header className="d-flex align-items-center">
-          <i className="fas fa-list me-2 text-success"></i>
+      <Card className="mb-4" style={{
+        background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+        border: '1.5px solid #e2e8f0',
+        borderRadius: '12px',
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)'
+      }}>
+        <Card.Header style={{
+          background: 'transparent',
+          borderBottom: '2px solid #e2e8f0',
+          padding: '1rem 1.5rem',
+          fontWeight: '700',
+          color: '#1f2937'
+        }} className="d-flex align-items-center">
+          <i className="fas fa-list me-2" style={{ color: '#059669' }}></i>
           Leave Type Usage
         </Card.Header>
         <Card.Body>
@@ -376,16 +477,43 @@ const Reports = () => {
       </Card>
 
       {/* Detailed Report with Filters */}
-      <Card className="modern-card">
-        <Card.Header className="d-flex justify-content-between align-items-center">
+      <Card style={{
+        background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+        border: '1.5px solid #e2e8f0',
+        borderRadius: '12px',
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)'
+      }}>
+        <Card.Header style={{
+          background: 'transparent',
+          borderBottom: '2px solid #e2e8f0',
+          padding: '1rem 1.5rem',
+          fontWeight: '700',
+          color: '#1f2937'
+        }} className="d-flex justify-content-between align-items-center">
           <div className="d-flex align-items-center">
-            <i className="fas fa-table me-2 text-warning"></i>
+            <i className="fas fa-table me-2" style={{ color: '#059669' }}></i>
             Detailed Leave Report
           </div>
           <Button 
-            variant="primary" 
             onClick={handleExport}
             disabled={exporting || !filters.startDate || !filters.endDate}
+            style={{
+              background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+              border: 'none',
+              borderRadius: '10px',
+              padding: '0.6rem 1.1rem',
+              fontWeight: '600',
+              boxShadow: '0 3px 10px rgba(5, 150, 105, 0.3)',
+              transition: 'all 0.3s'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.transform = 'translateY(-2px)';
+              e.target.style.boxShadow = '0 5px 16px rgba(5, 150, 105, 0.4)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.transform = 'translateY(0)';
+              e.target.style.boxShadow = '0 3px 10px rgba(5, 150, 105, 0.3)';
+            }}
           >
             <i className={`fas ${exporting ? 'fa-spinner fa-spin' : 'fa-download'} me-2`}></i>
             {exporting ? 'Exporting...' : 'Export CSV'}
@@ -394,15 +522,15 @@ const Reports = () => {
         <Card.Body>
           {/* Filters */}
           <div className="mb-4">
-            <h6 className="mb-3 fw-bold text-muted">
-              <i className="fas fa-filter me-2 text-primary"></i>
+            <h6 className="mb-3 fw-bold" style={{ color: '#374151' }}>
+              <i className="fas fa-filter me-2" style={{ color: '#059669' }}></i>
               Filter Options
             </h6>
             <Row className="g-3">
               <Col md={3}>
                 <Form.Group>
-                  <Form.Label className="fw-semibold text-muted">
-                    <i className="fas fa-calendar-alt me-2 text-primary"></i>
+                  <Form.Label className="fw-semibold" style={{ color: '#6b7280' }}>
+                    <i className="fas fa-calendar-alt me-2" style={{ color: '#059669' }}></i>
                     Start Date
                   </Form.Label>
                   <Form.Control
@@ -414,8 +542,8 @@ const Reports = () => {
               </Col>
               <Col md={3}>
                 <Form.Group>
-                  <Form.Label className="fw-semibold text-muted">
-                    <i className="fas fa-calendar-check me-2 text-primary"></i>
+                  <Form.Label className="fw-semibold" style={{ color: '#6b7280' }}>
+                    <i className="fas fa-calendar-check me-2" style={{ color: '#059669' }}></i>
                     End Date
                   </Form.Label>
                   <Form.Control
@@ -427,8 +555,8 @@ const Reports = () => {
               </Col>
               <Col md={3}>
                 <Form.Group>
-                  <Form.Label className="fw-semibold text-muted">
-                    <i className="fas fa-user me-2 text-primary"></i>
+                  <Form.Label className="fw-semibold" style={{ color: '#6b7280' }}>
+                    <i className="fas fa-user me-2" style={{ color: '#059669' }}></i>
                     Employee
                   </Form.Label>
                   <Form.Select
@@ -446,8 +574,8 @@ const Reports = () => {
               </Col>
               <Col md={3}>
                 <Form.Group>
-                  <Form.Label className="fw-semibold text-muted">
-                    <i className="fas fa-tags me-2 text-primary"></i>
+                  <Form.Label className="fw-semibold" style={{ color: '#6b7280' }}>
+                    <i className="fas fa-tags me-2" style={{ color: '#059669' }}></i>
                     Leave Type
                   </Form.Label>
                   <Form.Select

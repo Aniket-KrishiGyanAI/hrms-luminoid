@@ -1,6 +1,8 @@
 const mongoose = require('mongoose');
 const EmployeeProfile = require('../models/EmployeeProfile');
 const User = require('../models/User');
+const { getCache, setCache, delCache } = require('../config/cache');
+const logger = require('../utils/logger');
 
 const createProfile = async (req, res) => {
   try {
@@ -54,7 +56,7 @@ const getProfile = async (req, res) => {
         .populate('userId', 'firstName lastName email role department designation joinDate dateOfBirth')
         .populate('professionalInfo.reportingManager', 'firstName lastName email');
     } catch (popErr) {
-      console.error('Error during profile lookup/populate:', popErr);
+      logger.error('Error during profile lookup/populate', { error: popErr.message });
       profile = null;
     }
 
@@ -103,11 +105,9 @@ const getProfile = async (req, res) => {
       profile.location = profile.professionalInfo?.workLocation || profile.workInfo?.workLocation || '';
     }
 
-    console.log('Returning profile with employeeId:', profile.employeeId, 'and location:', profile.location);
-
     res.json(profile);
   } catch (error) {
-    console.error('getProfile error:', error);
+    logger.error('getProfile error', { error: error.message });
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
@@ -198,7 +198,7 @@ const updateProfile = async (req, res) => {
       profile: profileObj
     });
   } catch (error) {
-    console.error('updateProfile error:', error);
+    logger.error('updateProfile error', { error: error.message });
     res.status(500).json({ 
       message: 'Server error', 
       error: error.message 
@@ -364,6 +364,10 @@ const buildOrgChart = (profiles) => {
 
 const getAllEmployees = async (req, res) => {
   try {
+    const cacheKey = 'employees:all';
+    const cached = await getCache(cacheKey);
+    if (cached) return res.json(cached);
+
     const users = await User.find({ isActive: true })
       .select('firstName lastName email role department designation')
       .sort({ firstName: 1 })
@@ -381,6 +385,7 @@ const getAllEmployees = async (req, res) => {
       return user;
     });
     
+    await setCache(cacheKey, formattedUsers, 600);
     res.json(formattedUsers);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });

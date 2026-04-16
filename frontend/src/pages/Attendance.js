@@ -49,6 +49,10 @@ const Attendance = () => {
   const [liveHours, setLiveHours] = useState(0);
   const [journeyData, setJourneyData] = useState(null);
   const [journeyLoading, setJourneyLoading] = useState(false);
+  const [attendancePolicy, setAttendancePolicy] = useState(null);
+  const [showPolicyEditModal, setShowPolicyEditModal] = useState(false);
+  const [policyForm, setPolicyForm] = useState({});
+  const [policySaving, setPolicySaving] = useState(false);
 
   // Calculate live hours for checked-in employees
   useEffect(() => {
@@ -107,6 +111,9 @@ const Attendance = () => {
 
     // Fetch journey status for field employees
     fetchJourneyStatus();
+
+    // Fetch attendance policy
+    fetchAttendancePolicy();
 
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
@@ -319,6 +326,55 @@ const Attendance = () => {
       const res = await api.get('/api/journey/today');
       setJourneyData(res.data);
     } catch {}
+  };
+
+  const fetchAttendancePolicy = async () => {
+    try {
+      const res = await api.get('/api/attendance-policy');
+      setAttendancePolicy(res.data);
+    } catch (error) {
+      console.error('Error fetching attendance policy:', error);
+    }
+  };
+
+  const handleEditPolicy = () => {
+    setPolicyForm({
+      workingHours: { ...attendancePolicy.workingHours },
+      lateArrival: { ...attendancePolicy.lateArrival },
+      checkInRequirements: { ...attendancePolicy.checkInRequirements },
+      importantNotes: { ...attendancePolicy.importantNotes },
+      helpContact: { ...attendancePolicy.helpContact }
+    });
+    setShowPolicyEditModal(true);
+  };
+
+  const handleSavePolicy = async () => {
+    setPolicySaving(true);
+    try {
+      await api.put('/api/attendance-policy', policyForm);
+      toast.success('Attendance policy updated successfully');
+      setShowPolicyEditModal(false);
+      fetchAttendancePolicy();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to update policy');
+    } finally {
+      setPolicySaving(false);
+    }
+  };
+
+  const handleResetPolicy = async () => {
+    if (!window.confirm('Are you sure you want to reset the policy to defaults? This cannot be undone.')) return;
+    setPolicySaving(true);
+    try {
+      await api.post('/api/attendance-policy/reset');
+      toast.success('Policy reset to defaults');
+      setShowPolicyEditModal(false);
+      fetchAttendancePolicy();
+    } catch (error) {
+      toast.error('Failed to reset policy');
+    } finally {
+      setPolicySaving(false);
+    }
   };
 
   const handleStartJourney = async () => {
@@ -836,6 +892,120 @@ const Attendance = () => {
 
   return (
     <div className="fade-in-up">
+      {/* Attendance Policy Info Card */}
+      {attendancePolicy && (
+        <Card className="shadow-sm mb-4" style={{ border: '2px solid #bbf7d0', background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)' }}>
+          <Card.Header 
+            className="d-flex align-items-center justify-content-between" 
+            style={{ background: 'linear-gradient(135deg, #065f46 0%, #10b981 100%)', color: 'white', cursor: 'pointer', padding: '1rem 1.25rem' }}
+            onClick={() => {
+              const body = document.getElementById('policy-body');
+              const icon = document.getElementById('policy-icon');
+              if (body.style.display === 'none') {
+                body.style.display = 'block';
+                icon.className = 'fas fa-chevron-up';
+              } else {
+                body.style.display = 'none';
+                icon.className = 'fas fa-chevron-down';
+              }
+            }}
+          >
+            <div className="d-flex align-items-center gap-2">
+              <div className="rounded-circle d-flex align-items-center justify-content-center" style={{ width: '36px', height: '36px', background: 'rgba(255,255,255,0.2)' }}>
+                <i className="fas fa-info-circle" style={{ fontSize: '0.9rem' }}></i>
+              </div>
+              <div>
+                <span className="fw-bold" style={{ fontSize: '0.95rem' }}>Attendance Policy & Guidelines</span>
+                <div style={{ fontSize: '0.7rem', opacity: 0.9 }}>Click to view important attendance rules</div>
+              </div>
+            </div>
+            <div className="d-flex align-items-center gap-2">
+              {['ADMIN', 'HR'].includes(user?.role) && (
+                <Button
+                  size="sm"
+                  onClick={(e) => { e.stopPropagation(); handleEditPolicy(); }}
+                  style={{ background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.4)', color: 'white', borderRadius: '8px', padding: '4px 12px', fontWeight: 600 }}
+                >
+                  <i className="fas fa-edit me-1"></i>Edit Policy
+                </Button>
+              )}
+              <i id="policy-icon" className="fas fa-chevron-down" style={{ fontSize: '1.2rem' }}></i>
+            </div>
+          </Card.Header>
+          <Card.Body id="policy-body" style={{ display: 'none', padding: '1.5rem' }}>
+            <Row className="g-4">
+              <Col md={6}>
+                <div className="p-3" style={{ background: 'white', borderRadius: '12px', border: '2px solid #10b981', height: '100%' }}>
+                  <h6 className="fw-bold mb-3" style={{ color: '#065f46' }}>
+                    <i className="fas fa-clock me-2" style={{ color: '#10b981' }}></i>
+                    Working Hours
+                  </h6>
+                  <ul className="mb-0" style={{ fontSize: '0.875rem', color: '#334155', lineHeight: '1.8' }}>
+                    <li><strong>Standard Hours:</strong> {attendancePolicy.workingHours.standardStart} - {attendancePolicy.workingHours.standardEnd} ({attendancePolicy.workingHours.totalHours})</li>
+                    <li><strong>Core Hours:</strong> {attendancePolicy.workingHours.coreHoursStart} - {attendancePolicy.workingHours.coreHoursEnd} (mandatory presence)</li>
+                    <li><strong>Flexible Hours:</strong> {attendancePolicy.workingHours.flexibility}</li>
+                    <li><strong>Minimum Hours:</strong> {attendancePolicy.workingHours.minimumHours}</li>
+                  </ul>
+                </div>
+              </Col>
+              <Col md={6}>
+                <div className="p-3" style={{ background: 'white', borderRadius: '12px', border: '2px solid #f59e0b', height: '100%' }}>
+                  <h6 className="fw-bold mb-3" style={{ color: '#92400e' }}>
+                    <i className="fas fa-user-clock me-2" style={{ color: '#f59e0b' }}></i>
+                    Late Arrival Policy
+                  </h6>
+                  <ul className="mb-0" style={{ fontSize: '0.875rem', color: '#334155', lineHeight: '1.8' }}>
+                    <li><strong>Grace Period:</strong> {attendancePolicy.lateArrival.gracePeriod}</li>
+                    <li><strong>Late Mark:</strong> {attendancePolicy.lateArrival.lateMark}</li>
+                    <li><strong>Half Day:</strong> {attendancePolicy.lateArrival.halfDay}</li>
+                    <li><strong>Monthly Limit:</strong> {attendancePolicy.lateArrival.monthlyLimit}</li>
+                  </ul>
+                </div>
+              </Col>
+              <Col md={6}>
+                <div className="p-3" style={{ background: 'white', borderRadius: '12px', border: '2px solid #3b82f6', height: '100%' }}>
+                  <h6 className="fw-bold mb-3" style={{ color: '#1e3a8a' }}>
+                    <i className="fas fa-map-marker-alt me-2" style={{ color: '#3b82f6' }}></i>
+                    Check-in Requirements
+                  </h6>
+                  <ul className="mb-0" style={{ fontSize: '0.875rem', color: '#334155', lineHeight: '1.8' }}>
+                    <li><strong>GPS Mandatory:</strong> {attendancePolicy.checkInRequirements.gpsMandatory}</li>
+                    <li><strong>Office Mode:</strong> {attendancePolicy.checkInRequirements.officeMode}</li>
+                    <li><strong>Remote Mode:</strong> {attendancePolicy.checkInRequirements.remoteMode}</li>
+                    <li><strong>Hybrid Mode:</strong> {attendancePolicy.checkInRequirements.hybridMode}</li>
+                  </ul>
+                </div>
+              </Col>
+              <Col md={6}>
+                <div className="p-3" style={{ background: 'white', borderRadius: '12px', border: '2px solid #ef4444', height: '100%' }}>
+                  <h6 className="fw-bold mb-3" style={{ color: '#991b1b' }}>
+                    <i className="fas fa-exclamation-triangle me-2" style={{ color: '#ef4444' }}></i>
+                    Important Notes
+                  </h6>
+                  <ul className="mb-0" style={{ fontSize: '0.875rem', color: '#334155', lineHeight: '1.8' }}>
+                    <li><strong>Forgot Check-out:</strong> {attendancePolicy.importantNotes.forgotCheckout}</li>
+                    <li><strong>Missed Attendance:</strong> {attendancePolicy.importantNotes.missedAttendance}</li>
+                    <li><strong>Leave Days:</strong> {attendancePolicy.importantNotes.leaveDays}</li>
+                    <li><strong>Holidays:</strong> {attendancePolicy.importantNotes.holidays}</li>
+                  </ul>
+                </div>
+              </Col>
+            </Row>
+            <div className="mt-4 p-3 text-center" style={{ background: 'white', borderRadius: '12px', border: '2px solid #8b5cf6' }}>
+              <i className="fas fa-question-circle me-2" style={{ color: '#8b5cf6', fontSize: '1.1rem' }}></i>
+              <span style={{ fontSize: '0.875rem', color: '#334155' }}>
+                <strong>Need Help?</strong> Contact HR at <a href={`mailto:${attendancePolicy.helpContact.email}`} style={{ color: '#8b5cf6', fontWeight: 600 }}>{attendancePolicy.helpContact.email}</a> or call <strong>{attendancePolicy.helpContact.phone}</strong>
+              </span>
+            </div>
+            {attendancePolicy.lastUpdatedBy && (
+              <div className="mt-3 text-center" style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                <i className="fas fa-info-circle me-1"></i>
+                Last updated by {attendancePolicy.lastUpdatedBy.firstName} {attendancePolicy.lastUpdatedBy.lastName} on {new Date(attendancePolicy.lastUpdatedAt).toLocaleDateString()}
+              </div>
+            )}
+          </Card.Body>
+        </Card>
+      )}
 
       <Row className="mb-4">
         {/* Today's Status */}
@@ -901,34 +1071,61 @@ const Attendance = () => {
                   // Aggregated view for "All" employees
                   <>
                     <Row className="g-3 mb-4">
-                      <Col md={6}>
-                        <div className="text-center p-3" style={{ background: 'linear-gradient(135deg, #475569 0%, #64748b 100%)', borderRadius: '12px', color: 'white', boxShadow: '0 4px 12px rgba(71, 85, 105, 0.3)' }}>
-                          <i className="fas fa-users fa-2x mb-2"></i>
-                          <h3 className="fw-bold mb-1">{todayStatus.summary?.totalEmployees || 0}</h3>
-                          <small>Total Employees</small>
-                        </div>
-                      </Col>
-                      <Col md={3}>
-                        <div className="text-center p-2" style={{ background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)', borderRadius: '10px', color: 'white', boxShadow: '0 3px 10px rgba(5, 150, 105, 0.25)' }}>
-                          <i className="fas fa-sign-in-alt fa-lg mb-1"></i>
-                          <h4 className="fw-bold mb-0">{todayStatus.summary?.checkedIn || 0}</h4>
-                          <small style={{ fontSize: '0.75rem' }}>Checked In</small>
-                          <div className="mt-1" style={{ fontSize: '0.7rem', opacity: 0.9 }}>
-                            {todayStatus.summary?.totalEmployees > 0 && (
-                              `${Math.round((todayStatus.summary?.checkedIn / todayStatus.summary?.totalEmployees) * 100)}%`
-                            )}
+                      <Col md={4}>
+                        <div className="p-4 position-relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', borderRadius: '16px', boxShadow: '0 8px 24px rgba(102, 126, 234, 0.35)' }}>
+                          <div className="position-absolute" style={{ top: '-20px', right: '-20px', width: '100px', height: '100px', background: 'rgba(255,255,255,0.1)', borderRadius: '50%' }}></div>
+                          <div className="d-flex align-items-center justify-content-between position-relative">
+                            <div>
+                              <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.85)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>Total Employees</div>
+                              <h2 className="fw-bold mb-0" style={{ color: 'white', fontSize: '2.5rem' }}>{todayStatus.summary?.totalEmployees || 0}</h2>
+                            </div>
+                            <div className="rounded-circle d-flex align-items-center justify-content-center" style={{ width: '60px', height: '60px', background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(10px)' }}>
+                              <i className="fas fa-users" style={{ fontSize: '1.5rem', color: 'white' }}></i>
+                            </div>
                           </div>
                         </div>
                       </Col>
-                      <Col md={3}>
-                        <div className="text-center p-2" style={{ background: 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)', borderRadius: '10px', color: 'white', boxShadow: '0 3px 10px rgba(220, 38, 38, 0.25)' }}>
-                          <i className="fas fa-sign-out-alt fa-lg mb-1"></i>
-                          <h4 className="fw-bold mb-0">{todayStatus.summary?.checkedOut || 0}</h4>
-                          <small style={{ fontSize: '0.75rem' }}>Checked Out</small>
-                          <div className="mt-1" style={{ fontSize: '0.7rem', opacity: 0.9 }}>
-                            {todayStatus.summary?.checkedIn > 0 && (
-                              `${Math.round((todayStatus.summary?.checkedOut / todayStatus.summary?.checkedIn) * 100)}%`
-                            )}
+                      <Col md={4}>
+                        <div className="p-4 position-relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)', borderRadius: '16px', boxShadow: '0 8px 24px rgba(17, 153, 142, 0.35)' }}>
+                          <div className="position-absolute" style={{ top: '-20px', right: '-20px', width: '100px', height: '100px', background: 'rgba(255,255,255,0.1)', borderRadius: '50%' }}></div>
+                          <div className="d-flex align-items-center justify-content-between position-relative">
+                            <div>
+                              <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.85)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>Checked In</div>
+                              <h2 className="fw-bold mb-0" style={{ color: 'white', fontSize: '2.5rem' }}>{todayStatus.summary?.checkedIn || 0}</h2>
+                              <div className="mt-2 d-flex align-items-center gap-2">
+                                <div className="progress" style={{ height: '6px', width: '80px', background: 'rgba(255,255,255,0.3)', borderRadius: '10px' }}>
+                                  <div className="progress-bar" style={{ width: `${todayStatus.summary?.totalEmployees > 0 ? (todayStatus.summary?.checkedIn / todayStatus.summary?.totalEmployees) * 100 : 0}%`, background: 'white', borderRadius: '10px' }}></div>
+                                </div>
+                                <span style={{ fontSize: '0.85rem', color: 'white', fontWeight: '700' }}>
+                                  {todayStatus.summary?.totalEmployees > 0 ? Math.round((todayStatus.summary?.checkedIn / todayStatus.summary?.totalEmployees) * 100) : 0}%
+                                </span>
+                              </div>
+                            </div>
+                            <div className="rounded-circle d-flex align-items-center justify-content-center" style={{ width: '60px', height: '60px', background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(10px)' }}>
+                              <i className="fas fa-sign-in-alt" style={{ fontSize: '1.5rem', color: 'white' }}></i>
+                            </div>
+                          </div>
+                        </div>
+                      </Col>
+                      <Col md={4}>
+                        <div className="p-4 position-relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #ee0979 0%, #ff6a00 100%)', borderRadius: '16px', boxShadow: '0 8px 24px rgba(238, 9, 121, 0.35)' }}>
+                          <div className="position-absolute" style={{ top: '-20px', right: '-20px', width: '100px', height: '100px', background: 'rgba(255,255,255,0.1)', borderRadius: '50%' }}></div>
+                          <div className="d-flex align-items-center justify-content-between position-relative">
+                            <div>
+                              <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.85)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>Checked Out</div>
+                              <h2 className="fw-bold mb-0" style={{ color: 'white', fontSize: '2.5rem' }}>{todayStatus.summary?.checkedOut || 0}</h2>
+                              <div className="mt-2 d-flex align-items-center gap-2">
+                                <div className="progress" style={{ height: '6px', width: '80px', background: 'rgba(255,255,255,0.3)', borderRadius: '10px' }}>
+                                  <div className="progress-bar" style={{ width: `${todayStatus.summary?.checkedIn > 0 ? (todayStatus.summary?.checkedOut / todayStatus.summary?.checkedIn) * 100 : 0}%`, background: 'white', borderRadius: '10px' }}></div>
+                                </div>
+                                <span style={{ fontSize: '0.85rem', color: 'white', fontWeight: '700' }}>
+                                  {todayStatus.summary?.checkedIn > 0 ? Math.round((todayStatus.summary?.checkedOut / todayStatus.summary?.checkedIn) * 100) : 0}%
+                                </span>
+                              </div>
+                            </div>
+                            <div className="rounded-circle d-flex align-items-center justify-content-center" style={{ width: '60px', height: '60px', background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(10px)' }}>
+                              <i className="fas fa-sign-out-alt" style={{ fontSize: '1.5rem', color: 'white' }}></i>
+                            </div>
                           </div>
                         </div>
                       </Col>
@@ -2976,6 +3173,318 @@ const Attendance = () => {
         <Modal.Footer style={{ border: 'none' }}>
           <Button variant="secondary" onClick={() => setShowLocationModal(false)} style={{ borderRadius: '8px', padding: '8px 24px' }}>
             Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Attendance Policy Edit Modal */}
+      <Modal show={showPolicyEditModal} onHide={() => setShowPolicyEditModal(false)} size="xl">
+        <Modal.Header closeButton style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)', color: 'white', border: 'none' }}>
+          <Modal.Title className="d-flex align-items-center">
+            <div className="rounded-circle d-flex align-items-center justify-content-center me-3" style={{ width: '40px', height: '40px', background: 'rgba(255,255,255,0.2)' }}>
+              <i className="fas fa-edit"></i>
+            </div>
+            <div>
+              <div style={{ fontSize: '1rem', fontWeight: 700 }}>Edit Attendance Policy</div>
+              <div style={{ fontSize: '0.75rem', opacity: 0.85, fontWeight: 400 }}>Update policy rules and guidelines for all employees</div>
+            </div>
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body style={{ padding: '1.5rem', background: '#f8fafc', maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
+          {policyForm.workingHours && (
+            <Form>
+              {/* Working Hours Section */}
+              <div className="mb-4 p-3" style={{ background: 'white', borderRadius: '12px', border: '2px solid #10b981' }}>
+                <h6 className="fw-bold mb-3" style={{ color: '#065f46' }}>
+                  <i className="fas fa-clock me-2" style={{ color: '#10b981' }}></i>
+                  Working Hours
+                </h6>
+                <Row className="g-3">
+                  <Col md={6}>
+                    <Form.Group>
+                      <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>Standard Start Time</Form.Label>
+                      <Form.Control
+                        value={policyForm.workingHours.standardStart}
+                        onChange={(e) => setPolicyForm({ ...policyForm, workingHours: { ...policyForm.workingHours, standardStart: e.target.value } })}
+                        placeholder="e.g., 9:00 AM"
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group>
+                      <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>Standard End Time</Form.Label>
+                      <Form.Control
+                        value={policyForm.workingHours.standardEnd}
+                        onChange={(e) => setPolicyForm({ ...policyForm, workingHours: { ...policyForm.workingHours, standardEnd: e.target.value } })}
+                        placeholder="e.g., 6:00 PM"
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col md={12}>
+                    <Form.Group>
+                      <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>Total Hours Description</Form.Label>
+                      <Form.Control
+                        value={policyForm.workingHours.totalHours}
+                        onChange={(e) => setPolicyForm({ ...policyForm, workingHours: { ...policyForm.workingHours, totalHours: e.target.value } })}
+                        placeholder="e.g., 9 hours including 1 hour lunch break"
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group>
+                      <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>Core Hours Start</Form.Label>
+                      <Form.Control
+                        value={policyForm.workingHours.coreHoursStart}
+                        onChange={(e) => setPolicyForm({ ...policyForm, workingHours: { ...policyForm.workingHours, coreHoursStart: e.target.value } })}
+                        placeholder="e.g., 10:00 AM"
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group>
+                      <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>Core Hours End</Form.Label>
+                      <Form.Control
+                        value={policyForm.workingHours.coreHoursEnd}
+                        onChange={(e) => setPolicyForm({ ...policyForm, workingHours: { ...policyForm.workingHours, coreHoursEnd: e.target.value } })}
+                        placeholder="e.g., 4:00 PM"
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group>
+                      <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>Flexibility</Form.Label>
+                      <Form.Control
+                        value={policyForm.workingHours.flexibility}
+                        onChange={(e) => setPolicyForm({ ...policyForm, workingHours: { ...policyForm.workingHours, flexibility: e.target.value } })}
+                        placeholder="e.g., ±1 hour flexibility"
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group>
+                      <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>Minimum Hours Required</Form.Label>
+                      <Form.Control
+                        value={policyForm.workingHours.minimumHours}
+                        onChange={(e) => setPolicyForm({ ...policyForm, workingHours: { ...policyForm.workingHours, minimumHours: e.target.value } })}
+                        placeholder="e.g., 8 hours per day required"
+                      />
+                    </Form.Group>
+                  </Col>
+                </Row>
+              </div>
+
+              {/* Late Arrival Section */}
+              <div className="mb-4 p-3" style={{ background: 'white', borderRadius: '12px', border: '2px solid #f59e0b' }}>
+                <h6 className="fw-bold mb-3" style={{ color: '#92400e' }}>
+                  <i className="fas fa-user-clock me-2" style={{ color: '#f59e0b' }}></i>
+                  Late Arrival Policy
+                </h6>
+                <Row className="g-3">
+                  <Col md={6}>
+                    <Form.Group>
+                      <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>Grace Period</Form.Label>
+                      <Form.Control
+                        value={policyForm.lateArrival.gracePeriod}
+                        onChange={(e) => setPolicyForm({ ...policyForm, lateArrival: { ...policyForm.lateArrival, gracePeriod: e.target.value } })}
+                        placeholder="e.g., 15 minutes (9:00 AM - 9:15 AM)"
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group>
+                      <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>Late Mark Rule</Form.Label>
+                      <Form.Control
+                        value={policyForm.lateArrival.lateMark}
+                        onChange={(e) => setPolicyForm({ ...policyForm, lateArrival: { ...policyForm.lateArrival, lateMark: e.target.value } })}
+                        placeholder="e.g., After 9:15 AM marked as Late"
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group>
+                      <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>Half Day Rule</Form.Label>
+                      <Form.Control
+                        value={policyForm.lateArrival.halfDay}
+                        onChange={(e) => setPolicyForm({ ...policyForm, lateArrival: { ...policyForm.lateArrival, halfDay: e.target.value } })}
+                        placeholder="e.g., Arrival after 11:00 AM"
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group>
+                      <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>Monthly Limit</Form.Label>
+                      <Form.Control
+                        value={policyForm.lateArrival.monthlyLimit}
+                        onChange={(e) => setPolicyForm({ ...policyForm, lateArrival: { ...policyForm.lateArrival, monthlyLimit: e.target.value } })}
+                        placeholder="e.g., Maximum 3 late arrivals per month"
+                      />
+                    </Form.Group>
+                  </Col>
+                </Row>
+              </div>
+
+              {/* Check-in Requirements Section */}
+              <div className="mb-4 p-3" style={{ background: 'white', borderRadius: '12px', border: '2px solid #3b82f6' }}>
+                <h6 className="fw-bold mb-3" style={{ color: '#1e3a8a' }}>
+                  <i className="fas fa-map-marker-alt me-2" style={{ color: '#3b82f6' }}></i>
+                  Check-in Requirements
+                </h6>
+                <Row className="g-3">
+                  <Col md={6}>
+                    <Form.Group>
+                      <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>GPS Mandatory</Form.Label>
+                      <Form.Control
+                        value={policyForm.checkInRequirements.gpsMandatory}
+                        onChange={(e) => setPolicyForm({ ...policyForm, checkInRequirements: { ...policyForm.checkInRequirements, gpsMandatory: e.target.value } })}
+                        placeholder="e.g., Location services must be enabled"
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group>
+                      <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>Office Mode</Form.Label>
+                      <Form.Control
+                        value={policyForm.checkInRequirements.officeMode}
+                        onChange={(e) => setPolicyForm({ ...policyForm, checkInRequirements: { ...policyForm.checkInRequirements, officeMode: e.target.value } })}
+                        placeholder="e.g., Must be within office GPS radius"
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group>
+                      <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>Remote Mode</Form.Label>
+                      <Form.Control
+                        value={policyForm.checkInRequirements.remoteMode}
+                        onChange={(e) => setPolicyForm({ ...policyForm, checkInRequirements: { ...policyForm.checkInRequirements, remoteMode: e.target.value } })}
+                        placeholder="e.g., Check-in from home location"
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group>
+                      <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>Hybrid Mode</Form.Label>
+                      <Form.Control
+                        value={policyForm.checkInRequirements.hybridMode}
+                        onChange={(e) => setPolicyForm({ ...policyForm, checkInRequirements: { ...policyForm.checkInRequirements, hybridMode: e.target.value } })}
+                        placeholder="e.g., Flexible location for field work"
+                      />
+                    </Form.Group>
+                  </Col>
+                </Row>
+              </div>
+
+              {/* Important Notes Section */}
+              <div className="mb-4 p-3" style={{ background: 'white', borderRadius: '12px', border: '2px solid #ef4444' }}>
+                <h6 className="fw-bold mb-3" style={{ color: '#991b1b' }}>
+                  <i className="fas fa-exclamation-triangle me-2" style={{ color: '#ef4444' }}></i>
+                  Important Notes
+                </h6>
+                <Row className="g-3">
+                  <Col md={6}>
+                    <Form.Group>
+                      <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>Forgot Check-out</Form.Label>
+                      <Form.Control
+                        value={policyForm.importantNotes.forgotCheckout}
+                        onChange={(e) => setPolicyForm({ ...policyForm, importantNotes: { ...policyForm.importantNotes, forgotCheckout: e.target.value } })}
+                        placeholder="e.g., Auto check-out at 11:59 PM"
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group>
+                      <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>Missed Attendance</Form.Label>
+                      <Form.Control
+                        value={policyForm.importantNotes.missedAttendance}
+                        onChange={(e) => setPolicyForm({ ...policyForm, importantNotes: { ...policyForm.importantNotes, missedAttendance: e.target.value } })}
+                        placeholder="e.g., Contact HR within 24 hours"
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group>
+                      <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>Leave Days</Form.Label>
+                      <Form.Control
+                        value={policyForm.importantNotes.leaveDays}
+                        onChange={(e) => setPolicyForm({ ...policyForm, importantNotes: { ...policyForm.importantNotes, leaveDays: e.target.value } })}
+                        placeholder="e.g., No attendance marking required"
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group>
+                      <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>Holidays</Form.Label>
+                      <Form.Control
+                        value={policyForm.importantNotes.holidays}
+                        onChange={(e) => setPolicyForm({ ...policyForm, importantNotes: { ...policyForm.importantNotes, holidays: e.target.value } })}
+                        placeholder="e.g., Attendance not counted"
+                      />
+                    </Form.Group>
+                  </Col>
+                </Row>
+              </div>
+
+              {/* Help Contact Section */}
+              <div className="p-3" style={{ background: 'white', borderRadius: '12px', border: '2px solid #8b5cf6' }}>
+                <h6 className="fw-bold mb-3" style={{ color: '#6d28d9' }}>
+                  <i className="fas fa-question-circle me-2" style={{ color: '#8b5cf6' }}></i>
+                  Help Contact Information
+                </h6>
+                <Row className="g-3">
+                  <Col md={6}>
+                    <Form.Group>
+                      <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>HR Email</Form.Label>
+                      <Form.Control
+                        type="email"
+                        value={policyForm.helpContact.email}
+                        onChange={(e) => setPolicyForm({ ...policyForm, helpContact: { ...policyForm.helpContact, email: e.target.value } })}
+                        placeholder="e.g., hr@company.com"
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group>
+                      <Form.Label className="fw-semibold" style={{ fontSize: '0.85rem' }}>HR Phone</Form.Label>
+                      <Form.Control
+                        value={policyForm.helpContact.phone}
+                        onChange={(e) => setPolicyForm({ ...policyForm, helpContact: { ...policyForm.helpContact, phone: e.target.value } })}
+                        placeholder="e.g., +91-XXXX-XXXXXX"
+                      />
+                    </Form.Group>
+                  </Col>
+                </Row>
+              </div>
+            </Form>
+          )}
+        </Modal.Body>
+        <Modal.Footer style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '1rem 1.5rem' }}>
+          {user?.role === 'ADMIN' && (
+            <Button
+              variant="outline-danger"
+              onClick={handleResetPolicy}
+              disabled={policySaving}
+              style={{ borderRadius: '8px', fontWeight: 600, padding: '8px 20px', marginRight: 'auto' }}
+            >
+              <i className="fas fa-undo me-2"></i>Reset to Defaults
+            </Button>
+          )}
+          <Button
+            variant="light"
+            onClick={() => setShowPolicyEditModal(false)}
+            disabled={policySaving}
+            style={{ borderRadius: '8px', border: '2px solid #e2e8f0', fontWeight: 600, padding: '8px 20px' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSavePolicy}
+            disabled={policySaving}
+            style={{ borderRadius: '8px', background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)', border: 'none', fontWeight: 600, padding: '8px 24px', boxShadow: '0 4px 12px rgba(59,130,246,0.35)' }}
+          >
+            {policySaving ? (
+              <><span className="spinner-border spinner-border-sm me-2"></span>Saving...</>
+            ) : (
+              <><i className="fas fa-save me-2"></i>Save Policy</>
+            )}
           </Button>
         </Modal.Footer>
       </Modal>

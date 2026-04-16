@@ -13,12 +13,14 @@ import {
   MdMenu, MdLogout, MdHome,
   MdTask, MdCheckCircle, MdAddCircle, MdAssignment, MdSchool,
   MdAccessTimeFilled, MdCalendarMonth, MdWbSunny, MdNightsStay, MdWbTwilight,
-  MdLocationOn, MdDescription
+  MdLocationOn, MdDescription, MdWork, MdGroups
 } from 'react-icons/md';
 
 const PAGE_META = {
   '/dashboard':          { title: 'Dashboard',        icon: 'tachometer-alt' },
   '/attendance':         { title: 'Attendance',        icon: 'clock' },
+  '/leave-management':   { title: 'Leave Management',  icon: 'calendar-check' },
+  '/organization':       { title: 'Organization',      icon: 'building' },
   '/apply-leave':        { title: 'Apply Leave',       icon: 'calendar-plus' },
   '/my-leaves':          { title: 'My Leaves',         icon: 'calendar-check' },
   '/tasks':              { title: 'My Tasks',          icon: 'tasks' },
@@ -36,6 +38,8 @@ const PAGE_META = {
   '/assets':             { title: 'Assets',            icon: 'laptop' },
   '/training':           { title: 'Training Materials', icon: 'graduation-cap' },
   '/field-visits':       { title: 'Field Visits',       icon: 'map-marker-alt' },
+  '/my-field-work':      { title: 'My Field Work',      icon: 'briefcase' },
+  '/team-field-activity':{ title: 'Team Field Activity', icon: 'users' },
 };
 
 // ── Isolated clock component — re-renders every second but doesn't affect sidebar ──
@@ -207,20 +211,17 @@ const EnhancedLayout = ({ children }) => {
     const items = [
       { path: '/dashboard',   label: 'Dashboard',  icon: MdDashboard, roles: ['EMPLOYEE','MANAGER','HR','ADMIN'] },
       { path: '/attendance',  label: 'Attendance', icon: MdAccessTime, roles: ['EMPLOYEE','MANAGER','HR','ADMIN'] },
+      { path: '/leave-management', label: 'Leave Management', icon: MdCalendarToday, roles: ['EMPLOYEE','MANAGER','HR','ADMIN'] },
     ];
-    if (user?.role === 'EMPLOYEE') {
-      items.push(
-        { path: '/apply-leave', label: 'Apply Leave', icon: MdAddCircle,     roles: ['EMPLOYEE'] },
-        { path: '/my-leaves',   label: 'My Leaves',   icon: MdEventAvailable, roles: ['EMPLOYEE'] },
-        { path: '/tasks',       label: 'My Tasks',    icon: MdTask,           roles: ['EMPLOYEE'] }
-      );
-    }
     if (['MANAGER','HR','ADMIN'].includes(user?.role)) {
       items.push(
-        { path: '/approvals',          label: 'Approvals',       icon: MdCheckCircle,  roles: ['MANAGER','HR','ADMIN'], badge: pendingCount },
         { path: '/task-management',    label: 'Task Management', icon: MdAssignment,   roles: ['MANAGER','HR','ADMIN'] },
-        { path: '/team-calendar',      label: 'Team Calendar',   icon: MdCalendarToday,roles: ['MANAGER','HR','ADMIN'] },
-        { path: '/employee-directory', label: 'Directory',       icon: MdPeople,       roles: ['MANAGER','HR','ADMIN'] }
+        { path: '/organization', label: 'Organization', icon: MdPeople, roles: ['MANAGER','HR','ADMIN'] }
+      );
+    }
+    if (user?.role === 'EMPLOYEE') {
+      items.push(
+        { path: '/tasks',       label: 'My Tasks',    icon: MdTask,           roles: ['EMPLOYEE'] }
       );
     }
     if (['HR','ADMIN'].includes(user?.role)) {
@@ -229,9 +230,6 @@ const EnhancedLayout = ({ children }) => {
         { path: '/announcements', label: 'Announcements', icon: MdCampaign, roles: ['HR','ADMIN'] },
         { path: '/reports',       label: 'Reports',       icon: MdBarChart, roles: ['HR','ADMIN'] }
       );
-    }
-    if (user?.role === 'ADMIN') {
-      items.push({ path: '/departments', label: 'Departments', icon: MdAccountTree, roles: ['ADMIN'] });
     }
     items.push(
       { path: '/profile',  label: 'My Profile', icon: MdPerson,  roles: ['EMPLOYEE','MANAGER','HR','ADMIN'] },
@@ -243,9 +241,14 @@ const EnhancedLayout = ({ children }) => {
     }
     items.push({ path: '/training', label: 'Training', icon: MdSchool, roles: ['EMPLOYEE','MANAGER','HR','ADMIN'] });
     
-    // Field Visits - only for field employees or managers/HR/Admin
-    if (user?.isFieldEmployee || ['MANAGER','HR','ADMIN'].includes(user?.role)) {
-      items.push({ path: '/field-visits', label: 'Field Visits', icon: MdLocationOn, roles: ['EMPLOYEE','MANAGER','HR','ADMIN'] });
+    // Field Visits - Simplified Navigation
+    if (user?.isFieldEmployee) {
+      // Employees see "My Field Work"
+      items.push({ path: '/my-field-work', label: 'My Field Work', icon: MdWork, roles: ['EMPLOYEE'] });
+    }
+    if (['MANAGER','HR','ADMIN'].includes(user?.role)) {
+      // Managers/HR/Admin see "Team Field Activity"
+      items.push({ path: '/team-field-activity', label: 'Team Field Activity', icon: MdGroups, roles: ['MANAGER','HR','ADMIN'] });
     }
     
     return items.filter(item => item.roles.includes(user?.role));
@@ -254,7 +257,7 @@ const EnhancedLayout = ({ children }) => {
   const quickLinks = [
     { path: '/dashboard', icon: MdHome,       label: 'Home' },
     { path: '/attendance', icon: MdAccessTime, label: 'Attendance' },
-    { path: '/approvals',  icon: MdTask,       label: 'Approvals', badge: pendingCount, roles: ['MANAGER','HR','ADMIN'] },
+    { path: '/leave-management',  icon: MdTask,       label: 'Leaves', badge: pendingCount, roles: ['MANAGER','HR','ADMIN'] },
     { path: '/profile',    icon: MdPerson,     label: 'Profile' }
   ].filter(link => !link.roles || link.roles.includes(user?.role));
 

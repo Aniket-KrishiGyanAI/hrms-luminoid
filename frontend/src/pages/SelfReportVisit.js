@@ -155,7 +155,7 @@ const SelfReportVisit = () => {
     }
   };
 
-  const handlePhoto = (e) => {
+  const handlePhoto = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     
@@ -164,19 +164,72 @@ const SelfReportVisit = () => {
     
     // Capture GPS automatically if not already captured
     if (!gps) {
-      toast.info('📍 Capturing location...', { autoClose: 2000 });
-      captureGPS();
+      const loadingToast = toast.info('📍 Capturing location for photo...', { autoClose: false });
+      try {
+        console.log('🔵 Auto-capturing GPS for photo...');
+        const pos = await getLocation();
+        console.log('✅ GPS captured for photo:', pos);
+        const address = await getAddress(pos.lat, pos.lng);
+        setGps({ ...pos, address });
+        toast.dismiss(loadingToast);
+        toast.success('✅ Location captured with photo!', { autoClose: 3000 });
+        console.log('📍 Location saved with address:', address);
+      } catch (error) {
+        toast.dismiss(loadingToast);
+        console.error('❌ GPS Error Code:', error.code, 'Message:', error.message);
+        
+        if (error.code === 1) {
+          toast.error('🔒 Location permission denied. Please enable location access.', { autoClose: 7000 });
+          setTimeout(() => {
+            alert('📍 HOW TO ENABLE LOCATION:\n\n' +
+              '📱 iOS (Safari):\n' +
+              '1. Open Settings → Safari → Location\n' +
+              '2. Select "Allow"\n' +
+              '3. Refresh the page\n\n' +
+              '🤖 Android (Chrome):\n' +
+              '1. Tap 🔒 in address bar\n' +
+              '2. Tap Permissions → Location\n' +
+              '3. Select "Allow"');
+          }, 500);
+        } else if (error.code === 2) {
+          toast.error('📡 GPS unavailable - Move to open area and try again', { autoClose: 6000 });
+        } else if (error.code === 3) {
+          toast.error('⏱️ GPS timeout - Try again in open area', { autoClose: 5000 });
+        } else {
+          toast.error(`❌ Location error: ${error.message || 'Unknown error'}`, { autoClose: 5000 });
+        }
+      }
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.clientName.trim()) { toast.error('Client / place name is required'); return; }
+    
+    // Warn if photo is uploaded but no GPS
+    if (photo && !gps) {
+      const confirmSubmit = window.confirm(
+        '⚠️ WARNING: Photo has no GPS location!\n\n' +
+        'Your visit photo does not have location data attached.\n\n' +
+        'Do you want to:\n' +
+        '- Click "Cancel" to capture location first (recommended)\n' +
+        '- Click "OK" to submit without location'
+      );
+      if (!confirmSubmit) return;
+    }
+    
     setSubmitting(true);
     try {
       const fd = new FormData();
       Object.entries(form).forEach(([k, v]) => fd.append(k, v));
-      if (gps) { fd.append('lat', gps.lat); fd.append('lng', gps.lng); fd.append('address', gps.address); }
+      if (gps) { 
+        fd.append('lat', gps.lat); 
+        fd.append('lng', gps.lng); 
+        fd.append('address', gps.address);
+        console.log('✅ Submitting with GPS:', gps.lat, gps.lng);
+      } else {
+        console.log('⚠️ Submitting without GPS location');
+      }
       if (photo?.file) fd.append('photo', photo.file);
 
       await api.post('/api/field-visits/self-report', fd, {
@@ -257,17 +310,79 @@ const SelfReportVisit = () => {
               style={{ display: 'none' }} onChange={handlePhoto} />
 
             {photo ? (
-              <div className="position-relative d-inline-block">
+              <div className="position-relative d-inline-block" style={{ width: '100%' }}>
                 <img src={photo.preview} alt="visit"
                   style={{ width: '100%', maxHeight: 220, objectFit: 'cover', borderRadius: 10, border: '2px solid #10b981' }} />
                 <Button size="sm" variant="danger"
                   style={{ position: 'absolute', top: 6, right: 6, borderRadius: 20, padding: '2px 8px' }}
-                  onClick={() => setPhoto(null)}>
+                  onClick={() => { setPhoto(null); }}>
                   <i className="fas fa-times" />
                 </Button>
-                {gps && (
-                  <div style={{ position: 'absolute', bottom: 8, left: 8, background: 'rgba(0,0,0,0.6)', color: 'white', borderRadius: 6, padding: '3px 8px', fontSize: '0.72rem' }}>
-                    <i className="fas fa-map-marker-alt me-1" />{gps.address.split(',')[0]}
+                {gps ? (
+                  <div style={{ 
+                    position: 'absolute', 
+                    bottom: 8, 
+                    left: 8, 
+                    right: 8,
+                    background: 'rgba(16,185,129,0.95)', 
+                    color: 'white', 
+                    borderRadius: 8, 
+                    padding: '6px 10px', 
+                    fontSize: '0.75rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    backdropFilter: 'blur(10px)'
+                  }}>
+                    <i className="fas fa-map-marker-alt" />
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {gps.address.split(',').slice(0, 2).join(',')}
+                    </span>
+                    <i className="fas fa-check-circle" />
+                  </div>
+                ) : gpsLoading ? (
+                  <div style={{ 
+                    position: 'absolute', 
+                    bottom: 8, 
+                    left: 8, 
+                    right: 8,
+                    background: 'rgba(245,158,11,0.95)', 
+                    color: 'white', 
+                    borderRadius: 8, 
+                    padding: '6px 10px', 
+                    fontSize: '0.75rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    backdropFilter: 'blur(10px)'
+                  }}>
+                    <i className="fas fa-circle-notch fa-spin" />
+                    <span>Capturing location...</span>
+                  </div>
+                ) : (
+                  <div style={{ 
+                    position: 'absolute', 
+                    bottom: 8, 
+                    left: 8, 
+                    right: 8,
+                    background: 'rgba(239,68,68,0.95)', 
+                    color: 'white', 
+                    borderRadius: 8, 
+                    padding: '6px 10px', 
+                    fontSize: '0.75rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    backdropFilter: 'blur(10px)',
+                    cursor: 'pointer'
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    captureGPS();
+                  }}>
+                    <i className="fas fa-exclamation-triangle" />
+                    <span style={{ flex: 1 }}>No location - Tap to capture</span>
+                    <i className="fas fa-redo" />
                   </div>
                 )}
               </div>

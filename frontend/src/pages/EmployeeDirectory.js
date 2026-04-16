@@ -9,6 +9,7 @@ import './EmployeeDirectory.css';
 
 const EmployeeDirectory = () => {
   const [employees, setEmployees] = useState([]);
+  const [allEmployees, setAllEmployees] = useState([]); // Store all employees for stats
   const [departments, setDepartments] = useState([]);
   const [filters, setFilters] = useState({ search: '', department: '', role: '' });
   const [selectedEmployee, setSelectedEmployee] = useState(null);
@@ -43,10 +44,11 @@ const EmployeeDirectory = () => {
 
   const fetchDepartments = async () => {
     try {
-      const response = await api.get('/api/departments');
-      setDepartments(response.data);
+      const response = await api.get('/api/departments?limit=1000');
+      setDepartments(response.data.data || response.data || []);
     } catch (error) {
       console.error('Error fetching departments:', error);
+      setDepartments([]);
     }
   };
 
@@ -55,6 +57,12 @@ const EmployeeDirectory = () => {
     try {
       const response = await api.get(`/api/employee-management/all?status=${statusFilter}`);
       setEmployees(response.data);
+      
+      // Fetch all employees for stats (only once or when needed)
+      if (allEmployees.length === 0 || statusFilter === 'all') {
+        const allResponse = await api.get('/api/employee-management/all?status=all');
+        setAllEmployees(allResponse.data);
+      }
     } catch (error) {
       console.error('Error fetching employees:', error);
       toast.error('Unable to load employees');
@@ -204,7 +212,7 @@ const EmployeeDirectory = () => {
           
           <div style="margin-bottom: 1.25rem;">
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #1e293b; font-size: 0.9rem;">Last Working Day<span style="color: #dc2626; margin-left: 2px;">*</span></label>
-            <input id="exitDate" type="date" style="width: 100%; padding: 0.625rem 0.875rem; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 0.95rem;" value="${new Date().toISOString().split('T')[0]}" min="${new Date().toISOString().split('T')[0]}">
+            <input id="exitDate" type="date" style="width: 100%; padding: 0.625rem 0.875rem; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 0.95rem;" value="${new Date().toISOString().split('T')[0]}">
           </div>
           
           <div style="margin-bottom: 1.25rem;">
@@ -637,10 +645,10 @@ const EmployeeDirectory = () => {
   });
 
   const stats = {
-    total: employees.length,
-    active: employees.filter(e => e?.isActive).length,
-    inactive: employees.filter(e => e?.isActive === false).length,
-    departments: [...new Set(employees.map(e => e?.department).filter(Boolean))].length
+    total: allEmployees.length,
+    active: allEmployees.filter(e => e?.isActive).length,
+    inactive: allEmployees.filter(e => e?.isActive === false).length,
+    departments: [...new Set(allEmployees.map(e => e?.department).filter(Boolean))].length
   };
 
   const exportToExcel = async () => {
@@ -726,50 +734,55 @@ const EmployeeDirectory = () => {
         </div>
       </div>
 
-      {/* Status Tabs */}
-      <div className="status-tabs-container mb-3">
-        <div className="status-tabs" style={{ display: 'flex', gap: '0.75rem' }}>
-          <button 
-            className={`status-tab ${statusFilter === 'all' ? 'active' : ''}`}
-            onClick={() => setStatusFilter('all')}
-            style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: statusFilter === 'all' ? '2px solid #667eea' : '2px solid #e2e8f0', background: statusFilter === 'all' ? '#f0f4ff' : 'white', cursor: 'pointer' }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <i className="fas fa-users" style={{ fontSize: '1.25rem', color: '#667eea' }}></i>
-              <div style={{ textAlign: 'left' }}>
-                <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>All Employees</div>
-                <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1e293b' }}>{stats.total}</div>
-              </div>
+      {/* Status Cards */}
+      <div className="stats-cards-container mb-4">
+        <div 
+          className={`stats-card stats-card-all ${statusFilter === 'all' ? 'active' : ''}`}
+          onClick={() => setStatusFilter('all')}
+        >
+          <div className="stats-card-icon-wrapper stats-icon-all">
+            <i className="fas fa-users"></i>
+          </div>
+          <div className="stats-card-content">
+            <div className="stats-card-label">All Employees</div>
+            <div className="stats-card-value">{stats.total}</div>
+            <div className="stats-card-trend">Total workforce</div>
+          </div>
+          <div className="stats-card-glow stats-glow-all"></div>
+        </div>
+        
+        <div 
+          className={`stats-card stats-card-active ${statusFilter === 'active' ? 'active' : ''}`}
+          onClick={() => setStatusFilter('active')}
+        >
+          <div className="stats-card-icon-wrapper stats-icon-active">
+            <i className="fas fa-user-check"></i>
+          </div>
+          <div className="stats-card-content">
+            <div className="stats-card-label">Active</div>
+            <div className="stats-card-value">{stats.active}</div>
+            <div className="stats-card-trend">
+              <i className="fas fa-arrow-up"></i> {stats.total > 0 ? Math.round((stats.active / stats.total) * 100) : 0}% of total
             </div>
-          </button>
-          
-          <button 
-            className={`status-tab ${statusFilter === 'active' ? 'active' : ''}`}
-            onClick={() => setStatusFilter('active')}
-            style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: statusFilter === 'active' ? '2px solid #10b981' : '2px solid #e2e8f0', background: statusFilter === 'active' ? '#f0fdf4' : 'white', cursor: 'pointer' }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <i className="fas fa-check-circle" style={{ fontSize: '1.25rem', color: '#10b981' }}></i>
-              <div style={{ textAlign: 'left' }}>
-                <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>Active</div>
-                <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1e293b' }}>{stats.active}</div>
-              </div>
+          </div>
+          <div className="stats-card-glow stats-glow-active"></div>
+        </div>
+        
+        <div 
+          className={`stats-card stats-card-inactive ${statusFilter === 'inactive' ? 'active' : ''}`}
+          onClick={() => setStatusFilter('inactive')}
+        >
+          <div className="stats-card-icon-wrapper stats-icon-inactive">
+            <i className="fas fa-user-times"></i>
+          </div>
+          <div className="stats-card-content">
+            <div className="stats-card-label">Inactive</div>
+            <div className="stats-card-value">{stats.inactive}</div>
+            <div className="stats-card-trend">
+              <i className="fas fa-arrow-down"></i> {stats.total > 0 ? Math.round((stats.inactive / stats.total) * 100) : 0}% of total
             </div>
-          </button>
-          
-          <button 
-            className={`status-tab ${statusFilter === 'inactive' ? 'active' : ''}`}
-            onClick={() => setStatusFilter('inactive')}
-            style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: statusFilter === 'inactive' ? '2px solid #ef4444' : '2px solid #e2e8f0', background: statusFilter === 'inactive' ? '#fef2f2' : 'white', cursor: 'pointer' }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <i className="fas fa-times-circle" style={{ fontSize: '1.25rem', color: '#ef4444' }}></i>
-              <div style={{ textAlign: 'left' }}>
-                <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>Inactive</div>
-                <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1e293b' }}>{stats.inactive}</div>
-              </div>
-            </div>
-          </button>
+          </div>
+          <div className="stats-card-glow stats-glow-inactive"></div>
         </div>
       </div>
 
@@ -1761,9 +1774,13 @@ const EmployeeDirectory = () => {
                     onChange={(e) => setFormData({...formData, department: e.target.value})}
                   >
                     <option value="">Select Department</option>
-                    {Array.isArray(departments) && departments.map(dept => (
-                      <option key={dept._id} value={dept.name}>{dept.name}</option>
-                    ))}
+                    {departments && departments.length > 0 ? (
+                      departments.map(dept => (
+                        <option key={dept._id || dept.name} value={dept.name}>{dept.name}</option>
+                      ))
+                    ) : (
+                      <option disabled>Loading departments...</option>
+                    )}
                   </Form.Select>
                 </Form.Group>
                 <Form.Group className="mb-3">

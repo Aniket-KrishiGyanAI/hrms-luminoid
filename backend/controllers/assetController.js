@@ -1,4 +1,5 @@
 const Asset = require('../models/Asset');
+const logger = require('../utils/logger');
 
 const getAssets = async (req, res) => {
   try {

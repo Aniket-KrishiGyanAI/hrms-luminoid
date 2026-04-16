@@ -1,5 +1,6 @@
 const LeaveType = require('../models/LeaveType');
 const { validationResult } = require('express-validator');
+const logger = require('../utils/logger');
 
 const createLeaveType = async (req, res) => {
   try {

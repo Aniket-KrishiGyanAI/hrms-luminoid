@@ -1,6 +1,7 @@
 const LeaveBalance = require('../models/LeaveBalance');
 const LeaveType = require('../models/LeaveType');
 const User = require('../models/User');
+const logger = require('../utils/logger');
 
 // Helper function to ensure balances exist and monthly accruals are applied
 const ensureBalancesForUser = async (userId, year) => {
@@ -336,7 +337,7 @@ const accrueBalances = async () => {
       }
     }
 
-    // console.log('Monthly accrual completed - Added 1 vacation leave and 0.5 sick leave per employee');
+    // 
   } catch (error) {
     console.error('Accrual error:', error);
   }
@@ -382,7 +383,7 @@ const carryForward = async () => {
       }
     }
 
-    // console.log('Carry forward completed');
+    // 
   } catch (error) {
     console.error('Carry forward error:', error);
   }

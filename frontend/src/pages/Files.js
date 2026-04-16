@@ -49,6 +49,9 @@ const Files = () => {
     targetUserId: "",
     requiresAcknowledgment: false,
     visibility: { type: "ALL", departments: [], roles: [], employees: [] },
+    subType: "",
+    month: "",
+    year: "",
   });
   const [selectedFile, setSelectedFile] = useState(null);
   const [employees, setEmployees] = useState([]);
@@ -90,6 +93,11 @@ const Files = () => {
   const [orgSelected, setOrgSelected] = useState([]);
   const [orgFolderFilter, setOrgFolderFilter] = useState('');
   const [orgActiveFolder, setOrgActiveFolder] = useState(null);
+  // HR Documents state
+  const [hrSelectedEmpId, setHrSelectedEmpId] = useState(null);
+  const [hrSubTypeFilter, setHrSubTypeFilter] = useState('');
+  const [hrMonthFilter, setHrMonthFilter] = useState('');
+  const [hrYearFilter, setHrYearFilter] = useState('');
 
   useEffect(() => {
     fetchFiles();
@@ -105,6 +113,9 @@ const Files = () => {
   const fetchFiles = async () => {
     try {
       const response = await api.get("/api/files");
+      console.log('All files fetched:', response.data);
+      console.log('HR Document files:', response.data.filter(f => f.type === 'HR_DOCUMENT'));
+      console.log('Current user ID:', user.id);
       setFiles(response.data);
       
       // Check if employee's documents are locked
@@ -155,6 +166,9 @@ const Files = () => {
       if (fileForm.targetUserId) formData.append("targetUserId", fileForm.targetUserId);
       if (uploadFolderId) formData.append("folderId", uploadFolderId);
       formData.append("visibility", JSON.stringify(fileForm.visibility));
+      if (fileForm.subType) formData.append("subType", fileForm.subType);
+      if (fileForm.month) formData.append("month", fileForm.month);
+      if (fileForm.year) formData.append("year", fileForm.year);
 
       await api.post("/api/files/upload", formData, {
         headers: { "Content-Type": "multipart/form-data" },
@@ -168,6 +182,9 @@ const Files = () => {
         targetUserId: "",
         requiresAcknowledgment: false,
         visibility: { type: "ALL", departments: [], roles: [], employees: [] },
+        subType: "",
+        month: "",
+        year: "",
       });
       setSelectedFile(null);
       setUploadFolderId(null);
@@ -495,7 +512,8 @@ const Files = () => {
         description: '', 
         targetUserId: user.id, 
         requiresAcknowledgment: false,
-        visibility: { type: 'ALL', departments: [], roles: [], employees: [] }
+        visibility: { type: 'ALL', departments: [], roles: [], employees: [] },
+        subType: '', month: '', year: ''
       });
     } else {
       setFileForm({
@@ -505,6 +523,7 @@ const Files = () => {
         targetUserId: '',
         requiresAcknowledgment: false,
         visibility: { type: 'ALL', departments: [], roles: [], employees: [] },
+        subType: '', month: '', year: new Date().getFullYear()
       });
     }
     setShowModal(true);
@@ -555,6 +574,28 @@ const Files = () => {
     (file) => file.type === "ORGANIZATION"
   );
   const employeeFiles = files.filter((file) => file.type === "EMPLOYEE");
+  const hrDocumentFiles = files.filter((file) => file.type === "HR_DOCUMENT");
+
+  // For employees, filter HR documents by their user ID
+  const myHrDocuments = user?.role === 'EMPLOYEE' 
+    ? hrDocumentFiles.filter(f => {
+        const targetId = typeof f.targetUserId === 'object' ? f.targetUserId._id : f.targetUserId;
+        return String(targetId) === String(user.id);
+      })
+    : hrDocumentFiles;
+
+  const HR_SUB_TYPES = [
+    { value: 'SALARY_SLIP', label: 'Salary Slip', icon: 'fa-file-invoice-dollar', color: '#10b981', bg: '#ecfdf5' },
+    { value: 'OFFER_LETTER', label: 'Offer Letter', icon: 'fa-file-signature', color: '#6366f1', bg: '#eef2ff' },
+    { value: 'APPRAISAL_LETTER', label: 'Appraisal Letter', icon: 'fa-chart-line', color: '#f59e0b', bg: '#fffbeb' },
+    { value: 'EXPERIENCE_LETTER', label: 'Experience Letter', icon: 'fa-award', color: '#8b5cf6', bg: '#f5f3ff' },
+    { value: 'RELIEVING_LETTER', label: 'Relieving Letter', icon: 'fa-door-open', color: '#ef4444', bg: '#fef2f2' },
+    { value: 'OTHER', label: 'Other', icon: 'fa-file-alt', color: '#64748b', bg: '#f1f5f9' },
+  ];
+
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  const getSubTypeInfo = (subType) => HR_SUB_TYPES.find(s => s.value === subType) || HR_SUB_TYPES[HR_SUB_TYPES.length - 1];
 
   // Filter files based on search term (for HR/Admin)
   const filterFiles = (fileList) => {
@@ -624,7 +665,7 @@ const Files = () => {
                 <i className="fas fa-folder-plus me-2"></i>New Folder
               </Button>
               <Button variant="primary" onClick={handleOpenModal}>
-                <i className="fas fa-upload me-2"></i>Upload File
+                <i className="fas fa-upload me-2"></i>Upload Document
               </Button>
             </>
           )}
@@ -632,25 +673,119 @@ const Files = () => {
       </div>
 
       <Nav variant="tabs" className="mb-4">
-        <Nav.Item>
-          <Nav.Link active={activeTab === "organization"} onClick={() => { setActiveTab("organization"); setActiveFolder(null); }}>
-            <i className="fas fa-building me-2"></i>
-            Organization Documents ({organizationFiles.length})
-          </Nav.Link>
-        </Nav.Item>
-        <Nav.Item>
-          <Nav.Link active={activeTab === "employee"} onClick={() => { setActiveTab("employee"); setActiveFolder(null); }}>
-            <i className="fas fa-user me-2"></i>
-            Employee Documents ({employeeFiles.length})
-          </Nav.Link>
-        </Nav.Item>
-        <Nav.Item>
-          <Nav.Link active={activeTab === "folders"} onClick={() => { setActiveTab("folders"); setActiveFolder(null); }}>
-            <i className="fas fa-folder me-2"></i>
-            Folders ({folders.length})
-          </Nav.Link>
-        </Nav.Item>
+        {user?.role === 'EMPLOYEE' ? (
+          // Employee tabs: Organization, My Documents, Folders, HR Documents
+          <>
+            <Nav.Item>
+              <Nav.Link active={activeTab === "organization"} onClick={() => { setActiveTab("organization"); setActiveFolder(null); }} style={{ color: '#10b981', fontWeight: 600 }}>
+                <i className="fas fa-building me-2"></i>
+                Organization Documents ({organizationFiles.length})
+              </Nav.Link>
+            </Nav.Item>
+            <Nav.Item>
+              <Nav.Link active={activeTab === "employee"} onClick={() => { setActiveTab("employee"); setActiveFolder(null); }} style={{ color: '#10b981', fontWeight: 600 }}>
+                <i className="fas fa-user me-2"></i>
+                My Documents ({employeeFiles.filter(f => f.targetUserId === user.id).length})
+              </Nav.Link>
+            </Nav.Item>
+            <Nav.Item>
+              <Nav.Link active={activeTab === "folders"} onClick={() => { setActiveTab("folders"); setActiveFolder(null); }} style={{ color: '#10b981', fontWeight: 600 }}>
+                <i className="fas fa-folder me-2"></i>
+                Folders ({folders.length})
+              </Nav.Link>
+            </Nav.Item>
+            <Nav.Item>
+              <Nav.Link active={activeTab === "hr_documents"} onClick={() => setActiveTab("hr_documents")} style={{ color: '#10b981', fontWeight: 600 }}>
+                <i className="fas fa-file-invoice-dollar me-2"></i>
+                HR Documents ({user?.role === 'EMPLOYEE' ? myHrDocuments.length : hrDocumentFiles.length})
+              </Nav.Link>
+            </Nav.Item>
+          </>
+        ) : (
+          // HR/Admin tabs: Organization, Employee, Folders, HR Documents
+          <>
+            <Nav.Item>
+              <Nav.Link active={activeTab === "organization"} onClick={() => { setActiveTab("organization"); setActiveFolder(null); }} style={{ color: '#10b981', fontWeight: 600 }}>
+                <i className="fas fa-building me-2"></i>
+                Organization Documents ({organizationFiles.length})
+              </Nav.Link>
+            </Nav.Item>
+            <Nav.Item>
+              <Nav.Link active={activeTab === "employee"} onClick={() => { setActiveTab("employee"); setActiveFolder(null); }} style={{ color: '#10b981', fontWeight: 600 }}>
+                <i className="fas fa-user me-2"></i>
+                Employee Documents ({employeeFiles.length})
+              </Nav.Link>
+            </Nav.Item>
+            <Nav.Item>
+              <Nav.Link active={activeTab === "folders"} onClick={() => { setActiveTab("folders"); setActiveFolder(null); }} style={{ color: '#10b981', fontWeight: 600 }}>
+                <i className="fas fa-folder me-2"></i>
+                Folders ({folders.length})
+              </Nav.Link>
+            </Nav.Item>
+            <Nav.Item>
+              <Nav.Link active={activeTab === "hr_documents"} onClick={() => { setActiveTab("hr_documents"); setHrSelectedEmpId(null); }} style={{ color: '#10b981', fontWeight: 600 }}>
+                <i className="fas fa-file-invoice-dollar me-2"></i>
+                HR Documents ({hrDocumentFiles.length})
+              </Nav.Link>
+            </Nav.Item>
+          </>
+        )}
       </Nav>
+
+      {/* HR Documents - Employee View */}
+      {activeTab === 'hr_documents' && user?.role === 'EMPLOYEE' && (
+        <Row>
+          <Col>
+            <Card className="modern-table-wrapper">
+              <Card.Header><h5 className="mb-0"><i className="fas fa-file-invoice-dollar me-2"></i>HR Documents</h5></Card.Header>
+              <Card.Body className="p-0">
+                {myHrDocuments.length === 0 ? (
+                  <div className="table-empty"><i className="fas fa-folder-open"></i><p className="mb-0">No HR documents available</p></div>
+                ) : (
+                  <div className="table-responsive">
+                    <Table className="table">
+                      <thead><tr><th>Document Type</th><th>Name</th><th>Month/Year</th><th>Size</th><th>Date</th><th>Actions</th></tr></thead>
+                      <tbody>
+                        {myHrDocuments.map(file => {
+                          const subTypeInfo = getSubTypeInfo(file.subType);
+                          return (
+                            <tr key={file._id}>
+                              <td>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                  <div style={{ width: 32, height: 32, borderRadius: '0.4rem', background: subTypeInfo.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <i className={`fas ${subTypeInfo.icon}`} style={{ color: subTypeInfo.color, fontSize: '0.9rem' }}></i>
+                                  </div>
+                                  <span style={{ fontWeight: 600, color: subTypeInfo.color }}>{subTypeInfo.label}</span>
+                                </div>
+                              </td>
+                              <td><div className="fw-semibold">{file.name}</div>{file.description && <small className="text-muted">{file.description}</small>}</td>
+                              <td>
+                                {file.month && file.year ? (
+                                  <span className="text-muted">{MONTHS[file.month - 1]} {file.year}</span>
+                                ) : (
+                                  <span style={{ color: '#cbd5e1' }}>—</span>
+                                )}
+                              </td>
+                              <td>{formatFileSize(file.size)}</td>
+                              <td><span className="text-muted">{new Date(file.createdAt).toLocaleDateString()}</span></td>
+                              <td>
+                                <div className="d-flex gap-1 flex-wrap">
+                                  <Button size="sm" variant="outline-secondary" onClick={() => handlePreview(file)}><i className="fas fa-eye me-1"></i>Preview</Button>
+                                  <Button size="sm" variant="outline-primary" onClick={() => handleDownload(file._id, file.originalName || file.name)}><i className="fas fa-download me-1"></i>Download</Button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </Table>
+                  </div>
+                )}
+              </Card.Body>
+            </Card>
+          </Col>
+        </Row>
+      )}
 
       {activeTab === 'employee' && ['HR', 'ADMIN'].includes(user?.role) && !selectedEmpId && (
         <Row>
@@ -1027,78 +1162,129 @@ const Files = () => {
                   );
 
                   // ── Table view ──
+                  const thStyle = { padding: '0.65rem 0.85rem', fontWeight: 600, color: '#475569', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em', background: '#f8fafc', borderBottom: '2px solid #e2e8f0', whiteSpace: 'nowrap' };
                   return (
-                    <div className="table-responsive">
-                      <Table className="table">
+                    <div className="table-responsive" style={{ borderRadius: '0 0 0.75rem 0.75rem', overflow: 'hidden' }}>
+                      <Table className="table mb-0" style={{ fontSize: '0.85rem' }}>
                         <thead>
                           <tr>
                             {['HR','ADMIN'].includes(user?.role) && (
-                              <th style={{ width: 36 }}>
+                              <th style={{ ...thStyle, width: 40 }}>
                                 <input type="checkbox"
                                   checked={orgSelected.length === docs.length && docs.length > 0}
                                   onChange={e => setOrgSelected(e.target.checked ? docs.map(f => f._id) : [])}
                                   style={{ width: 15, height: 15, cursor: 'pointer' }} />
                               </th>
                             )}
-                            <th>Name</th><th>Category</th><th>Size</th>
-                            {['HR','ADMIN'].includes(user?.role) && <th>Uploaded By</th>}
-                            {['HR','ADMIN'].includes(user?.role) && <th>Visibility</th>}
-                            <th>Date</th><th>Actions</th>
+                            <th style={{ ...thStyle, minWidth: 220 }}>Name</th>
+                            <th style={thStyle}>Category</th>
+                            <th style={thStyle}>Folder</th>
+                            <th style={thStyle}>Size</th>
+                            {['HR','ADMIN'].includes(user?.role) && <th style={thStyle}>Uploaded By</th>}
+                            {['HR','ADMIN'].includes(user?.role) && <th style={thStyle}>Visibility</th>}
+                            <th style={thStyle}>Status</th>
+                            <th style={thStyle}>Date</th>
+                            <th style={{ ...thStyle, textAlign: 'right' }}>Actions</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {docs.map(file => {
+                          {docs.map((file, idx) => {
                             const fi = getFileIcon(file.mimeType);
                             const isExpiring = file.expiryDate && new Date(file.expiryDate) > new Date() && (new Date(file.expiryDate) - new Date()) < 7 * 86400000;
                             const isExpired = file.expiryDate && new Date(file.expiryDate) < new Date();
+                            const folderObj = file.folderId ? folders.find(x => String(x._id) === String(file.folderId)) : null;
+                            const rowBg = isExpired ? '#fff5f5' : isExpiring ? '#fffbeb' : idx % 2 === 0 ? '#fff' : '#fafbfc';
                             return (
-                              <tr key={file._id} style={{ background: isExpired ? '#fff5f5' : isExpiring ? '#fffbeb' : undefined }}>
+                              <tr key={file._id}
+                                style={{ background: rowBg, borderBottom: '1px solid #f1f5f9', transition: 'background 0.12s' }}
+                                onMouseEnter={e => e.currentTarget.style.background = '#f0f4ff'}
+                                onMouseLeave={e => e.currentTarget.style.background = rowBg}
+                              >
                                 {['HR','ADMIN'].includes(user?.role) && (
-                                  <td>
+                                  <td style={{ padding: '0.7rem 0.85rem', verticalAlign: 'middle' }}>
                                     <input type="checkbox" checked={orgSelected.includes(file._id)}
                                       onChange={e => setOrgSelected(prev => e.target.checked ? [...prev, file._id] : prev.filter(x => x !== file._id))}
                                       style={{ width: 15, height: 15, cursor: 'pointer' }} />
                                   </td>
                                 )}
-                                <td>
+                                {/* Name */}
+                                <td style={{ padding: '0.7rem 0.85rem', verticalAlign: 'middle', maxWidth: 260 }}>
                                   <div className="d-flex align-items-center gap-2">
-                                    <div style={{ width: 28, height: 28, borderRadius: '0.35rem', background: fi.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                      <i className={`fas ${fi.icon}`} style={{ color: fi.color, fontSize: '0.8rem' }}></i>
+                                    <div style={{ width: 34, height: 34, borderRadius: '0.45rem', background: fi.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                      <i className={`fas ${fi.icon}`} style={{ color: fi.color, fontSize: '0.9rem' }}></i>
                                     </div>
-                                    <div>
-                                      <div className="fw-semibold" style={{ fontSize: '0.85rem' }}>{file.name}</div>
-                                      {file.description && <small className="text-muted">{file.description}</small>}
-                                      {file.folderId && (() => { const f = folders.find(x => String(x._id) === String(file.folderId)); return f ? <div style={{ marginTop: '0.15rem' }}><span style={{ fontSize: '0.65rem', background: f.color + '20', color: f.color, padding: '0.1rem 0.4rem', borderRadius: '1rem', fontWeight: 600 }}><i className="fas fa-folder me-1"></i>{f.name}</span></div> : null; })()}
+                                    <div style={{ minWidth: 0 }}>
+                                      <div title={file.description || file.name} className="fw-semibold" style={{ fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200, color: '#1e293b' }}>{file.name}</div>
+                                      {file.description && <div style={{ fontSize: '0.72rem', color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>{file.description}</div>}
                                     </div>
                                   </div>
                                 </td>
-                                <td><span className="text-muted" style={{ fontSize: '0.82rem' }}>{file.category || '—'}</span></td>
-                                <td style={{ fontSize: '0.82rem' }}>{formatFileSize(file.size)}</td>
+                                {/* Category */}
+                                <td style={{ padding: '0.7rem 0.85rem', verticalAlign: 'middle' }}>
+                                  {file.category
+                                    ? <span style={{ fontSize: '0.75rem', fontWeight: 600, padding: '0.2rem 0.55rem', borderRadius: '1rem', background: '#f1f5f9', color: '#475569' }}>{file.category}</span>
+                                    : <span style={{ color: '#cbd5e1', fontSize: '0.8rem' }}>—</span>}
+                                </td>
+                                {/* Folder */}
+                                <td style={{ padding: '0.7rem 0.85rem', verticalAlign: 'middle' }}>
+                                  {folderObj
+                                    ? <span onClick={() => { setAssignFile(file); setShowAssignModal(true); }} title="Change folder" style={{ fontSize: '0.75rem', fontWeight: 600, padding: '0.2rem 0.55rem', borderRadius: '1rem', background: folderObj.color + '18', color: folderObj.color, cursor: ['HR','ADMIN'].includes(user?.role) ? 'pointer' : 'default', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                                        <i className="fas fa-folder" style={{ fontSize: '0.7rem' }}></i>{folderObj.name}
+                                      </span>
+                                    : <span style={{ color: '#cbd5e1', fontSize: '0.8rem' }}>—</span>}
+                                </td>
+                                {/* Size */}
+                                <td style={{ padding: '0.7rem 0.85rem', verticalAlign: 'middle', color: '#64748b', fontSize: '0.82rem', whiteSpace: 'nowrap' }}>{formatFileSize(file.size)}</td>
+                                {/* Uploaded By */}
                                 {['HR','ADMIN'].includes(user?.role) && (
-                                  <td style={{ fontSize: '0.82rem' }}>{file.uploadedBy?.firstName} {file.uploadedBy?.lastName}</td>
+                                  <td style={{ padding: '0.7rem 0.85rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                      <div style={{ width: 24, height: 24, borderRadius: '50%', background: '#eef2ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 700, color: '#6366f1', flexShrink: 0 }}>
+                                        {(file.uploadedBy?.firstName?.[0] || '') + (file.uploadedBy?.lastName?.[0] || '')}
+                                      </div>
+                                      <span style={{ fontSize: '0.82rem', color: '#374151' }}>{file.uploadedBy?.firstName} {file.uploadedBy?.lastName}</span>
+                                    </div>
+                                  </td>
                                 )}
-                                {['HR','ADMIN'].includes(user?.role) && <td>{getVisibilityBadge(file)}</td>}
-                                <td style={{ fontSize: '0.82rem' }}>
-                                  <div>{new Date(file.createdAt).toLocaleDateString()}</div>
-                                  {isExpired && <small style={{ color: '#ef4444', fontWeight: 600 }}><i className="fas fa-clock me-1"></i>Expired</small>}
-                                  {isExpiring && !isExpired && <small style={{ color: '#d97706', fontWeight: 600 }}><i className="fas fa-exclamation-triangle me-1"></i>Expiring soon</small>}
-                                </td>
-                                <td>
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-                                    {file.requiresAcknowledgment && <Badge bg="info" style={{ fontSize: '0.65rem' }}><i className="fas fa-signature me-1"></i>Ack required</Badge>}
+                                {/* Visibility */}
+                                {['HR','ADMIN'].includes(user?.role) && (
+                                  <td style={{ padding: '0.7rem 0.85rem', verticalAlign: 'middle' }}>{getVisibilityBadge(file)}</td>
+                                )}
+                                {/* Status */}
+                                <td style={{ padding: '0.7rem 0.85rem', verticalAlign: 'middle' }}>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                                     {isExpired && <Badge bg="danger" style={{ fontSize: '0.65rem' }}><i className="fas fa-clock me-1"></i>Expired</Badge>}
-                                    {isExpiring && !isExpired && <Badge bg="warning" style={{ fontSize: '0.65rem' }}><i className="fas fa-exclamation-triangle me-1"></i>Expiring soon</Badge>}
+                                    {isExpiring && !isExpired && <Badge bg="warning" style={{ fontSize: '0.65rem' }}><i className="fas fa-exclamation-triangle me-1"></i>Expiring</Badge>}
+                                    {file.requiresAcknowledgment && <Badge bg="info" style={{ fontSize: '0.65rem' }}><i className="fas fa-signature me-1"></i>Ack req.</Badge>}
+                                    {!isExpired && !isExpiring && !file.requiresAcknowledgment && <span style={{ color: '#cbd5e1', fontSize: '0.8rem' }}>—</span>}
                                   </div>
                                 </td>
-                                <td>
-                                  <div className="d-flex gap-1 flex-wrap">
-                                    <Button size="sm" variant="outline-secondary" onClick={() => handlePreview(file)}><i className="fas fa-eye"></i></Button>
-                                    <Button size="sm" variant="outline-primary" onClick={() => handleDownload(file._id, file.originalName || file.name)}><i className="fas fa-download"></i></Button>
+                                {/* Date */}
+                                <td style={{ padding: '0.7rem 0.85rem', verticalAlign: 'middle', color: '#64748b', fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
+                                  {new Date(file.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                </td>
+                                {/* Actions */}
+                                <td style={{ padding: '0.7rem 0.85rem', verticalAlign: 'middle', textAlign: 'right' }}>
+                                  <div className="d-flex gap-1 justify-content-end">
+                                    <button onClick={() => handlePreview(file)} title="Preview"
+                                      style={{ width: 30, height: 30, borderRadius: '0.4rem', border: '1px solid #e2e8f0', background: '#f8fafc', color: '#475569', cursor: 'pointer', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                      <i className="fas fa-eye"></i>
+                                    </button>
+                                    <button onClick={() => handleDownload(file._id, file.originalName || file.name)} title="Download"
+                                      style={{ width: 30, height: 30, borderRadius: '0.4rem', border: '1px solid #bfdbfe', background: '#eff6ff', color: '#3b82f6', cursor: 'pointer', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                      <i className="fas fa-download"></i>
+                                    </button>
                                     {['HR','ADMIN'].includes(user?.role) && (
-                                      <Button size="sm" variant="outline-secondary" onClick={() => { setAssignFile(file); setShowAssignModal(true); }} title="Move to folder" style={{ color: '#7c3aed', borderColor: '#ddd6fe' }}><i className="fas fa-folder-open"></i></Button>
+                                      <button onClick={() => { setAssignFile(file); setShowAssignModal(true); }} title="Move to folder"
+                                        style={{ width: 30, height: 30, borderRadius: '0.4rem', border: '1px solid #ddd6fe', background: '#f5f3ff', color: '#7c3aed', cursor: 'pointer', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <i className="fas fa-folder-open"></i>
+                                      </button>
                                     )}
                                     {['HR','ADMIN'].includes(user?.role) && (
-                                      <Button size="sm" variant="outline-danger" onClick={() => handleDeleteFile(file._id)}><i className="fas fa-trash"></i></Button>
+                                      <button onClick={() => handleDeleteFile(file._id)} title="Delete"
+                                        style={{ width: 30, height: 30, borderRadius: '0.4rem', border: '1px solid #fecaca', background: '#fef2f2', color: '#ef4444', cursor: 'pointer', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <i className="fas fa-trash"></i>
+                                      </button>
                                     )}
                                   </div>
                                 </td>
@@ -1330,32 +1516,227 @@ const Files = () => {
         </Row>
       )}
 
+      {/* HR Documents Tab - For HR/ADMIN */}
+      {activeTab === 'hr_documents' && ['HR', 'ADMIN'].includes(user?.role) && !hrSelectedEmpId && (
+        <Row>
+          <Col>
+            <Card className="modern-table-wrapper">
+              <Card.Header>
+                <div className="d-flex justify-content-between align-items-center">
+                  <h5 className="mb-0"><i className="fas fa-file-invoice-dollar me-2"></i>HR Documents by Employee</h5>
+                  <Form.Control
+                    type="text" placeholder="Search employee..."
+                    value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+                    style={{ width: 240, fontSize: '0.85rem' }}
+                  />
+                </div>
+              </Card.Header>
+              <Card.Body>
+                {(() => {
+                  // Build employee map from HR documents
+                  const empMap = {};
+                  hrDocumentFiles.forEach(f => {
+                    const tid = f.targetUserId;
+                    if (!tid) return;
+                    if (!empMap[tid]) empMap[tid] = { id: tid, files: [] };
+                    empMap[tid].files.push(f);
+                  });
+                  
+                  // Include all employees
+                  employees.forEach(emp => {
+                    if (!empMap[emp._id]) empMap[emp._id] = { id: emp._id, files: [] };
+                  });
+                  
+                  const term = searchTerm.toLowerCase();
+                  const empList = Object.values(empMap).filter(e => {
+                    const emp = employees.find(x => x._id === e.id);
+                    if (!emp) return false;
+                    return !term || `${emp.firstName} ${emp.lastName}`.toLowerCase().includes(term) || (emp.department || '').toLowerCase().includes(term);
+                  });
+                  
+                  if (empList.length === 0) return (
+                    <div className="table-empty"><i className="fas fa-users"></i><p className="mb-0">No employees found</p></div>
+                  );
+                  
+                  return (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px,1fr))', gap: '1rem' }}>
+                      {empList.map(e => {
+                        const emp = employees.find(x => x._id === e.id);
+                        if (!emp) return null;
+                        const initials = `${emp.firstName?.[0] || ''}${emp.lastName?.[0] || ''}`.toUpperCase();
+                        const colors = ['#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899'];
+                        const color = colors[(emp.firstName?.charCodeAt(0) || 0) % colors.length];
+                        
+                        // Count by document type
+                        const salarySlips = e.files.filter(f => f.subType === 'SALARY_SLIP').length;
+                        const offerLetters = e.files.filter(f => f.subType === 'OFFER_LETTER').length;
+                        const appraisals = e.files.filter(f => f.subType === 'APPRAISAL_LETTER').length;
+                        const others = e.files.filter(f => !['SALARY_SLIP', 'OFFER_LETTER', 'APPRAISAL_LETTER'].includes(f.subType)).length;
+                        
+                        return (
+                          <div key={e.id} onClick={() => setHrSelectedEmpId(e.id)}
+                            style={{ background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: '0.875rem', padding: '1.25rem 1rem', cursor: 'pointer', transition: 'box-shadow 0.15s, border-color 0.15s' }}
+                            onMouseEnter={el => { el.currentTarget.style.boxShadow = '0 4px 16px rgba(16,185,129,0.12)'; el.currentTarget.style.borderColor = '#6ee7b7'; }}
+                            onMouseLeave={el => { el.currentTarget.style.boxShadow = 'none'; el.currentTarget.style.borderColor = '#e2e8f0'; }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.85rem' }}>
+                              <div style={{ width: 42, height: 42, borderRadius: '50%', background: color + '20', border: `2px solid ${color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.95rem', color, flexShrink: 0 }}>
+                                {initials}
+                              </div>
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{emp.firstName} {emp.lastName}</div>
+                                <div style={{ fontSize: '0.72rem', color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{emp.department || emp.designation || 'No dept'}</div>
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.65rem' }}>
+                              <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.2rem 0.5rem', borderRadius: '1rem', background: '#f1f5f9', color: '#475569' }}>
+                                <i className="fas fa-file me-1"></i>{e.files.length} docs
+                              </span>
+                              {salarySlips > 0 && <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.2rem 0.5rem', borderRadius: '1rem', background: '#ecfdf5', color: '#10b981' }}>
+                                <i className="fas fa-file-invoice-dollar me-1"></i>{salarySlips} salary
+                              </span>}
+                              {offerLetters > 0 && <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.2rem 0.5rem', borderRadius: '1rem', background: '#eef2ff', color: '#6366f1' }}>
+                                <i className="fas fa-file-signature me-1"></i>{offerLetters} offer
+                              </span>}
+                              {appraisals > 0 && <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.2rem 0.5rem', borderRadius: '1rem', background: '#fffbeb', color: '#f59e0b' }}>
+                                <i className="fas fa-chart-line me-1"></i>{appraisals} appraisal
+                              </span>}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                              <i className="fas fa-chevron-right" style={{ color: '#cbd5e1', fontSize: '0.75rem' }}></i>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </Card.Body>
+            </Card>
+          </Col>
+        </Row>
+      )}
+
+      {/* HR Documents - Selected Employee Detail */}
+      {activeTab === 'hr_documents' && ['HR', 'ADMIN'].includes(user?.role) && hrSelectedEmpId && (() => {
+        const emp = employees.find(x => x._id === hrSelectedEmpId);
+        const empHrDocs = hrDocumentFiles.filter(f => f.targetUserId === hrSelectedEmpId);
+        const initials = `${emp?.firstName?.[0] || ''}${emp?.lastName?.[0] || ''}`.toUpperCase();
+        const colors = ['#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899'];
+        const color = colors[(emp?.firstName?.charCodeAt(0) || 0) % colors.length];
+        
+        return (
+          <Row>
+            <Col>
+              <Card className="modern-table-wrapper">
+                <Card.Header>
+                  <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                    <div className="d-flex align-items-center gap-2">
+                      <button onClick={() => setHrSelectedEmpId(null)} style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem' }}>
+                        <i className="fas fa-arrow-left me-1"></i>Back
+                      </button>
+                      <span style={{ color: '#cbd5e1' }}>|</span>
+                      <div style={{ width: 32, height: 32, borderRadius: '50%', background: color + '20', border: `2px solid ${color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.8rem', color }}>{initials}</div>
+                      <div>
+                        <h5 className="mb-0" style={{ fontSize: '0.95rem' }}>{emp?.firstName} {emp?.lastName}</h5>
+                        <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{emp?.department || emp?.designation || ''}</div>
+                      </div>
+                    </div>
+                    <Button size="sm" variant="success" onClick={() => { 
+                      console.log('Selected employee ID:', hrSelectedEmpId);
+                      console.log('Employee details:', employees.find(x => x._id === hrSelectedEmpId));
+                      setFileForm({ type: 'HR_DOCUMENT', subType: 'SALARY_SLIP', category: '', description: '', targetUserId: hrSelectedEmpId, requiresAcknowledgment: false, visibility: { type: 'ALL', departments: [], roles: [], employees: [] }, month: new Date().getMonth() + 1, year: new Date().getFullYear() }); 
+                      setUploadFolderId(null); 
+                      setShowModal(true); 
+                    }}>
+                      <i className="fas fa-upload me-1"></i>Upload HR Doc for {emp?.firstName}
+                    </Button>
+                  </div>
+                </Card.Header>
+                <Card.Body className="p-0">
+                  {empHrDocs.length === 0 ? (
+                    <div className="table-empty"><i className="fas fa-folder-open"></i><p className="mb-0">No HR documents for this employee</p></div>
+                  ) : (
+                    <div className="table-responsive">
+                      <Table className="table">
+                        <thead>
+                          <tr><th>Document Type</th><th>Name</th><th>Month/Year</th><th>Size</th><th>Date</th><th>Actions</th></tr>
+                        </thead>
+                        <tbody>
+                          {empHrDocs.map(file => {
+                            const subTypeInfo = getSubTypeInfo(file.subType);
+                            return (
+                              <tr key={file._id}>
+                                <td>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <div style={{ width: 32, height: 32, borderRadius: '0.4rem', background: subTypeInfo.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                      <i className={`fas ${subTypeInfo.icon}`} style={{ color: subTypeInfo.color, fontSize: '0.9rem' }}></i>
+                                    </div>
+                                    <span style={{ fontWeight: 600, color: subTypeInfo.color }}>{subTypeInfo.label}</span>
+                                  </div>
+                                </td>
+                                <td>
+                                  <div className="fw-semibold">{file.name}</div>
+                                  {file.description && <small className="text-muted">{file.description}</small>}
+                                </td>
+                                <td>
+                                  {file.month && file.year ? (
+                                    <span className="text-muted">{MONTHS[file.month - 1]} {file.year}</span>
+                                  ) : (
+                                    <span style={{ color: '#cbd5e1' }}>—</span>
+                                  )}
+                                </td>
+                                <td>{formatFileSize(file.size)}</td>
+                                <td><span className="text-muted">{new Date(file.createdAt).toLocaleDateString()}</span></td>
+                                <td>
+                                  <div className="d-flex gap-1 flex-wrap">
+                                    <Button size="sm" variant="outline-secondary" onClick={() => handlePreview(file)}><i className="fas fa-eye me-1"></i>Preview</Button>
+                                    <Button size="sm" variant="outline-primary" onClick={() => handleDownload(file._id, file.originalName || file.name)}><i className="fas fa-download me-1"></i>Download</Button>
+                                    <Button size="sm" variant="outline-danger" onClick={() => handleDeleteFile(file._id)}><i className="fas fa-trash me-1"></i>Delete</Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </Table>
+                    </div>
+                  )}
+                </Card.Body>
+              </Card>
+            </Col>
+          </Row>
+        );
+      })()}
+
+
+
       {/* Upload Modal */}
       <Modal show={showModal} onHide={() => !uploading && setShowModal(false)} size="lg" centered>
-        <Form onSubmit={handleFileUpload}>
-          <Modal.Header closeButton style={{ background: 'linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%)', color: '#fff', borderBottom: 'none', borderRadius: '0.5rem 0.5rem 0 0' }}>
+        <Form onSubmit={handleFileUpload} id="uploadForm">
+          <Modal.Header closeButton style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff', borderBottom: 'none', borderRadius: '0.5rem 0.5rem 0 0', flexShrink: 0 }}>
             <Modal.Title style={{ fontWeight: 700, fontSize: '1.1rem' }}>
               <i className="fas fa-cloud-upload-alt me-2"></i>
-              {uploadFolderId ? `Upload to "${activeFolder?.folder?.name || 'Folder'}"` : user?.role === 'EMPLOYEE' ? 'Upload My Document' : 'Upload File'}
+              {uploadFolderId ? `Upload to "${activeFolder?.folder?.name || 'Folder'}"` : user?.role === 'EMPLOYEE' ? 'Upload My Document' : 'Upload Document'}
             </Modal.Title>
           </Modal.Header>
 
-          <Modal.Body style={{ background: '#f8fafc', padding: '1.5rem' }}>
+          <Modal.Body style={{ background: '#f0fdf4', padding: '1.5rem', overflowY: 'auto', maxHeight: '60vh' }}>
 
             {/* Drag & Drop Zone */}
             <div
               onClick={() => document.getElementById('fileInput').click()}
-              onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = '#6366f1'; e.currentTarget.style.background = '#eef2ff'; }}
-              onDragLeave={(e) => { e.currentTarget.style.borderColor = '#c7d2fe'; e.currentTarget.style.background = '#fff'; }}
+              onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.borderColor = '#10b981'; e.currentTarget.style.background = '#ecfdf5'; }}
+              onDragLeave={(e) => { e.currentTarget.style.borderColor = '#86efac'; e.currentTarget.style.background = '#fff'; }}
               onDrop={(e) => {
                 e.preventDefault();
-                e.currentTarget.style.borderColor = '#c7d2fe';
+                e.currentTarget.style.borderColor = '#86efac';
                 e.currentTarget.style.background = '#fff';
                 const dropped = e.dataTransfer.files[0];
                 if (dropped) setSelectedFile(dropped);
               }}
               style={{
-                border: '2px dashed #c7d2fe',
+                border: '2px dashed #86efac',
                 borderRadius: '0.75rem',
                 background: '#fff',
                 padding: '2rem',
@@ -1374,14 +1755,14 @@ const Files = () => {
               />
               {selectedFile ? (
                 <div>
-                  <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#eef2ff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.75rem' }}>
-                    <i className="fas fa-file-alt" style={{ fontSize: '1.4rem', color: '#6366f1' }}></i>
+                  <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.75rem' }}>
+                    <i className="fas fa-file-alt" style={{ fontSize: '1.4rem', color: '#10b981' }}></i>
                   </div>
                   <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.95rem' }}>{selectedFile.name}</div>
                   <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '0.25rem' }}>
                     {formatFileSize(selectedFile.size)}
                     <span
-                      style={{ marginLeft: '0.75rem', color: '#6366f1', cursor: 'pointer', fontWeight: 600 }}
+                      style={{ marginLeft: '0.75rem', color: '#10b981', cursor: 'pointer', fontWeight: 600 }}
                       onClick={(e) => { e.stopPropagation(); setSelectedFile(null); }}
                     >
                       <i className="fas fa-times me-1"></i>Remove
@@ -1390,67 +1771,120 @@ const Files = () => {
                 </div>
               ) : (
                 <div>
-                  <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#eef2ff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.75rem' }}>
-                    <i className="fas fa-cloud-upload-alt" style={{ fontSize: '1.6rem', color: '#6366f1' }}></i>
+                  <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.75rem' }}>
+                    <i className="fas fa-cloud-upload-alt" style={{ fontSize: '1.6rem', color: '#10b981' }}></i>
                   </div>
                   <div style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.95rem' }}>Drag & drop your file here</div>
-                  <div style={{ color: '#94a3b8', fontSize: '0.8rem', marginTop: '0.25rem' }}>or <span style={{ color: '#6366f1', fontWeight: 600 }}>click to browse</span></div>
+                  <div style={{ color: '#94a3b8', fontSize: '0.8rem', marginTop: '0.25rem' }}>or <span style={{ color: '#10b981', fontWeight: 600 }}>click to browse</span></div>
                   <div style={{ color: '#cbd5e1', fontSize: '0.75rem', marginTop: '0.5rem' }}>PDF, DOC, XLS, PNG, JPG supported</div>
                 </div>
               )}
             </div>
 
+            {/* Section: Document Type Selection */}
+            {user?.role !== 'EMPLOYEE' && (
+              <div style={{ background: '#fff', borderRadius: '0.75rem', border: '1px solid #d1fae5', padding: '1.25rem', marginBottom: '1rem' }}>
+                <div style={{ fontWeight: 700, color: '#374151', fontSize: '0.85rem', marginBottom: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ width: 24, height: 24, borderRadius: '50%', background: '#d1fae5', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <i className="fas fa-file-alt" style={{ color: '#10b981', fontSize: '0.75rem' }}></i>
+                  </span>
+                  Document Type
+                </div>
+                <div className="d-flex gap-2">
+                  {[
+                    { value: 'ORGANIZATION', icon: 'building', label: 'Organization', desc: 'Policies, handbooks, forms', color: '#10b981' },
+                    { value: 'EMPLOYEE', icon: 'user', label: 'Employee', desc: 'Joining docs, ID proofs', color: '#059669' },
+                    { value: 'HR_DOCUMENT', icon: 'file-invoice-dollar', label: 'HR Document', desc: 'Salary slips, letters', color: '#047857' }
+                  ].map(t => (
+                    <div
+                      key={t.value}
+                      onClick={() => setFileForm({ ...fileForm, type: t.value, targetUserId: '', category: '', subType: t.value === 'HR_DOCUMENT' ? 'SALARY_SLIP' : '' })}
+                      style={{
+                        flex: 1, padding: '0.75rem 0.65rem', borderRadius: '0.6rem', cursor: 'pointer', textAlign: 'center', fontSize: '0.78rem', fontWeight: 600, transition: 'all 0.15s',
+                        border: fileForm.type === t.value ? `2px solid ${t.color}` : '2px solid #d1fae5',
+                        background: fileForm.type === t.value ? `${t.color}15` : '#f0fdf4',
+                        color: fileForm.type === t.value ? t.color : '#64748b'
+                      }}
+                    >
+                      <i className={`fas fa-${t.icon}`} style={{ display: 'block', fontSize: '1.3rem', marginBottom: '0.4rem' }}></i>
+                      <div style={{ fontWeight: 700, marginBottom: '0.15rem' }}>{t.label}</div>
+                      <div style={{ fontSize: '0.68rem', opacity: 0.8 }}>{t.desc}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Section: File Details */}
-            <div style={{ background: '#fff', borderRadius: '0.75rem', border: '1px solid #e2e8f0', padding: '1.25rem', marginBottom: '1rem' }}>
+            <div style={{ background: '#fff', borderRadius: '0.75rem', border: '1px solid #d1fae5', padding: '1.25rem', marginBottom: '1rem' }}>
               <div style={{ fontWeight: 700, color: '#374151', fontSize: '0.85rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span style={{ width: 24, height: 24, borderRadius: '50%', background: '#eef2ff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <i className="fas fa-info-circle" style={{ color: '#6366f1', fontSize: '0.75rem' }}></i>
+                <span style={{ width: 24, height: 24, borderRadius: '50%', background: '#d1fae5', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <i className="fas fa-info-circle" style={{ color: '#10b981', fontSize: '0.75rem' }}></i>
                 </span>
-                File Details
+                {fileForm.type === 'EMPLOYEE' ? 'Employee Document Details' : 'Document Details'}
               </div>
               <Row className="g-3">
-                {user?.role !== 'EMPLOYEE' && (
-                  <Col md={6}>
-                    <Form.Label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#374151' }}>Document Type</Form.Label>
-                    <div className="d-flex gap-2">
-                      {['ORGANIZATION', 'EMPLOYEE'].map(t => (
-                        <div
-                          key={t}
-                          onClick={() => setFileForm({ ...fileForm, type: t, targetUserId: '' })}
-                          style={{
-                            flex: 1, padding: '0.6rem', borderRadius: '0.5rem', cursor: 'pointer', textAlign: 'center', fontSize: '0.8rem', fontWeight: 600, transition: 'all 0.15s',
-                            border: fileForm.type === t ? '2px solid #6366f1' : '2px solid #e2e8f0',
-                            background: fileForm.type === t ? '#eef2ff' : '#f8fafc',
-                            color: fileForm.type === t ? '#6366f1' : '#64748b'
-                          }}
-                        >
-                          <i className={`fas fa-${t === 'ORGANIZATION' ? 'building' : 'user'} me-1`}></i>
-                          {t === 'ORGANIZATION' ? 'Organization' : 'Employee'}
-                        </div>
-                      ))}
+                {/* HR Document Sub-Type */}
+                {fileForm.type === 'HR_DOCUMENT' && (
+                  <Col md={12}>
+                    <Form.Label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#374151' }}>HR Document Type <span className="text-danger">*</span></Form.Label>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '0.5rem' }}>
+                      {HR_SUB_TYPES.map(st => {
+                        const selected = fileForm.subType === st.value;
+                        return (
+                          <div
+                            key={st.value}
+                            onClick={() => setFileForm({ ...fileForm, subType: st.value })}
+                            style={{
+                              padding: '0.6rem 0.75rem', borderRadius: '0.5rem', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600, transition: 'all 0.15s',
+                              border: selected ? `2px solid ${st.color}` : '1.5px solid #e2e8f0',
+                              background: selected ? st.bg : '#f8fafc',
+                              color: selected ? st.color : '#64748b',
+                              display: 'flex', alignItems: 'center', gap: '0.5rem'
+                            }}
+                          >
+                            <i className={`fas ${st.icon}`} style={{ fontSize: '0.9rem' }}></i>
+                            <span>{st.label}</span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </Col>
                 )}
-                <Col md={user?.role !== 'EMPLOYEE' ? 6 : 12}>
-                  <Form.Label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#374151' }}>Category</Form.Label>
-                  <Form.Select
-                    value={fileForm.category}
-                    onChange={(e) => setFileForm({ ...fileForm, category: e.target.value })}
-                    style={{ fontSize: '0.85rem', borderRadius: '0.5rem' }}
-                  >
-                    <option value="">Select category...</option>
-                    {['Policy', 'Handbook', 'Form', 'Contract', 'Offer Letter', 'ID Proof', 'Certificate', 'Other'].map(c => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </Form.Select>
-                </Col>
-                {fileForm.type === 'EMPLOYEE' && user?.role !== 'EMPLOYEE' && (
-                  <Col md={12}>
-                    <Form.Label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#374151' }}>Assign to Employee</Form.Label>
+
+                {/* Category - Only for non-HR documents */}
+                {fileForm.type !== 'HR_DOCUMENT' && (
+                  <Col md={fileForm.type === 'EMPLOYEE' && user?.role !== 'EMPLOYEE' ? 6 : 12}>
+                    <Form.Label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#374151' }}>Category</Form.Label>
+                    <Form.Select
+                      value={fileForm.category}
+                      onChange={(e) => setFileForm({ ...fileForm, category: e.target.value })}
+                      style={{ fontSize: '0.85rem', borderRadius: '0.5rem' }}
+                    >
+                      <option value="">Select category...</option>
+                      {fileForm.type === 'EMPLOYEE' ? (
+                        ['Aadhar Card', 'PAN Card', 'Passport', 'Driving License', 'Voter ID', 'Educational Certificate', 'Experience Letter', 'Resume', 'Bank Details', 'Other'].map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))
+                      ) : (
+                        ['Policy', 'Handbook', 'Form', 'Contract', 'Offer Letter', 'Announcement', 'Guideline', 'Other'].map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))
+                      )}
+                    </Form.Select>
+                  </Col>
+                )}
+
+                {/* Employee Selection */}
+                {(fileForm.type === 'EMPLOYEE' || fileForm.type === 'HR_DOCUMENT') && user?.role !== 'EMPLOYEE' && (
+                  <Col md={fileForm.type === 'EMPLOYEE' ? 6 : 12}>
+                    <Form.Label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#374151' }}>
+                      {fileForm.type === 'HR_DOCUMENT' ? 'Select Employee' : 'Assign to Employee'} <span className="text-danger">*</span>
+                    </Form.Label>
                     <Form.Select
                       value={fileForm.targetUserId}
                       onChange={(e) => setFileForm({ ...fileForm, targetUserId: e.target.value })}
-                      required={fileForm.type === 'EMPLOYEE'}
+                      required={fileForm.type === 'EMPLOYEE' || fileForm.type === 'HR_DOCUMENT'}
                       style={{ fontSize: '0.85rem', borderRadius: '0.5rem' }}
                     >
                       <option value="">Select employee...</option>
@@ -1462,6 +1896,39 @@ const Files = () => {
                     </Form.Select>
                   </Col>
                 )}
+
+                {/* Month & Year for HR Documents */}
+                {fileForm.type === 'HR_DOCUMENT' && (
+                  <>
+                    <Col md={6}>
+                      <Form.Label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#374151' }}>Month</Form.Label>
+                      <Form.Select
+                        value={fileForm.month}
+                        onChange={(e) => setFileForm({ ...fileForm, month: e.target.value })}
+                        style={{ fontSize: '0.85rem', borderRadius: '0.5rem' }}
+                      >
+                        <option value="">Select month...</option>
+                        {MONTHS.map((m, idx) => (
+                          <option key={idx} value={idx + 1}>{m}</option>
+                        ))}
+                      </Form.Select>
+                    </Col>
+                    <Col md={6}>
+                      <Form.Label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#374151' }}>Year</Form.Label>
+                      <Form.Select
+                        value={fileForm.year}
+                        onChange={(e) => setFileForm({ ...fileForm, year: e.target.value })}
+                        style={{ fontSize: '0.85rem', borderRadius: '0.5rem' }}
+                      >
+                        <option value="">Select year...</option>
+                        {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i).map(y => (
+                          <option key={y} value={y}>{y}</option>
+                        ))}
+                      </Form.Select>
+                    </Col>
+                  </>
+                )}
+
                 <Col md={12}>
                   <Form.Label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#374151' }}>Description <span style={{ color: '#94a3b8', fontWeight: 400 }}>(optional)</span></Form.Label>
                   <Form.Control
@@ -1476,9 +1943,9 @@ const Files = () => {
               </Row>
             </div>
 
-            {/* Section: Visibility — only for ORGANIZATION type and non-employee */}
-            {fileForm.type === 'ORGANIZATION' && user?.role !== 'EMPLOYEE' && (
-              <div style={{ background: '#fff', borderRadius: '0.75rem', border: '1px solid #e2e8f0', padding: '1.25rem', marginBottom: '1rem' }}>
+            {/* Section: Visibility — only for ORGANIZATION type */}
+            {fileForm.type === 'ORGANIZATION' && (
+              <div style={{ background: '#fff', borderRadius: '0.75rem', border: '1px solid #d1fae5', padding: '1.25rem', marginBottom: '1rem' }}>
                 <div style={{ fontWeight: 700, color: '#374151', fontSize: '0.85rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <span style={{ width: 24, height: 24, borderRadius: '50%', background: '#fef3c7', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                     <i className="fas fa-eye" style={{ color: '#d97706', fontSize: '0.75rem' }}></i>
@@ -1602,7 +2069,7 @@ const Files = () => {
             )}
 
             {/* Section: Options */}
-            <div style={{ background: '#fff', borderRadius: '0.75rem', border: '1px solid #e2e8f0', padding: '1rem 1.25rem' }}>
+            <div style={{ background: '#fff', borderRadius: '0.75rem', border: '1px solid #d1fae5', padding: '1rem 1.25rem' }}>
               <div
                 onClick={() => setFileForm({ ...fileForm, requiresAcknowledgment: !fileForm.requiresAcknowledgment })}
                 style={{
@@ -1611,7 +2078,7 @@ const Files = () => {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                  <span style={{ width: 32, height: 32, borderRadius: '0.4rem', background: fileForm.requiresAcknowledgment ? '#ecfdf5' : '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ width: 32, height: 32, borderRadius: '0.4rem', background: fileForm.requiresAcknowledgment ? '#d1fae5' : '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <i className="fas fa-signature" style={{ color: fileForm.requiresAcknowledgment ? '#10b981' : '#94a3b8', fontSize: '0.85rem' }}></i>
                   </span>
                   <div>
@@ -1634,22 +2101,22 @@ const Files = () => {
 
           </Modal.Body>
 
-          <Modal.Footer style={{ background: '#f8fafc', borderTop: '1px solid #e2e8f0', padding: '1rem 1.5rem' }}>
+          <Modal.Footer style={{ background: '#f0fdf4', borderTop: '1px solid #d1fae5', padding: '1rem 1.5rem', display: 'flex !important', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
             <Button
               variant="light"
               onClick={() => setShowModal(false)}
               disabled={uploading}
-              style={{ fontWeight: 600, fontSize: '0.85rem', borderRadius: '0.5rem', border: '1.5px solid #e2e8f0' }}
+              style={{ fontWeight: 600, fontSize: '0.85rem', borderRadius: '0.5rem', border: '1.5px solid #d1fae5', background: '#fff', color: '#64748b', padding: '0.5rem 1.5rem' }}
             >
-              Cancel
+              <i className="fas fa-times me-2"></i>Cancel
             </Button>
             <Button
               type="submit"
               disabled={uploading || !selectedFile}
               style={{
-                background: uploading ? '#a5b4fc' : 'linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%)',
+                background: uploading ? '#6ee7b7' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                 border: 'none', fontWeight: 700, fontSize: '0.85rem', borderRadius: '0.5rem',
-                padding: '0.5rem 1.5rem', minWidth: 130
+                padding: '0.5rem 1.5rem', minWidth: 130, color: '#fff'
               }}
             >
               {uploading ? (

@@ -1,12 +1,18 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { checkUserPermission } = require('../controllers/permissionController');
+const tokenBlacklist = require('../utils/tokenBlacklist');
 
 const auth = async (req, res, next) => {
   try {
     const token = req.header('Authorization')?.replace('Bearer ', '');
     if (!token) {
       return res.status(401).json({ message: 'Access denied. No token provided.' });
+    }
+
+    // Check if token is blacklisted
+    if (tokenBlacklist.isBlacklisted(token)) {
+      return res.status(401).json({ message: 'Token has been revoked.' });
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -17,6 +23,7 @@ const auth = async (req, res, next) => {
     }
 
     req.user = user;
+    req.token = token; // Store token for logout
     next();
   } catch (error) {
     res.status(401).json({ message: 'Invalid token.' });

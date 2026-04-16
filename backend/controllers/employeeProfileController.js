@@ -1,6 +1,7 @@
 const EmployeeProfile = require('../models/EmployeeProfile');
 const User = require('../models/User');
 const { uploadProfileImage, deleteProfileImage } = require('../utils/s3Utils');
+const logger = require('../utils/logger');
 
 const getProfile = async (req, res) => {
   try {

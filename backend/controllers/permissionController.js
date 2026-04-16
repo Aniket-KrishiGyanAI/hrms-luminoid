@@ -1,6 +1,7 @@
 const Permission = require('../models/Permission');
 const Role = require('../models/Role');
 const User = require('../models/User');
+const logger = require('../utils/logger');
 
 const getPermissions = async (req, res) => {
   try {
