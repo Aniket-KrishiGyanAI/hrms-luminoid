@@ -796,7 +796,7 @@ const TaskManagement = () => {
               <Button className="btn-work-logs" onClick={() => {
                 fetchWorkLogs();
                 setShowWorkLogHistory(true);
-              }}>
+              }} style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', border: 'none', color: 'white' }}>
                 <i className="fas fa-clipboard-list me-2"></i>Work Logs
               </Button>
             )}

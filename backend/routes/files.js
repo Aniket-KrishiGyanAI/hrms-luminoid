@@ -5,7 +5,20 @@ const { auth, authorize } = require('../middleware/auth');
 
 const router = express.Router();
 
-const upload = multer({ storage: multer.memoryStorage() });
+const ALLOWED_FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_FILE_SIZE },
+  fileFilter: (req, file, cb) => {
+    if (ALLOWED_FILE_TYPES.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only PDF, JPEG, and PNG files are allowed'));
+    }
+  }
+});
 
 router.get('/', auth, getFiles);
 router.post('/upload', auth, upload.single('file'), uploadFile);

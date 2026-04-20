@@ -1,6 +1,7 @@
 const Holiday = require("../models/Holiday");
 const User = require("../models/User");
 const { sendHolidayNotification } = require("../utils/emailService");
+const logger = require('../utils/logger');
 
 const getHolidays = async (req, res) => {
   try {
@@ -17,23 +18,19 @@ const getHolidays = async (req, res) => {
       startDate = new Date(queryStartDate);
       endDate = new Date(queryEndDate);
       endDate.setHours(23, 59, 59, 999); // Include entire end day
-      console.log("🏖️ Holidays query by date range:", {
-        queryStartDate,
-        queryEndDate,
-        mongoQuery: { $gte: startDate, $lte: endDate },
-      });
+      
     } else {
       const yearValue = year || new Date().getFullYear();
       startDate = new Date(yearValue, 0, 1);
       endDate = new Date(yearValue, 11, 31);
-      console.log("🏖️ Holidays query by year:", yearValue);
+      
     }
 
     const holidays = await Holiday.find({
       date: { $gte: startDate, $lte: endDate },
     }).sort({ date: 1 });
 
-    console.log("🏖️ Holidays found:", holidays.length, holidays);
+    
     res.json(holidays);
   } catch (error) {
     console.error("❌ Holiday error:", error.message);

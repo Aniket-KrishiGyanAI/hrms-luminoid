@@ -10,19 +10,19 @@ const moment = require('moment-timezone');
 
 // Monthly accrual on 1st of every month at 00:00
 cron.schedule('0 0 1 * *', async () => {
-  console.log('Running monthly accrual...');
+  
   await accrueBalances();
 });
 
 // Year-end carry forward on January 1st at 00:00
 cron.schedule('0 0 1 1 *', async () => {
-  console.log('Running year-end carry forward...');
+  
   await carryForward();
 });
 
 // Holiday notification - runs daily at 09:00 AM
 cron.schedule('0 9 * * *', async () => {
-  console.log('Checking for upcoming holidays...');
+  
   
   const twoDaysFromNow = new Date();
   twoDaysFromNow.setDate(twoDaysFromNow.getDate() + 2);
@@ -54,7 +54,7 @@ cron.schedule('0 9 * * *', async () => {
 
 // Leave reminder - runs daily at 10:00 AM
 cron.schedule('0 10 * * *', async () => {
-  console.log('Checking for pending leave approvals...');
+  
   
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -77,7 +77,7 @@ cron.schedule('0 10 * * *', async () => {
     }
     
     if (pendingLeaves.length > 0) {
-      console.log(`Sent ${pendingLeaves.length} leave reminder notifications`);
+      
     }
   } catch (error) {
     console.error('Error in leave reminder job:', error);
@@ -86,7 +86,7 @@ cron.schedule('0 10 * * *', async () => {
 
 // Auto checkout - runs every 30 minutes from 6 PM to 11 PM to handle different office end times
 cron.schedule('*/30 18-23 * * *', async () => {
-  console.log('Running auto checkout for employees who forgot to check out...');
+  
   
   const today = moment.tz('Asia/Kolkata').startOf('day').toDate();
   const now = moment.tz('Asia/Kolkata');
@@ -169,7 +169,7 @@ cron.schedule('*/30 18-23 * * *', async () => {
     }
     
     if (checkedOutCount > 0) {
-      console.log(`Auto checked out ${checkedOutCount} employees based on their office end times`);
+      
     }
   } catch (error) {
     console.error('Error in auto checkout job:', error);
@@ -178,11 +178,11 @@ cron.schedule('*/30 18-23 * * *', async () => {
 
 // Clear daily updates - runs daily at 00:00 (midnight)
 cron.schedule('0 0 * * *', async () => {
-  console.log('Clearing daily updates...');
+  
   
   try {
     const result = await DailyUpdate.deleteMany({});
-    console.log(`Deleted ${result.deletedCount} daily updates`);
+    
   } catch (error) {
     console.error('Error clearing daily updates:', error);
   }
@@ -212,7 +212,7 @@ cron.schedule('0 9 * * *', async () => {
 
 // Auto generate field visit daily reports — runs at 11:55 PM every day
 cron.schedule('55 23 * * *', async () => {
-  console.log('Generating field visit daily reports...');
+  
   try {
     const { generateDailyReport } = require('../controllers/fieldReportController');
     const FieldVisit = require('../models/FieldVisit');
@@ -227,7 +227,7 @@ cron.schedule('55 23 * * *', async () => {
     for (const empId of employeesWithVisits) {
       await generateDailyReport(empId, new Date());
     }
-    console.log(`Field reports generated for ${employeesWithVisits.length} employees`);
+    
   } catch (error) {
     console.error('Error generating field reports:', error);
   }
@@ -235,7 +235,7 @@ cron.schedule('55 23 * * *', async () => {
 
 // Auto-end active journeys at midnight
 cron.schedule('59 23 * * *', async () => {
-  console.log('Auto-ending active journeys at midnight...');
+  
   try {
     const { autoEndJourneys } = require('../controllers/journeyController');
     await autoEndJourneys();
@@ -246,7 +246,7 @@ cron.schedule('59 23 * * *', async () => {
 
 // Journey start reminder - runs every 30 minutes during work hours (9 AM - 6 PM)
 cron.schedule('*/30 9-18 * * *', async () => {
-  console.log('Checking for journey start reminders...');
+  
   try {
     const { sendJourneyStartReminders } = require('../services/journeyNotificationService');
     await sendJourneyStartReminders();
@@ -257,7 +257,7 @@ cron.schedule('*/30 9-18 * * *', async () => {
 
 // End journey reminder - runs at 6 PM and 7 PM
 cron.schedule('0 18,19 * * *', async () => {
-  console.log('Sending end journey reminders...');
+  
   try {
     const { sendEndJourneyReminders } = require('../services/journeyNotificationService');
     await sendEndJourneyReminders();
@@ -268,7 +268,7 @@ cron.schedule('0 18,19 * * *', async () => {
 
 // Low battery alerts - runs every hour during work hours
 cron.schedule('0 9-18 * * *', async () => {
-  console.log('Checking for low battery alerts...');
+  
   try {
     const { sendLowBatteryAlerts } = require('../services/journeyNotificationService');
     await sendLowBatteryAlerts();
@@ -277,5 +277,5 @@ cron.schedule('0 9-18 * * *', async () => {
   }
 });
 
-console.log('Cron jobs scheduled successfully');
+
 

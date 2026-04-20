@@ -287,116 +287,173 @@ const Announcements = () => {
       </Row>
 
       {/* Create Modal */}
-      <Modal show={showModal} onHide={() => setShowModal(false)} size="lg">
-        <Modal.Header closeButton>
-          <Modal.Title>Create New Announcement</Modal.Title>
-        </Modal.Header>
+      <Modal show={showModal} onHide={() => !submitting && setShowModal(false)} size="lg" centered>
         <Form onSubmit={handleSubmit}>
-          <Modal.Body>
-            <Row>
-              <Col md={8}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Title</Form.Label>
+          <Modal.Header closeButton style={{ background: 'linear-gradient(135deg,#10b981 0%,#059669 100%)', color: '#fff', borderBottom: 'none', borderRadius: '0.5rem 0.5rem 0 0' }}>
+            <Modal.Title style={{ fontWeight: 700, fontSize: '1.1rem' }}>
+              <i className="fas fa-bullhorn me-2"></i>Create New Announcement
+            </Modal.Title>
+          </Modal.Header>
+
+          <Modal.Body style={{ background: '#f8fafc', padding: '1.5rem', overflowY: 'auto', maxHeight: 'calc(100vh - 260px)' }} className="announcement-modal-body">
+
+            {/* Section: Basic Info */}
+            <div style={{ background: '#fff', borderRadius: '0.75rem', border: '1px solid #e2e8f0', padding: '1.25rem', marginBottom: '1rem' }}>
+              <div style={{ fontWeight: 700, color: '#374151', fontSize: '0.85rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ width: 24, height: 24, borderRadius: '50%', background: '#d1fae5', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <i className="fas fa-info-circle" style={{ color: '#10b981', fontSize: '0.75rem' }}></i>
+                </span>
+                Announcement Details
+              </div>
+              <Row className="g-3">
+                <Col md={8}>
+                  <Form.Label style={{ fontWeight: 600, fontSize: '0.82rem', color: '#374151' }}>Title <span className="text-danger">*</span></Form.Label>
                   <Form.Control
                     type="text"
                     value={formData.title}
                     onChange={(e) => setFormData({...formData, title: e.target.value})}
+                    placeholder="Enter announcement title..."
                     required
+                    style={{ borderRadius: '0.5rem', fontSize: '0.85rem' }}
                   />
-                </Form.Group>
-              </Col>
-              <Col md={4}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Priority</Form.Label>
-                  <Form.Select
-                    value={formData.priority}
-                    onChange={(e) => setFormData({...formData, priority: e.target.value})}
-                  >
-                    <option value="LOW">Low</option>
-                    <option value="MEDIUM">Medium</option>
-                    <option value="HIGH">High</option>
-                  </Form.Select>
-                </Form.Group>
-              </Col>
-            </Row>
-            <Form.Group className="mb-3">
-              <Form.Label>Content</Form.Label>
-              <Form.Control
-                as="textarea"
-                rows={4}
-                value={formData.content}
-                onChange={(e) => setFormData({...formData, content: e.target.value})}
-                required
-              />
-            </Form.Group>
-            <Row>
-              <Col md={6}>
-                <Form.Group className="mb-3">
-                  <Form.Label><i className="fas fa-user-tag me-2"></i>Target Roles</Form.Label>
-                  <div>
-                    {['EMPLOYEE', 'MANAGER', 'HR', 'ADMIN'].map(role => (
-                      <Form.Check
-                        key={role}
-                        type="checkbox"
-                        label={role}
-                        checked={formData.targetRoles.includes(role)}
-                        onChange={(e) => handleRoleChange(role, e.target.checked)}
-                      />
+                </Col>
+                <Col md={4}>
+                  <Form.Label style={{ fontWeight: 600, fontSize: '0.82rem', color: '#374151' }}>Priority</Form.Label>
+                  <div style={{ display: 'flex', gap: '0.4rem' }}>
+                    {[
+                      { value: 'LOW', color: '#06b6d4', bg: '#ecfeff', label: 'Low' },
+                      { value: 'MEDIUM', color: '#f59e0b', bg: '#fffbeb', label: 'Med' },
+                      { value: 'HIGH', color: '#ef4444', bg: '#fef2f2', label: 'High' },
+                    ].map(p => (
+                      <div key={p.value} onClick={() => setFormData({...formData, priority: p.value})}
+                        style={{
+                          flex: 1, padding: '0.5rem 0.25rem', borderRadius: '0.5rem', cursor: 'pointer',
+                          textAlign: 'center', fontSize: '0.78rem', fontWeight: 700, transition: 'all 0.15s',
+                          border: formData.priority === p.value ? `2px solid ${p.color}` : '2px solid #e2e8f0',
+                          background: formData.priority === p.value ? p.bg : '#f8fafc',
+                          color: formData.priority === p.value ? p.color : '#94a3b8'
+                        }}
+                      >
+                        {p.label}
+                      </div>
                     ))}
                   </div>
-                  <Form.Text className="text-muted">
-                    Leave empty to target all roles
-                  </Form.Text>
-                </Form.Group>
-              </Col>
-              <Col md={6}>
-                <Form.Group className="mb-3">
-                  <Form.Label><i className="fas fa-building me-2"></i>Target Departments</Form.Label>
-                  <div style={{ maxHeight: '150px', overflowY: 'auto', border: '1px solid #dee2e6', borderRadius: '4px', padding: '8px' }}>
-                    {departments.map(dept => (
-                      <Form.Check
-                        key={dept._id}
-                        type="checkbox"
-                        label={dept.name}
-                        checked={formData.targetDepartments.includes(dept._id)}
-                        onChange={(e) => handleDepartmentChange(dept._id, e.target.checked)}
-                      />
-                    ))}
-                  </div>
-                  <Form.Text className="text-muted">
-                    Leave empty to target all departments
-                  </Form.Text>
-                </Form.Group>
-              </Col>
-            </Row>
-            <Row>
-              <Col md={12}>
-                <Form.Group className="mb-3">
-                  <Form.Label><i className="fas fa-clock me-2"></i>Expiry Date (Optional)</Form.Label>
+                </Col>
+                <Col md={12}>
+                  <Form.Label style={{ fontWeight: 600, fontSize: '0.82rem', color: '#374151' }}>Content <span className="text-danger">*</span></Form.Label>
                   <Form.Control
-                    type="date"
-                    value={formData.expiryDate}
-                    onChange={(e) => setFormData({...formData, expiryDate: e.target.value})}
+                    as="textarea" rows={4}
+                    value={formData.content}
+                    onChange={(e) => setFormData({...formData, content: e.target.value})}
+                    placeholder="Write your announcement here..."
+                    required
+                    style={{ borderRadius: '0.5rem', fontSize: '0.85rem', resize: 'none' }}
                   />
-                  <Form.Text className="text-muted">
-                    Leave empty for no expiry
-                  </Form.Text>
-                </Form.Group>
-              </Col>
-            </Row>
+                </Col>
+              </Row>
+            </div>
+
+            {/* Section: Audience */}
+            <div style={{ background: '#fff', borderRadius: '0.75rem', border: '1px solid #e2e8f0', padding: '1.25rem', marginBottom: '1rem' }}>
+              <div style={{ fontWeight: 700, color: '#374151', fontSize: '0.85rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ width: 24, height: 24, borderRadius: '50%', background: '#d1fae5', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <i className="fas fa-users" style={{ color: '#10b981', fontSize: '0.7rem' }}></i>
+                </span>
+                Audience
+              </div>
+              <Row className="g-3">
+                <Col md={6}>
+                  <Form.Label style={{ fontWeight: 600, fontSize: '0.82rem', color: '#374151' }}>
+                    <i className="fas fa-user-tag me-1" style={{ color: '#10b981' }}></i>Target Roles
+                  </Form.Label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                    {[{ value: 'EMPLOYEE', icon: 'user', color: '#10b981', bg: '#d1fae5' }, { value: 'MANAGER', icon: 'user-tie', color: '#059669', bg: '#a7f3d0' }, { value: 'HR', icon: 'user-nurse', color: '#047857', bg: '#6ee7b7' }, { value: 'ADMIN', icon: 'shield-alt', color: '#065f46', bg: '#34d399' }].map(r => {
+                      const checked = formData.targetRoles.includes(r.value);
+                      return (
+                        <div key={r.value} onClick={() => handleRoleChange(r.value, !checked)}
+                          style={{
+                            padding: '0.45rem 0.85rem', borderRadius: '0.5rem', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600,
+                            border: checked ? `2px solid ${r.color}` : '2px solid #e2e8f0',
+                            background: checked ? r.bg : '#f8fafc',
+                            color: checked ? r.color : '#64748b',
+                            display: 'flex', alignItems: 'center', gap: '0.4rem', transition: 'all 0.15s'
+                          }}
+                        >
+                          <i className={`fas fa-${r.icon}`} style={{ fontSize: '0.75rem' }}></i>
+                          {r.value.charAt(0) + r.value.slice(1).toLowerCase()}
+                          {checked && <i className="fas fa-check" style={{ fontSize: '0.65rem' }}></i>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '0.4rem' }}>Leave empty to target all roles</div>
+                </Col>
+                <Col md={6}>
+                  <Form.Label style={{ fontWeight: 600, fontSize: '0.82rem', color: '#374151' }}>
+                    <i className="fas fa-building me-1" style={{ color: '#10b981' }}></i>Target Departments
+                  </Form.Label>
+                  <div style={{ maxHeight: 140, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.3rem' }} className="department-scroll">
+                    {departments.map(dept => {
+                      const checked = formData.targetDepartments.includes(dept._id);
+                      return (
+                        <div key={dept._id} onClick={() => handleDepartmentChange(dept._id, !checked)}
+                          style={{
+                            padding: '0.4rem 0.7rem', borderRadius: '0.4rem', cursor: 'pointer', fontSize: '0.82rem',
+                            border: checked ? '1.5px solid #10b981' : '1.5px solid #e2e8f0',
+                            background: checked ? '#d1fae5' : '#f8fafc',
+                            color: checked ? '#10b981' : '#374151',
+                            display: 'flex', alignItems: 'center', gap: '0.5rem', transition: 'all 0.15s'
+                          }}
+                        >
+                          <i className={`fas fa-${checked ? 'check-circle' : 'circle'}`} style={{ fontSize: '0.72rem', color: checked ? '#10b981' : '#cbd5e1' }}></i>
+                          <span style={{ fontWeight: checked ? 600 : 400 }}>{dept.name}</span>
+                        </div>
+                      );
+                    })}
+                    {departments.length === 0 && <small className="text-muted">No departments found</small>}
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '0.4rem' }}>Leave empty to target all departments</div>
+                </Col>
+              </Row>
+            </div>
+
+            {/* Section: Expiry */}
+            <div style={{ background: '#fff', borderRadius: '0.75rem', border: '1px solid #e2e8f0', padding: '1.25rem' }}>
+              <div style={{ fontWeight: 700, color: '#374151', fontSize: '0.85rem', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ width: 24, height: 24, borderRadius: '50%', background: '#d1fae5', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <i className="fas fa-clock" style={{ color: '#10b981', fontSize: '0.7rem' }}></i>
+                </span>
+                Expiry Date <span style={{ color: '#94a3b8', fontWeight: 400, fontSize: '0.78rem' }}>(optional)</span>
+              </div>
+              <Form.Control
+                type="date"
+                value={formData.expiryDate}
+                onChange={(e) => setFormData({...formData, expiryDate: e.target.value})}
+                style={{ borderRadius: '0.5rem', fontSize: '0.85rem', maxWidth: 220 }}
+              />
+              <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '0.4rem' }}>Leave empty for no expiry</div>
+            </div>
+
           </Modal.Body>
-          <Modal.Footer>
-            <Button variant="secondary" onClick={() => setShowModal(false)} disabled={submitting}>
+
+          <Modal.Footer style={{ background: '#f8fafc', borderTop: '1px solid #e2e8f0', padding: '1rem 1.5rem' }}>
+            <Button
+              variant="light"
+              onClick={() => setShowModal(false)}
+              disabled={submitting}
+              style={{ fontWeight: 600, fontSize: '0.85rem', borderRadius: '0.5rem', border: '1.5px solid #e2e8f0' }}
+            >
               Cancel
             </Button>
-            <Button variant="primary" type="submit" disabled={submitting}>
+            <Button
+              type="submit"
+              disabled={submitting}
+              style={{ background: 'linear-gradient(135deg,#10b981 0%,#059669 100%)', border: 'none', fontWeight: 700, fontSize: '0.85rem', borderRadius: '0.5rem', padding: '0.5rem 1.5rem', minWidth: 170 }}
+            >
               {submitting ? (
-                <>
-                  <span className="spinner-border spinner-border-sm me-2"></span>
-                  Creating...
-                </>
+                <><span className="spinner-border spinner-border-sm me-2" role="status"></span>Creating...</>
               ) : (
-                'Create Announcement'
+                <><i className="fas fa-bullhorn me-2"></i>Create Announcement</>
               )}
             </Button>
           </Modal.Footer>

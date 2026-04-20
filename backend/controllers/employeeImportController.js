@@ -4,6 +4,7 @@ const xlsx = require('xlsx');
 const csv = require('csv-parser');
 const fs = require('fs');
 const bcrypt = require('bcryptjs');
+const logger = require('../utils/logger');
 
 const importEmployees = async (req, res) => {
   try {

@@ -7,6 +7,7 @@ import { toast } from 'react-toastify';
 import Swal from 'sweetalert2';
 import { scheduleTaskReminder, checkDailyReminder, requestNotificationPermission, isWorkingDay } from '../utils/taskReminder';
 import '../styles/TaskResponsive.css';
+import '../styles/ModalFix.css';
 import MobileTaskDetails from '../components/MobileTaskDetails';
 import MobileDailyUpdate from '../components/MobileDailyUpdate';
 import WorkLogModal from '../components/WorkLogModal';
@@ -23,6 +24,7 @@ const Tasks = () => {
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [showWorkLogModal, setShowWorkLogModal] = useState(false);
   const [showWorkLogHistory, setShowWorkLogHistory] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [workLogs, setWorkLogs] = useState([]);
   const [filteredWorkLogs, setFilteredWorkLogs] = useState([]);
   const [workLogFilters, setWorkLogFilters] = useState({ search: '', status: '', dateRange: 'all', startDate: '', endDate: '' });
@@ -85,6 +87,12 @@ const Tasks = () => {
     fetchEmployees();
     checkTodayLog();
     
+    // Handle window resize
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    
     // Request notification permission on load
     requestNotificationPermission();
     
@@ -124,6 +132,7 @@ const Tasks = () => {
       clearInterval(taskRefreshIntervalRef.current);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('resize', handleResize);
     };
   }, []);
 
@@ -757,7 +766,7 @@ const Tasks = () => {
         <div className="d-flex justify-content-between align-items-center">
           <div>
             <h1 className="page-title">
-              <i className="fas fa-tasks me-3 text-primary"></i>
+              <i className="fas fa-tasks me-3" style={{color: '#10b981'}}></i>
               My Tasks
               {pendingUpdatesCount > 0 && (
                 <Badge bg="danger" className="ms-3" style={{fontSize: '0.7rem', verticalAlign: 'middle'}}>
@@ -773,10 +782,18 @@ const Tasks = () => {
                 <i className="fas fa-exclamation-circle me-2"></i>No work logged today
               </Badge>
             )}
-            <Button variant="outline-primary" size="sm" onClick={() => { fetchWorkLogs(); setShowWorkLogHistory(true); }}>
+            <Button 
+              variant="outline-success" 
+              size="sm" 
+              onClick={() => { fetchWorkLogs(); setShowWorkLogHistory(true); }}
+              style={{borderWidth: '2px', fontWeight: '600'}}
+            >
               <i className="fas fa-history me-2"></i>History
             </Button>
-            <Button variant="success" onClick={() => setShowWorkLogModal(true)}>
+            <Button 
+              style={{background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', border: 'none', fontWeight: '600', boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)'}}
+              onClick={() => setShowWorkLogModal(true)}
+            >
               <i className="fas fa-plus me-2"></i>Log Work
             </Button>
           </div>
@@ -785,92 +802,264 @@ const Tasks = () => {
 
       <Row>
         <Col>
-          <Card>
-            <Card.Header>
-              <h5 className="mb-0">Task List</h5>
+          <Card style={{border: 'none', borderRadius: '16px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)'}}>
+            <Card.Header style={{background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', borderRadius: '16px 16px 0 0', padding: '1.5rem'}}>
+              <div className="d-flex justify-content-between align-items-center">
+                <div>
+                  <h5 className="mb-1" style={{fontWeight: '700', fontSize: '1.3rem'}}>
+                    <i className="fas fa-list-check me-2"></i>My Task List
+                  </h5>
+                  <small style={{opacity: 0.9}}>{tasks.length} task{tasks.length !== 1 ? 's' : ''} assigned to you</small>
+                </div>
+                <Badge bg="light" text="dark" style={{fontSize: '1rem', padding: '0.5rem 1rem'}}>
+                  {tasks.filter(t => t.status === 'IN_PROGRESS').length} Active
+                </Badge>
+              </div>
             </Card.Header>
-            <Card.Body>
+            <Card.Body style={{padding: '0'}}>
               {tasks.length > 0 ? (
                 <>
                 {/* Desktop Table View */}
-                <div className="d-none d-md-block">
-                <Table responsive hover>
-                  <thead>
+                <div className="d-none d-md-block" style={{overflowX: 'auto'}}>
+                <table className="table mb-0" style={{fontSize: '0.95rem'}}>
+                  <thead style={{background: '#f8f9fa', borderBottom: '2px solid #e9ecef'}}>
                     <tr>
-                      <th>Task</th>
-                      <th>Department</th>
-                      <th>Type</th>
-                      <th>Location</th>
-                      <th>Scheduled</th>
-                      <th>Priority</th>
-                      <th>Status</th>
-                      <th>Actions</th>
+                      <th style={{padding: '1rem 1.5rem', fontWeight: '600', color: '#495057', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.5px', border: 'none'}}>Task Details</th>
+                      <th style={{padding: '1rem 1.5rem', fontWeight: '600', color: '#495057', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.5px', border: 'none'}}>Department</th>
+                      <th style={{padding: '1rem 1.5rem', fontWeight: '600', color: '#495057', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.5px', border: 'none'}}>Progress</th>
+                      <th style={{padding: '1rem 1.5rem', fontWeight: '600', color: '#495057', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.5px', border: 'none'}}>Priority</th>
+                      <th style={{padding: '1rem 1.5rem', fontWeight: '600', color: '#495057', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.5px', border: 'none'}}>Status</th>
+                      <th style={{padding: '1rem 1.5rem', fontWeight: '600', color: '#495057', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.5px', border: 'none', textAlign: 'center'}}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {tasks.map(task => (
-                      <tr key={task._id} style={{background: isUpdateOverdue(task) ? '#fff3cd' : 'white'}}>
-                        <td>
-                          <strong>{task.title}</strong>
-                          {task.description && <><br/><small className="text-muted">{task.description}</small></>}
-                          {isUpdateOverdue(task) && (
-                            <><br/><Badge bg="warning" text="dark" style={{fontSize: '0.7rem'}}>
-                              <i className="fas fa-exclamation-triangle me-1"></i>Update Overdue
-                            </Badge></>
-                          )}
-                          <br/><small className="text-muted"><i className="fas fa-clock me-1"></i>{getLastUpdateTime(task)}</small>
+                      <tr key={task._id} style={{background: isUpdateOverdue(task) ? '#fff8e1' : 'white', borderBottom: '1px solid #f1f3f5', transition: 'all 0.2s'}} onMouseEnter={(e) => e.currentTarget.style.background = '#f8f9fa'} onMouseLeave={(e) => e.currentTarget.style.background = isUpdateOverdue(task) ? '#fff8e1' : 'white'}>
+                        <td style={{padding: '1.25rem 1.5rem', border: 'none', verticalAlign: 'middle'}}>
+                          <div style={{display: 'flex', alignItems: 'start', gap: '1rem'}}>
+                            <div style={{
+                              width: '48px',
+                              height: '48px',
+                              borderRadius: '12px',
+                              background: task.status === 'COMPLETED' ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : task.status === 'IN_PROGRESS' ? 'linear-gradient(135deg, #34d399 0%, #10b981 100%)' : 'linear-gradient(135deg, #6ee7b7 0%, #34d399 100%)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: 'white',
+                              fontSize: '1.2rem',
+                              flexShrink: 0
+                            }}>
+                              <i className={task.status === 'COMPLETED' ? 'fas fa-check-circle' : task.status === 'IN_PROGRESS' ? 'fas fa-spinner' : 'fas fa-clock'}></i>
+                            </div>
+                            <div style={{flex: 1, minWidth: 0}}>
+                              <div style={{fontWeight: '600', color: '#1e293b', fontSize: '1rem', marginBottom: '0.25rem', lineHeight: '1.4'}}>{task.title}</div>
+                              {task.description && <div style={{fontSize: '0.85rem', color: '#64748b', marginBottom: '0.5rem', lineHeight: '1.4', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'}}>{task.description}</div>}
+                              <div style={{display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center'}}>
+                                <span style={{fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.25rem'}}>
+                                  <i className="fas fa-briefcase" style={{fontSize: '0.75rem'}}></i>
+                                  {task.taskType.replace(/_/g, ' ')}
+                                </span>
+                                <span style={{fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.25rem'}}>
+                                  <i className="fas fa-calendar" style={{fontSize: '0.75rem'}}></i>
+                                  {new Date(task.scheduledDate).toLocaleDateString('en-GB', {day: '2-digit', month: 'short'})}
+                                </span>
+                                <span style={{fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.25rem'}}>
+                                  <i className="fas fa-clock" style={{fontSize: '0.75rem'}}></i>
+                                  {getLastUpdateTime(task)}
+                                </span>
+                                {isUpdateOverdue(task) && (
+                                  <Badge bg="warning" text="dark" style={{fontSize: '0.7rem', padding: '0.25rem 0.5rem'}}>
+                                    <i className="fas fa-exclamation-triangle me-1"></i>Update Due
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          </div>
                         </td>
-                        <td>{task.department}</td>
-                        <td>{task.taskType}</td>
-                        <td><Badge bg="secondary">{task.workLocation}</Badge></td>
-                        <td>{new Date(task.scheduledDate).toLocaleDateString()}</td>
-                        <td>{getPriorityBadge(task.priority)}</td>
-                        <td>{getStatusBadge(task.status)}</td>
-                        <td>
-                          <div className="d-flex gap-2">
+                        <td style={{padding: '1.25rem 1.5rem', border: 'none', verticalAlign: 'middle'}}>
+                          <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                            <div style={{width: '8px', height: '8px', borderRadius: '50%', background: '#10b981'}}></div>
+                            <span style={{fontWeight: '500', color: '#334155'}}>{task.department}</span>
+                          </div>
+                          <Badge bg="light" text="dark" style={{fontSize: '0.7rem', marginTop: '0.25rem', padding: '0.25rem 0.5rem'}}>
+                            <i className="fas fa-map-marker-alt me-1"></i>{task.workLocation}
+                          </Badge>
+                        </td>
+                        <td style={{padding: '1.25rem 1.5rem', border: 'none', verticalAlign: 'middle'}}>
+                          <div style={{width: '100px'}}>
+                            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem'}}>
+                              <span style={{fontSize: '0.75rem', fontWeight: '600', color: '#64748b'}}>Progress</span>
+                              <span style={{fontSize: '0.85rem', fontWeight: '700', color: task.progressPercent >= 75 ? '#059669' : task.progressPercent >= 50 ? '#10b981' : task.progressPercent >= 25 ? '#34d399' : '#6ee7b7'}}>{task.progressPercent || 0}%</span>
+                            </div>
+                            <div style={{height: '6px', background: '#e5e7eb', borderRadius: '3px', overflow: 'hidden'}}>
+                              <div style={{
+                                height: '100%',
+                                width: `${task.progressPercent || 0}%`,
+                                background: task.progressPercent >= 75 ? 'linear-gradient(90deg, #059669 0%, #047857 100%)' : task.progressPercent >= 50 ? 'linear-gradient(90deg, #10b981 0%, #059669 100%)' : task.progressPercent >= 25 ? 'linear-gradient(90deg, #34d399 0%, #10b981 100%)' : 'linear-gradient(90deg, #6ee7b7 0%, #34d399 100%)',
+                                borderRadius: '3px',
+                                transition: 'width 0.3s ease'
+                              }}></div>
+                            </div>
+                          </div>
+                        </td>
+                        <td style={{padding: '1.25rem 1.5rem', border: 'none', verticalAlign: 'middle'}}>
+                          <Badge style={{
+                            background: task.priority === 'HIGH' ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' : task.priority === 'MEDIUM' ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                            border: 'none',
+                            padding: '0.4rem 0.8rem',
+                            fontSize: '0.8rem',
+                            fontWeight: '600',
+                            boxShadow: task.priority === 'HIGH' ? '0 2px 8px rgba(239, 68, 68, 0.3)' : task.priority === 'MEDIUM' ? '0 2px 8px rgba(245, 158, 11, 0.3)' : '0 2px 8px rgba(59, 130, 246, 0.3)'
+                          }}>
+                            <i className="fas fa-flag me-1"></i>{task.priority}
+                          </Badge>
+                        </td>
+                        <td style={{padding: '1.25rem 1.5rem', border: 'none', verticalAlign: 'middle'}}>
+                          <Badge style={{
+                            background: task.status === 'COMPLETED' ? '#d1fae5' : task.status === 'IN_PROGRESS' ? '#a7f3d0' : task.status === 'REVIEW' ? '#fef3c7' : task.status === 'CANCELLED' ? '#fee2e2' : '#f3f4f6',
+                            color: task.status === 'COMPLETED' ? '#065f46' : task.status === 'IN_PROGRESS' ? '#047857' : task.status === 'REVIEW' ? '#92400e' : task.status === 'CANCELLED' ? '#991b1b' : '#374151',
+                            border: 'none',
+                            padding: '0.4rem 0.8rem',
+                            fontSize: '0.8rem',
+                            fontWeight: '600'
+                          }}>
+                            <span style={{display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: task.status === 'COMPLETED' ? '#10b981' : task.status === 'IN_PROGRESS' ? '#34d399' : task.status === 'REVIEW' ? '#f59e0b' : task.status === 'CANCELLED' ? '#ef4444' : '#6b7280', marginRight: '0.5rem'}}></span>
+                            {task.status.replace('_', ' ')}
+                          </Badge>
+                        </td>
+                        <td style={{padding: '1.25rem 1.5rem', border: 'none', verticalAlign: 'middle'}}>
+                          <div style={{display: 'flex', gap: '0.5rem', justifyContent: 'center', flexWrap: 'wrap'}}>
                             {task.status === 'ASSIGNED' && (
-                              <Button size="sm" variant="primary" onClick={() => {
-                                setSelectedTask(task);
-                                setShowCheckInModal(true);
-                              }} disabled={loadingStates[`start-${task._id}`]}>
-                                {loadingStates[`start-${task._id}`] ? <><span className="spinner-border spinner-border-sm me-1"></span>Starting...</> : 'Start'}
+                              <Button 
+                                size="sm" 
+                                onClick={() => {
+                                  setSelectedTask(task);
+                                  setShowCheckInModal(true);
+                                }} 
+                                disabled={loadingStates[`start-${task._id}`]}
+                                style={{
+                                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                                  border: 'none',
+                                  padding: '0.5rem 1rem',
+                                  fontSize: '0.85rem',
+                                  fontWeight: '600',
+                                  borderRadius: '8px',
+                                  boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)',
+                                  transition: 'all 0.2s'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+                                onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+                              >
+                                {loadingStates[`start-${task._id}`] ? (
+                                  <><span className="spinner-border spinner-border-sm me-1"></span>Starting...</>
+                                ) : (
+                                  <><i className="fas fa-play me-1"></i>Start</>
+                                )}
                               </Button>
                             )}
                             {task.status === 'IN_PROGRESS' && (
                               <>
-                                <Button size="sm" variant="warning" onClick={() => {
-                                  setSelectedTask(task);
-                                  setUpdateForm({ 
-                                    progressPercent: task.progressPercent || 0,
-                                    status: 'ON_TRACK', 
-                                    workDone: '', 
-                                    issues: '',
-                                    nextDayPlan: '',
-                                    hoursSpent: '',
-                                    visitOutcome: '',
-                                    orderValue: ''
-                                  });
-                                  setShowUpdateModal(true);
-                                }} disabled={loadingStates[`update-${task._id}`]}>
-                                  {loadingStates[`update-${task._id}`] ? <><span className="spinner-border spinner-border-sm me-1"></span>Loading...</> : 'Update'}
+                                <Button 
+                                  size="sm" 
+                                  onClick={() => {
+                                    setSelectedTask(task);
+                                    setUpdateForm({ 
+                                      progressPercent: task.progressPercent || 0,
+                                      status: 'ON_TRACK', 
+                                      workDone: '', 
+                                      issues: '',
+                                      nextDayPlan: '',
+                                      hoursSpent: '',
+                                      visitOutcome: '',
+                                      orderValue: ''
+                                    });
+                                    setShowUpdateModal(true);
+                                  }} 
+                                  disabled={loadingStates[`update-${task._id}`]}
+                                  style={{
+                                    background: 'linear-gradient(135deg, #34d399 0%, #10b981 100%)',
+                                    border: 'none',
+                                    padding: '0.5rem 1rem',
+                                    fontSize: '0.85rem',
+                                    fontWeight: '600',
+                                    borderRadius: '8px',
+                                    boxShadow: '0 2px 8px rgba(52, 211, 153, 0.3)',
+                                    transition: 'all 0.2s'
+                                  }}
+                                  onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+                                  onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+                                >
+                                  {loadingStates[`update-${task._id}`] ? (
+                                    <><span className="spinner-border spinner-border-sm me-1"></span>Loading...</>
+                                  ) : (
+                                    <><i className="fas fa-edit me-1"></i>Update</>
+                                  )}
                                 </Button>
-                                <Button size="sm" variant="success" onClick={() => {
-                                  setSelectedTask(task);
-                                  setShowCheckOutModal(true);
-                                }} disabled={loadingStates[`complete-${task._id}`]}>
-                                  {loadingStates[`complete-${task._id}`] ? <><span className="spinner-border spinner-border-sm me-1"></span>Loading...</> : 'Complete'}
+                                <Button 
+                                  size="sm" 
+                                  onClick={() => {
+                                    setSelectedTask(task);
+                                    setShowCheckOutModal(true);
+                                  }} 
+                                  disabled={loadingStates[`complete-${task._id}`]}
+                                  style={{
+                                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                                    border: 'none',
+                                    padding: '0.5rem 1rem',
+                                    fontSize: '0.85rem',
+                                    fontWeight: '600',
+                                    borderRadius: '8px',
+                                    boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)',
+                                    transition: 'all 0.2s'
+                                  }}
+                                  onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+                                  onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+                                >
+                                  {loadingStates[`complete-${task._id}`] ? (
+                                    <><span className="spinner-border spinner-border-sm me-1"></span>Loading...</>
+                                  ) : (
+                                    <><i className="fas fa-check-circle me-1"></i>Complete</>
+                                  )}
                                 </Button>
                               </>
                             )}
-                            <Button size="sm" variant="outline-info" onClick={() => handleViewTask(task)} disabled={loadingStates[`view-${task._id}`]}>
-                              {loadingStates[`view-${task._id}`] ? <><span className="spinner-border spinner-border-sm me-1"></span>Loading...</> : 'View'}
+                            <Button 
+                              size="sm" 
+                              onClick={() => handleViewTask(task)} 
+                              disabled={loadingStates[`view-${task._id}`]}
+                              style={{
+                                background: 'white',
+                                border: '2px solid #10b981',
+                                color: '#10b981',
+                                padding: '0.5rem 1rem',
+                                fontSize: '0.85rem',
+                                fontWeight: '600',
+                                borderRadius: '8px',
+                                transition: 'all 0.2s'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = '#10b981';
+                                e.currentTarget.style.color = 'white';
+                                e.currentTarget.style.transform = 'translateY(-2px)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'white';
+                                e.currentTarget.style.color = '#10b981';
+                                e.currentTarget.style.transform = 'translateY(0)';
+                              }}
+                            >
+                              {loadingStates[`view-${task._id}`] ? (
+                                <><span className="spinner-border spinner-border-sm me-1"></span>Loading...</>
+                              ) : (
+                                <><i className="fas fa-eye me-1"></i>View</>
+                              )}
                             </Button>
                           </div>
                         </td>
                       </tr>
                     ))}
                   </tbody>
-                </Table>
+                </table>
                 </div>
                 
                 {/* Mobile Card View */}
@@ -970,9 +1159,27 @@ const Tasks = () => {
                 </div>
                 </>
               ) : (
-                <div className="text-center py-4">
-                  <i className="fas fa-tasks text-muted fs-1 mb-3"></i>
-                  <p className="text-muted mb-0">No tasks assigned</p>
+                <div style={{textAlign: 'center', padding: '4rem 2rem'}}>
+                  <div style={{width: '120px', height: '120px', borderRadius: '50%', background: 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 2rem', boxShadow: '0 8px 24px rgba(16, 185, 129, 0.2)'}}>
+                    <i className="fas fa-tasks" style={{fontSize: '3rem', color: '#10b981'}}></i>
+                  </div>
+                  <h4 style={{fontWeight: '700', color: '#1e293b', marginBottom: '0.75rem'}}>No Tasks Assigned</h4>
+                  <p style={{color: '#64748b', fontSize: '1rem', marginBottom: '2rem', maxWidth: '400px', margin: '0 auto 2rem'}}>You don't have any tasks assigned at the moment. Check back later or contact your manager.</p>
+                  <div style={{display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap'}}>
+                    <Button 
+                      variant="outline-primary" 
+                      onClick={() => fetchTasks()}
+                      style={{padding: '0.75rem 1.5rem', fontSize: '0.95rem', fontWeight: '600', borderRadius: '10px', border: '2px solid #10b981', color: '#10b981'}}
+                    >
+                      <i className="fas fa-sync-alt me-2"></i>Refresh
+                    </Button>
+                    <Button 
+                      onClick={() => setShowWorkLogModal(true)}
+                      style={{background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', border: 'none', padding: '0.75rem 1.5rem', fontSize: '0.95rem', fontWeight: '600', borderRadius: '10px', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.4)'}}
+                    >
+                      <i className="fas fa-plus me-2"></i>Log Work Instead
+                    </Button>
+                  </div>
                 </div>
               )}
             </Card.Body>
@@ -981,28 +1188,97 @@ const Tasks = () => {
       </Row>
 
       {/* Start Task Modal */}
-      <Modal show={showCheckInModal} onHide={() => setShowCheckInModal(false)} centered>
-        <Modal.Header closeButton>
-          <Modal.Title>Start Task</Modal.Title>
+      <Modal show={showCheckInModal} onHide={() => setShowCheckInModal(false)} centered size="md">
+        <Modal.Header closeButton style={{background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', padding: '1.5rem'}}>
+          <Modal.Title style={{fontSize: '1.3rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
+            <div style={{width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+              <i className="fas fa-play" style={{fontSize: '1.2rem'}}></i>
+            </div>
+            Start Task
+          </Modal.Title>
         </Modal.Header>
-        <Modal.Body>
-          <p>Are you sure you want to start this task?</p>
+        <Modal.Body style={{padding: '2rem'}}>
+          <div style={{textAlign: 'center', marginBottom: '2rem'}}>
+            <div style={{width: '80px', height: '80px', borderRadius: '50%', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem', boxShadow: '0 8px 24px rgba(16, 185, 129, 0.3)'}}>
+              <i className="fas fa-rocket" style={{fontSize: '2rem', color: 'white'}}></i>
+            </div>
+            <h5 style={{fontWeight: '600', color: '#1e293b', marginBottom: '0.5rem'}}>Ready to begin?</h5>
+            <p style={{color: '#64748b', fontSize: '0.95rem', margin: 0}}>You're about to start working on this task</p>
+          </div>
+          
           {selectedTask && (
-            <div className="alert alert-info">
-              <strong>{selectedTask.title}</strong><br/>
-              Department: {selectedTask.department}<br/>
-              Type: {selectedTask.taskType}
+            <div style={{background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)', border: '2px solid #86efac', borderRadius: '12px', padding: '1.5rem', marginBottom: '1.5rem'}}>
+              <div style={{display: 'flex', alignItems: 'start', gap: '1rem'}}>
+                <div style={{width: '40px', height: '40px', borderRadius: '10px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
+                  <i className="fas fa-tasks" style={{color: 'white', fontSize: '1rem'}}></i>
+                </div>
+                <div style={{flex: 1}}>
+                  <div style={{fontWeight: '700', color: '#166534', fontSize: '1.1rem', marginBottom: '0.75rem'}}>{selectedTask.title}</div>
+                  <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', fontSize: '0.9rem'}}>
+                    <div>
+                      <div style={{color: '#15803d', fontSize: '0.75rem', fontWeight: '600', marginBottom: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Department</div>
+                      <div style={{color: '#166534', fontWeight: '500'}}>{selectedTask.department}</div>
+                    </div>
+                    <div>
+                      <div style={{color: '#15803d', fontSize: '0.75rem', fontWeight: '600', marginBottom: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Type</div>
+                      <div style={{color: '#166534', fontWeight: '500'}}>{selectedTask.taskType.replace(/_/g, ' ')}</div>
+                    </div>
+                    <div>
+                      <div style={{color: '#15803d', fontSize: '0.75rem', fontWeight: '600', marginBottom: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Priority</div>
+                      <Badge style={{
+                        background: selectedTask.priority === 'HIGH' ? '#ef4444' : selectedTask.priority === 'MEDIUM' ? '#f59e0b' : '#3b82f6',
+                        border: 'none',
+                        padding: '0.25rem 0.6rem',
+                        fontSize: '0.75rem'
+                      }}>
+                        {selectedTask.priority}
+                      </Badge>
+                    </div>
+                    <div>
+                      <div style={{color: '#15803d', fontSize: '0.75rem', fontWeight: '600', marginBottom: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Scheduled</div>
+                      <div style={{color: '#166534', fontWeight: '500'}}>{new Date(selectedTask.scheduledDate).toLocaleDateString('en-GB', {day: '2-digit', month: 'short'})}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
-          {selectedTask?.requireCheckIn && <small className="text-muted">Your location will be recorded</small>}
+          
+          {selectedTask?.requireCheckIn && (
+            <div style={{background: '#fef3c7', border: '1px solid #fde68a', borderRadius: '10px', padding: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
+              <i className="fas fa-map-marker-alt" style={{color: '#d97706', fontSize: '1.2rem'}}></i>
+              <div>
+                <div style={{fontWeight: '600', color: '#92400e', fontSize: '0.9rem'}}>Location Tracking Enabled</div>
+                <small style={{color: '#b45309'}}>Your GPS location will be recorded when you start</small>
+              </div>
+            </div>
+          )}
         </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowCheckInModal(false)}>Cancel</Button>
-          <Button variant="primary" onClick={() => handleCheckIn(selectedTask)} disabled={loadingStates[`checkin-${selectedTask?._id}`]}>
+        <Modal.Footer style={{background: '#f8fafc', border: 'none', padding: '1.25rem 2rem'}}>
+          <Button 
+            variant="light" 
+            onClick={() => setShowCheckInModal(false)}
+            style={{padding: '0.75rem 1.5rem', fontSize: '0.95rem', fontWeight: '600', borderRadius: '10px', border: '2px solid #e5e7eb'}}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={() => handleCheckIn(selectedTask)} 
+            disabled={loadingStates[`checkin-${selectedTask?._id}`]}
+            style={{
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              border: 'none',
+              padding: '0.75rem 2rem',
+              fontSize: '0.95rem',
+              fontWeight: '600',
+              borderRadius: '10px',
+              boxShadow: '0 4px 12px rgba(16, 185, 129, 0.4)'
+            }}
+          >
             {loadingStates[`checkin-${selectedTask?._id}`] ? (
-              <><span className="spinner-border spinner-border-sm me-2"></span>Starting...</>
+              <><span className="spinner-border spinner-border-sm me-2"></span>Starting Task...</>
             ) : (
-              <><i className="fas fa-play me-2"></i>Start Task</>
+              <><i className="fas fa-play me-2"></i>Start Working</>
             )}
           </Button>
         </Modal.Footer>
@@ -1010,57 +1286,150 @@ const Tasks = () => {
 
       {/* Complete Task Modal */}
       <Modal show={showCheckOutModal} onHide={() => setShowCheckOutModal(false)} size="lg" centered>
-        <Modal.Header closeButton>
-          <Modal.Title>Complete Task</Modal.Title>
+        <Modal.Header closeButton style={{background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', padding: '1.5rem'}}>
+          <Modal.Title style={{fontSize: '1.3rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
+            <div style={{width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+              <i className="fas fa-check-circle" style={{fontSize: '1.2rem'}}></i>
+            </div>
+            Complete Task
+          </Modal.Title>
         </Modal.Header>
         <Form onSubmit={handleCheckOut}>
-          <Modal.Body>
-            <Form.Group className="mb-3">
-              <Form.Label>Outcome</Form.Label>
-              <Form.Control type="text" value={checkOutForm.outcome} onChange={(e) => setCheckOutForm({...checkOutForm, outcome: e.target.value})} placeholder="e.g., Success, Completed, Delivered" />
-            </Form.Group>
+          <Modal.Body style={{padding: '2rem', background: '#f8fafc'}}>
+            <div style={{textAlign: 'center', marginBottom: '2rem'}}>
+              <div style={{width: '80px', height: '80px', borderRadius: '50%', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem', boxShadow: '0 8px 24px rgba(16, 185, 129, 0.3)'}}>
+                <i className="fas fa-trophy" style={{fontSize: '2rem', color: 'white'}}></i>
+              </div>
+              <h5 style={{fontWeight: '600', color: '#1e293b', marginBottom: '0.5rem'}}>Great Work!</h5>
+              <p style={{color: '#64748b', fontSize: '0.95rem', margin: 0}}>Add final details to complete this task</p>
+            </div>
 
-            <Form.Group className="mb-3">
-              <Form.Label>Notes</Form.Label>
-              <Form.Control as="textarea" rows={3} value={checkOutForm.notes} onChange={(e) => setCheckOutForm({...checkOutForm, notes: e.target.value})} placeholder="Add task notes..." />
-            </Form.Group>
+            {selectedTask && (
+              <div style={{background: 'white', border: '2px solid #e5e7eb', borderRadius: '12px', padding: '1.25rem', marginBottom: '1.5rem'}}>
+                <div style={{fontWeight: '600', color: '#1e293b', fontSize: '1rem', marginBottom: '0.5rem'}}>
+                  <i className="fas fa-tasks me-2" style={{color: '#10b981'}}></i>{selectedTask.title}
+                </div>
+                <div style={{fontSize: '0.85rem', color: '#64748b'}}>
+                  {selectedTask.department} • {selectedTask.taskType.replace(/_/g, ' ')}
+                </div>
+              </div>
+            )}
 
-            <Row>
-              <Col md={6}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Actual Hours</Form.Label>
-                  <Form.Control type="number" step="0.5" value={checkOutForm.actualHours} onChange={(e) => setCheckOutForm({...checkOutForm, actualHours: e.target.value})} placeholder="0" />
-                </Form.Group>
-              </Col>
-              <Col md={6}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Next Follow-up Date</Form.Label>
-                  <Form.Control type="date" value={checkOutForm.nextFollowUpDate} onChange={(e) => setCheckOutForm({...checkOutForm, nextFollowUpDate: e.target.value})} />
-                </Form.Group>
-              </Col>
-            </Row>
+            <div style={{background: 'white', borderRadius: '12px', padding: '1.5rem', marginBottom: '1rem', boxShadow: '0 2px 8px rgba(0,0,0,0.06)'}}>
+              <Form.Group className="mb-3">
+                <Form.Label style={{fontWeight: '600', color: '#374151', fontSize: '0.95rem', marginBottom: '0.75rem'}}>
+                  <i className="fas fa-clipboard-check me-2" style={{color: '#10b981'}}></i>Task Outcome
+                </Form.Label>
+                <Form.Control 
+                  type="text" 
+                  value={checkOutForm.outcome} 
+                  onChange={(e) => setCheckOutForm({...checkOutForm, outcome: e.target.value})} 
+                  placeholder="e.g., Successfully completed, Delivered on time"
+                  style={{borderRadius: '8px', border: '2px solid #e5e7eb', padding: '0.75rem', fontSize: '0.95rem'}}
+                />
+              </Form.Group>
+
+              <Form.Group className="mb-3">
+                <Form.Label style={{fontWeight: '600', color: '#374151', fontSize: '0.95rem', marginBottom: '0.75rem'}}>
+                  <i className="fas fa-sticky-note me-2" style={{color: '#667eea'}}></i>Completion Notes
+                </Form.Label>
+                <Form.Control 
+                  as="textarea" 
+                  rows={3} 
+                  value={checkOutForm.notes} 
+                  onChange={(e) => setCheckOutForm({...checkOutForm, notes: e.target.value})} 
+                  placeholder="Add any important notes about task completion..."
+                  style={{borderRadius: '8px', border: '2px solid #e5e7eb', padding: '0.75rem', fontSize: '0.95rem', resize: 'none'}}
+                />
+              </Form.Group>
+
+              <Row>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label style={{fontWeight: '600', color: '#374151', fontSize: '0.95rem', marginBottom: '0.75rem'}}>
+                      <i className="fas fa-clock me-2" style={{color: '#f59e0b'}}></i>Actual Hours Spent
+                    </Form.Label>
+                    <Form.Control 
+                      type="number" 
+                      step="0.5" 
+                      value={checkOutForm.actualHours} 
+                      onChange={(e) => setCheckOutForm({...checkOutForm, actualHours: e.target.value})} 
+                      placeholder="0"
+                      style={{borderRadius: '8px', border: '2px solid #e5e7eb', padding: '0.75rem', fontSize: '0.95rem'}}
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label style={{fontWeight: '600', color: '#374151', fontSize: '0.95rem', marginBottom: '0.75rem'}}>
+                      <i className="fas fa-calendar-plus me-2" style={{color: '#3b82f6'}}></i>Next Follow-up Date
+                    </Form.Label>
+                    <Form.Control 
+                      type="date" 
+                      value={checkOutForm.nextFollowUpDate} 
+                      onChange={(e) => setCheckOutForm({...checkOutForm, nextFollowUpDate: e.target.value})}
+                      style={{borderRadius: '8px', border: '2px solid #e5e7eb', padding: '0.75rem', fontSize: '0.95rem'}}
+                    />
+                  </Form.Group>
+                </Col>
+              </Row>
+            </div>
 
             {selectedTask?.department === 'Sales' && (
-              <>
+              <div style={{background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)', border: '2px solid #fbbf24', borderRadius: '12px', padding: '1.5rem'}}>
+                <h6 style={{fontWeight: '700', color: '#92400e', marginBottom: '1rem', fontSize: '1rem'}}>
+                  <i className="fas fa-dollar-sign me-2"></i>Sales Information
+                </h6>
                 <Form.Group className="mb-3">
-                  <Form.Label>Order Value</Form.Label>
-                  <Form.Control type="number" value={checkOutForm.orderValue} onChange={(e) => setCheckOutForm({...checkOutForm, orderValue: e.target.value})} placeholder="0" />
+                  <Form.Label style={{fontWeight: '600', color: '#78350f', fontSize: '0.9rem'}}>Order Value (₹)</Form.Label>
+                  <Form.Control 
+                    type="number" 
+                    value={checkOutForm.orderValue} 
+                    onChange={(e) => setCheckOutForm({...checkOutForm, orderValue: e.target.value})} 
+                    placeholder="0"
+                    style={{borderRadius: '8px', border: '2px solid #fbbf24', padding: '0.75rem', fontSize: '0.95rem', background: 'white'}}
+                  />
                 </Form.Group>
 
-                <Form.Group className="mb-3">
-                  <Form.Label>Order Details</Form.Label>
-                  <Form.Control as="textarea" rows={2} value={checkOutForm.orderDetails} onChange={(e) => setCheckOutForm({...checkOutForm, orderDetails: e.target.value})} placeholder="Order details..." />
+                <Form.Group>
+                  <Form.Label style={{fontWeight: '600', color: '#78350f', fontSize: '0.9rem'}}>Order Details</Form.Label>
+                  <Form.Control 
+                    as="textarea" 
+                    rows={2} 
+                    value={checkOutForm.orderDetails} 
+                    onChange={(e) => setCheckOutForm({...checkOutForm, orderDetails: e.target.value})} 
+                    placeholder="Product details, quantity, special notes..."
+                    style={{borderRadius: '8px', border: '2px solid #fbbf24', padding: '0.75rem', fontSize: '0.95rem', resize: 'none', background: 'white'}}
+                  />
                 </Form.Group>
-              </>
+              </div>
             )}
           </Modal.Body>
-          <Modal.Footer>
-            <Button variant="secondary" onClick={() => setShowCheckOutModal(false)}>Cancel</Button>
-            <Button variant="success" type="submit" disabled={loadingStates.checkout}>
+          <Modal.Footer style={{background: 'white', border: 'none', padding: '1.25rem 2rem'}}>
+            <Button 
+              variant="light" 
+              onClick={() => setShowCheckOutModal(false)}
+              style={{padding: '0.75rem 1.5rem', fontSize: '0.95rem', fontWeight: '600', borderRadius: '10px', border: '2px solid #e5e7eb'}}
+            >
+              Cancel
+            </Button>
+            <Button 
+              type="submit" 
+              disabled={loadingStates.checkout}
+              style={{
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                border: 'none',
+                padding: '0.75rem 2rem',
+                fontSize: '0.95rem',
+                fontWeight: '600',
+                borderRadius: '10px',
+                boxShadow: '0 4px 12px rgba(16, 185, 129, 0.4)'
+              }}
+            >
               {loadingStates.checkout ? (
                 <><span className="spinner-border spinner-border-sm me-2"></span>Completing...</>
               ) : (
-                <><i className="fas fa-check me-2"></i>Complete Task</>
+                <><i className="fas fa-check-circle me-2"></i>Mark as Complete</>
               )}
             </Button>
           </Modal.Footer>
@@ -1068,7 +1437,8 @@ const Tasks = () => {
       </Modal>
 
       {/* Task Details Modal */}
-      <Modal show={showDetailsModal} onHide={() => setShowDetailsModal(false)} size="xl" centered className="d-none d-md-block">
+      {showDetailsModal && !isMobile && (
+        <Modal show={true} onHide={() => setShowDetailsModal(false)} size="xl" centered scrollable>
         <Modal.Header closeButton style={{background: '#2c3e50', color: 'white', borderBottom: '1px solid #1a252f'}}>
           <Modal.Title style={{fontSize: '1.1rem', fontWeight: '600'}}>Task Details</Modal.Title>
         </Modal.Header>
@@ -1412,211 +1782,240 @@ const Tasks = () => {
           )}
         </Modal.Body>
       </Modal>
+      )}
 
       {/* Mobile Task Details */}
-      <MobileTaskDetails 
-        task={selectedTask}
-        show={showDetailsModal}
-        onHide={() => setShowDetailsModal(false)}
-        user={user}
-        onAddComment={handleAddComment}
-      />
+      {showDetailsModal && isMobile && (
+        <MobileTaskDetails 
+          task={selectedTask}
+          show={true}
+          onHide={() => setShowDetailsModal(false)}
+          user={user}
+          onAddComment={handleAddComment}
+        />
+      )}
 
-      {/* Daily Update Modal - Simplified */}
-      <Modal show={showUpdateModal} onHide={() => setShowUpdateModal(false)} size="lg" centered className="d-none d-md-block">
-        <Modal.Header closeButton style={{background: '#ffffff', color: '#1a1a1a', borderBottom: '2px solid #e0e0e0'}}>
-          <Modal.Title style={{fontSize: '1.2rem', fontWeight: '600'}}>
-            Daily Progress Update
-          </Modal.Title>
-        </Modal.Header>
-        <Form onSubmit={handleDailyUpdate}>
-          <Modal.Body style={{padding: '2rem', background: '#f8f9fa'}}>
-            {selectedTask && (
-              <div className="alert" style={{background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', border: 'none', borderRadius: '12px', padding: '1rem', marginBottom: '1.5rem'}}>
-                <div style={{fontSize: '1.1rem', fontWeight: '600', marginBottom: '0.25rem'}}>{selectedTask.title}</div>
-                <div style={{fontSize: '0.9rem', opacity: 0.9}}>{selectedTask.department} • {selectedTask.taskType}</div>
-              </div>
-            )}
-
-            <div style={{background: 'white', padding: '1.5rem', borderRadius: '12px', marginBottom: '1.5rem', boxShadow: '0 2px 8px rgba(0,0,0,0.08)'}}>
-              <Form.Group className="mb-3">
-                <Form.Label style={{fontSize: '1rem', fontWeight: '600', color: '#1a1a1a', marginBottom: '1rem'}}>Progress Percentage</Form.Label>
-                <div className="text-center mb-3">
-                  <div style={{display: 'inline-block', position: 'relative'}}>
-                    <svg width="120" height="120" style={{transform: 'rotate(-90deg)'}}>
-                      <circle cx="60" cy="60" r="50" fill="none" stroke="#e9ecef" strokeWidth="10"/>
-                      <circle cx="60" cy="60" r="50" fill="none" 
-                        stroke={updateForm.progressPercent >= 75 ? '#28a745' : updateForm.progressPercent >= 50 ? '#0dcaf0' : updateForm.progressPercent >= 25 ? '#ffc107' : '#dc3545'}
-                        strokeWidth="10" strokeDasharray={`${updateForm.progressPercent * 3.14} 314`} strokeLinecap="round"/>
-                    </svg>
-                    <div style={{position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)'}}>
-                      <h2 className="mb-0" style={{fontSize: '2rem', fontWeight: '700'}}>{updateForm.progressPercent}%</h2>
+      {/* Daily Update Modal - Desktop Only */}
+      {showUpdateModal && (
+        <>
+          {/* Desktop Version */}
+          <div className="d-none d-md-block">
+            <Modal 
+              show={showUpdateModal} 
+              onHide={() => setShowUpdateModal(false)} 
+              size="lg" 
+              centered
+            >
+              <Modal.Header closeButton style={{background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none'}}>
+                <Modal.Title style={{fontSize: '1.3rem', fontWeight: '700'}}>
+                  <i className="fas fa-chart-line me-2"></i>Daily Update
+                </Modal.Title>
+              </Modal.Header>
+              <Form onSubmit={handleDailyUpdate}>
+                <Modal.Body style={{padding: '2rem', background: '#f8f9fa', maxHeight: '70vh', overflowY: 'auto'}}>
+                  {selectedTask && (
+                    <div style={{background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', border: 'none', borderRadius: '12px', padding: '1.25rem', marginBottom: '1.5rem'}}>
+                      <div style={{fontSize: '1.1rem', fontWeight: '600', marginBottom: '0.5rem'}}>{selectedTask.title}</div>
+                      <div style={{fontSize: '0.9rem', opacity: 0.9}}>
+                        <i className="fas fa-building me-2"></i>{selectedTask.department} •
+                        <i className="fas fa-briefcase ms-2 me-2"></i>{selectedTask.taskType.replace(/_/g, ' ')}
+                      </div>
                     </div>
-                  </div>
-                </div>
-                <Form.Range 
-                  min="0" 
-                  max="100" 
-                  step="5"
-                  value={updateForm.progressPercent} 
-                  onChange={(e) => setUpdateForm({...updateForm, progressPercent: e.target.value})} 
-                  style={{height: '8px'}}
-                />
-                <div className="d-flex justify-content-between mt-2">
-                  <small style={{color: '#6c757d'}}>0%</small>
-                  <small style={{color: '#6c757d'}}>50%</small>
-                  <small style={{color: '#6c757d'}}>100%</small>
-                </div>
-              </Form.Group>
-            </div>
+                  )}
 
-            <Row className="mb-3">
-              <Col md={6}>
-                <div style={{background: 'white', padding: '1.5rem', borderRadius: '12px', height: '100%', boxShadow: '0 2px 8px rgba(0,0,0,0.08)'}}>
-                  <Form.Group>
-                    <Form.Label style={{fontSize: '0.95rem', fontWeight: '600', color: '#1a1a1a', marginBottom: '0.75rem'}}>Task Status</Form.Label>
-                    <Form.Select 
-                      value={updateForm.status} 
-                      onChange={(e) => setUpdateForm({...updateForm, status: e.target.value})} 
-                      required
-                      style={{padding: '0.75rem', fontSize: '0.95rem', borderRadius: '8px', border: '2px solid #e0e0e0'}}
-                    >
-                      <option value="ON_TRACK">✓ On Track</option>
-                      <option value="NEED_HELP">⚠ Need Help</option>
-                      <option value="BLOCKED">✗ Blocked</option>
-                      <option value="COMPLETED">✓ Completed</option>
-                    </Form.Select>
-                  </Form.Group>
-                </div>
-              </Col>
-              <Col md={6}>
-                <div style={{background: 'white', padding: '1.5rem', borderRadius: '12px', height: '100%', boxShadow: '0 2px 8px rgba(0,0,0,0.08)'}}>
-                  <Form.Group>
-                    <Form.Label style={{fontSize: '0.95rem', fontWeight: '600', color: '#1a1a1a', marginBottom: '0.75rem'}}>Hours Worked</Form.Label>
-                    <Form.Control 
-                      type="number" 
-                      step="0.5" 
-                      min="0" 
-                      max="12" 
-                      value={updateForm.hoursSpent} 
-                      onChange={(e) => setUpdateForm({...updateForm, hoursSpent: e.target.value})} 
-                      placeholder="e.g., 8"
-                      style={{padding: '0.75rem', fontSize: '0.95rem', borderRadius: '8px', border: '2px solid #e0e0e0'}}
-                    />
-                  </Form.Group>
-                </div>
-              </Col>
-            </Row>
+                  {/* Progress & Status */}
+                  <Row className="mb-3">
+                    <Col md={6}>
+                      <div style={{background: 'white', padding: '1.5rem', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)'}}>
+                        <Form.Group>
+                          <Form.Label style={{fontSize: '0.95rem', fontWeight: '600', color: '#374151', marginBottom: '1rem'}}>Progress (%)</Form.Label>
+                          <Form.Range
+                            min="0"
+                            max="100"
+                            step="5"
+                            value={updateForm.progressPercent}
+                            onChange={(e) => setUpdateForm({...updateForm, progressPercent: e.target.value})}
+                            style={{height: '8px'}}
+                          />
+                          <div className="text-center mt-2">
+                            <strong style={{fontSize: '1.5rem', color: '#10b981'}}>{updateForm.progressPercent}%</strong>
+                          </div>
+                        </Form.Group>
+                      </div>
+                    </Col>
+                    <Col md={6}>
+                      <div style={{background: 'white', padding: '1.5rem', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)'}}>
+                        <Form.Group>
+                          <Form.Label style={{fontSize: '0.95rem', fontWeight: '600', color: '#374151'}}>Status</Form.Label>
+                          <Form.Select
+                            value={updateForm.status}
+                            onChange={(e) => setUpdateForm({...updateForm, status: e.target.value})}
+                            required
+                            style={{padding: '0.75rem', fontSize: '0.95rem', borderRadius: '8px', border: '2px solid #e5e7eb'}}
+                          >
+                            <option value="ON_TRACK">On Track</option>
+                            <option value="BLOCKED">Blocked</option>
+                            <option value="NEED_HELP">Need Help</option>
+                            <option value="COMPLETED">Completed</option>
+                          </Form.Select>
+                        </Form.Group>
+                      </div>
+                    </Col>
+                  </Row>
 
-            <div style={{background: 'white', padding: '1.5rem', borderRadius: '12px', marginBottom: '1.5rem', boxShadow: '0 2px 8px rgba(0,0,0,0.08)'}}>
-              <Form.Group>
-                <Form.Label style={{fontSize: '0.95rem', fontWeight: '600', color: '#1a1a1a', marginBottom: '0.75rem'}}>What work did you complete today? <span className="text-danger">*</span></Form.Label>
-                <Form.Control 
-                  as="textarea" 
-                  rows={4} 
-                  value={updateForm.workDone} 
-                  onChange={(e) => setUpdateForm({...updateForm, workDone: e.target.value})} 
-                  placeholder={selectedTask?.department === 'Sales' ? "Example: Met 2 clients, gave product demo, received order of Rs. 50,000" : "Example: Completed assigned work, attended meetings, coordinated with team"}
-                  required 
-                  style={{padding: '0.75rem', fontSize: '0.95rem', borderRadius: '8px', border: '2px solid #e0e0e0', resize: 'none'}}
-                />
-              </Form.Group>
-            </div>
-
-            {(updateForm.status === 'BLOCKED' || updateForm.status === 'NEED_HELP') && (
-              <div style={{background: '#fff3cd', padding: '1.5rem', borderRadius: '12px', marginBottom: '1.5rem', border: '2px solid #ffc107'}}>
-                <Form.Group>
-                  <Form.Label style={{fontSize: '0.95rem', fontWeight: '600', color: '#856404', marginBottom: '0.75rem'}}>What issues are you facing? <span className="text-danger">*</span></Form.Label>
-                  <Form.Control 
-                    as="textarea" 
-                    rows={3} 
-                    value={updateForm.issues} 
-                    onChange={(e) => setUpdateForm({...updateForm, issues: e.target.value})} 
-                    placeholder="Describe the problem or what help you need"
-                    required
-                    style={{padding: '0.75rem', fontSize: '0.95rem', borderRadius: '8px', border: '2px solid #ffc107', resize: 'none', background: 'white'}}
-                  />
-                </Form.Group>
-              </div>
-            )}
-
-            {selectedTask?.department === 'Sales' && (
-              <div style={{background: 'white', padding: '1.5rem', borderRadius: '12px', marginBottom: '1.5rem', boxShadow: '0 2px 8px rgba(0,0,0,0.08)'}}>
-                <h6 className="mb-3" style={{fontSize: '1rem', fontWeight: '600', color: '#1a1a1a'}}>Sales Details (Optional)</h6>
-                <Row>
-                  <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label style={{fontSize: '0.9rem', fontWeight: '500'}}>Meeting Result</Form.Label>
-                      <Form.Select value={updateForm.visitOutcome} onChange={(e) => setUpdateForm({...updateForm, visitOutcome: e.target.value})} style={{padding: '0.75rem', fontSize: '0.95rem', borderRadius: '8px', border: '2px solid #e0e0e0'}}>
-                        <option value="">Select...</option>
-                        <option value="POSITIVE">Positive</option>
-                        <option value="NEUTRAL">Need Follow-up</option>
-                        <option value="NEGATIVE">Not Interested</option>
-                        <option value="ORDER_RECEIVED">Got Order</option>
-                      </Form.Select>
-                    </Form.Group>
-                  </Col>
-                  <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label style={{fontSize: '0.9rem', fontWeight: '500'}}>Order Amount</Form.Label>
-                      <Form.Control 
-                        type="number" 
-                        value={updateForm.orderValue} 
-                        onChange={(e) => setUpdateForm({...updateForm, orderValue: e.target.value})} 
-                        placeholder="Rs. 0"
-                        style={{padding: '0.75rem', fontSize: '0.95rem', borderRadius: '8px', border: '2px solid #e0e0e0'}}
+                  {/* Work Done */}
+                  <div style={{background: 'white', padding: '1.5rem', borderRadius: '12px', marginBottom: '1rem', boxShadow: '0 2px 8px rgba(0,0,0,0.08)'}}>
+                    <Form.Group>
+                      <Form.Label style={{fontSize: '0.95rem', fontWeight: '600', color: '#374151'}}>Work Done Today <span className="text-danger">*</span></Form.Label>
+                      <Form.Control
+                        as="textarea"
+                        rows={3}
+                        value={updateForm.workDone}
+                        onChange={(e) => setUpdateForm({...updateForm, workDone: e.target.value})}
+                        placeholder="Describe what you accomplished today..."
+                        required
+                        style={{padding: '0.75rem', fontSize: '0.95rem', borderRadius: '8px', border: '2px solid #e5e7eb', resize: 'none'}}
                       />
                     </Form.Group>
-                  </Col>
-                </Row>
-              </div>
-            )}
+                  </div>
 
-            <div style={{background: 'white', padding: '1.5rem', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)'}}>
-              <Form.Group>
-                <Form.Label style={{fontSize: '0.95rem', fontWeight: '600', color: '#1a1a1a', marginBottom: '0.75rem'}}>Plan for Tomorrow</Form.Label>
-                <Form.Control 
-                  as="textarea" 
-                  rows={2} 
-                  value={updateForm.nextDayPlan} 
-                  onChange={(e) => setUpdateForm({...updateForm, nextDayPlan: e.target.value})} 
-                  placeholder="What will you work on tomorrow?"
-                  style={{padding: '0.75rem', fontSize: '0.95rem', borderRadius: '8px', border: '2px solid #e0e0e0', resize: 'none'}}
-                />
-              </Form.Group>
-            </div>
-          </Modal.Body>
-          <Modal.Footer style={{background: '#ffffff', borderTop: '2px solid #e0e0e0', padding: '1.25rem 2rem'}}>
-            <Button variant="light" onClick={() => setShowUpdateModal(false)} style={{padding: '0.75rem 1.5rem', fontSize: '0.95rem', fontWeight: '600', borderRadius: '8px', border: '2px solid #e0e0e0'}}>
-              Cancel
-            </Button>
-            <Button variant="primary" type="submit" disabled={loadingStates.update} style={{padding: '0.75rem 2rem', fontSize: '0.95rem', fontWeight: '600', borderRadius: '8px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)'}}>
-              {loadingStates.update ? (
-                <><span className="spinner-border spinner-border-sm me-2"></span>Submitting...</>
-              ) : (
-                <><i className="fas fa-paper-plane me-2"></i>Submit Update</>
-              )}
-            </Button>
-          </Modal.Footer>
-        </Form>
-      </Modal>
+                  {/* Time & Issues */}
+                  <Row className="mb-3">
+                    <Col md={6}>
+                      <div style={{background: 'white', padding: '1.5rem', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)'}}>
+                        <Form.Group>
+                          <Form.Label style={{fontSize: '0.95rem', fontWeight: '600', color: '#374151'}}>Hours Spent</Form.Label>
+                          <Form.Control
+                            type="number"
+                            step="0.5"
+                            min="0"
+                            max="24"
+                            value={updateForm.hoursSpent}
+                            onChange={(e) => setUpdateForm({...updateForm, hoursSpent: e.target.value})}
+                            placeholder="e.g., 8"
+                            style={{padding: '0.75rem', fontSize: '0.95rem', borderRadius: '8px', border: '2px solid #e5e7eb'}}
+                          />
+                        </Form.Group>
+                      </div>
+                    </Col>
+                    <Col md={6}>
+                      <div style={{background: 'white', padding: '1.5rem', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)'}}>
+                        <Form.Group>
+                          <Form.Label style={{fontSize: '0.95rem', fontWeight: '600', color: '#374151'}}>Issues/Blockers</Form.Label>
+                          <Form.Control
+                            as="textarea"
+                            rows={1}
+                            value={updateForm.issues}
+                            onChange={(e) => setUpdateForm({...updateForm, issues: e.target.value})}
+                            placeholder="Any challenges..."
+                            style={{padding: '0.75rem', fontSize: '0.95rem', borderRadius: '8px', border: '2px solid #e5e7eb', resize: 'none'}}
+                          />
+                        </Form.Group>
+                      </div>
+                    </Col>
+                  </Row>
 
-      {/* Mobile Daily Update */}
-      <MobileDailyUpdate
-        show={showUpdateModal}
-        onHide={() => setShowUpdateModal(false)}
-        task={selectedTask}
-        updateForm={updateForm}
-        setUpdateForm={setUpdateForm}
-        onSubmit={handleDailyUpdate}
-      />
+                  {/* Sales Specific */}
+                  {(selectedTask?.department === 'Sales' || selectedTask?.taskType === 'SALES') && (
+                    <div style={{background: 'white', padding: '1.5rem', borderRadius: '12px', marginBottom: '1rem', boxShadow: '0 2px 8px rgba(0,0,0,0.08)'}}>
+                      <h6 style={{fontSize: '1rem', fontWeight: '600', color: '#10b981', marginBottom: '1rem', borderBottom: '2px solid #e9ecef', paddingBottom: '0.5rem'}}>
+                        <i className="fas fa-dollar-sign me-2"></i>Sales Details
+                      </h6>
+                      <Row>
+                        <Col md={6}>
+                          <Form.Group className="mb-3">
+                            <Form.Label style={{fontSize: '0.9rem', fontWeight: '500', color: '#374151'}}>Visit Outcome</Form.Label>
+                            <Form.Select
+                              value={updateForm.visitOutcome}
+                              onChange={(e) => setUpdateForm({...updateForm, visitOutcome: e.target.value})}
+                              style={{padding: '0.6rem', fontSize: '0.9rem', borderRadius: '8px', border: '2px solid #e5e7eb'}}
+                            >
+                              <option value="">Select...</option>
+                              <option value="POSITIVE">Positive</option>
+                              <option value="NEUTRAL">Neutral</option>
+                              <option value="NEGATIVE">Negative</option>
+                              <option value="ORDER_RECEIVED">Order Received</option>
+                              <option value="DEMO_SCHEDULED">Demo Scheduled</option>
+                              <option value="PROPOSAL_SENT">Proposal Sent</option>
+                            </Form.Select>
+                          </Form.Group>
+                        </Col>
+                        <Col md={6}>
+                          <Form.Group className="mb-3">
+                            <Form.Label style={{fontSize: '0.9rem', fontWeight: '500', color: '#374151'}}>Order Value</Form.Label>
+                            <Form.Control
+                              type="number"
+                              value={updateForm.orderValue}
+                              onChange={(e) => setUpdateForm({...updateForm, orderValue: e.target.value})}
+                              placeholder="Enter amount"
+                              style={{padding: '0.6rem', fontSize: '0.9rem', borderRadius: '8px', border: '2px solid #e5e7eb'}}
+                            />
+                          </Form.Group>
+                        </Col>
+                      </Row>
+                    </div>
+                  )}
+
+                  {/* Next Day Plan */}
+                  <div style={{background: 'white', padding: '1.5rem', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)'}}>
+                    <Form.Group>
+                      <Form.Label style={{fontSize: '0.95rem', fontWeight: '600', color: '#374151'}}>Plan for Tomorrow</Form.Label>
+                      <Form.Control
+                        as="textarea"
+                        rows={2}
+                        value={updateForm.nextDayPlan}
+                        onChange={(e) => setUpdateForm({...updateForm, nextDayPlan: e.target.value})}
+                        placeholder="What do you plan to work on tomorrow..."
+                        style={{padding: '0.75rem', fontSize: '0.95rem', borderRadius: '8px', border: '2px solid #e5e7eb', resize: 'none'}}
+                      />
+                    </Form.Group>
+                  </div>
+                </Modal.Body>
+                <Modal.Footer style={{background: 'white', borderTop: '2px solid #e5e7eb', padding: '1.25rem 2rem'}}>
+                  <Button
+                    variant="secondary"
+                    onClick={() => setShowUpdateModal(false)}
+                    style={{padding: '0.75rem 1.5rem', fontSize: '0.95rem', fontWeight: '600', borderRadius: '8px'}}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="primary"
+                    type="submit"
+                    disabled={loadingStates.update}
+                    style={{padding: '0.75rem 2rem', fontSize: '0.95rem', fontWeight: '600', borderRadius: '8px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', border: 'none', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.4)'}}
+                  >
+                    {loadingStates.update ? (
+                      <><span className="spinner-border spinner-border-sm me-2"></span>Submitting...</>
+                    ) : (
+                      <><i className="fas fa-save me-2"></i>Submit Update</>
+                    )}
+                  </Button>
+                </Modal.Footer>
+              </Form>
+            </Modal>
+          </div>
+
+          {/* Mobile Version */}
+          <div className="d-md-none">
+            <MobileDailyUpdate
+              show={showUpdateModal}
+              onHide={() => setShowUpdateModal(false)}
+              task={selectedTask}
+              updateForm={updateForm}
+              setUpdateForm={setUpdateForm}
+              onSubmit={handleDailyUpdate}
+            />
+          </div>
+        </>
+      )}
 
       {/* Work Log Modal */}
       <Modal show={showWorkLogModal} onHide={() => {
         setShowWorkLogModal(false);
         setSelectedWorkLogDetail(null);
         setBulkLogs([{ workDone: '', hoursSpent: '', category: 'GENERAL', status: 'COMPLETED', project: '', deliverables: '', location: 'OFFICE', issues: '', date: new Date().toISOString().split('T')[0], templateData: {}, customCategory: '' }]);
-      }} size="xl" centered>
+      }} size="xl" centered scrollable>
         <Modal.Header closeButton style={{background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', borderBottom: 'none'}}>
           <Modal.Title style={{fontSize: '1.3rem', fontWeight: '600'}}>
             <i className="fas fa-clipboard-list me-2"></i>{selectedWorkLogDetail ? 'Edit Work Log' : 'Daily Work Report'}
@@ -1878,7 +2277,7 @@ const Tasks = () => {
       </Modal>
 
       {/* Work Log History Modal */}
-      <Modal show={showWorkLogHistory} onHide={() => setShowWorkLogHistory(false)} size="xl" centered>
+      <Modal show={showWorkLogHistory} onHide={() => setShowWorkLogHistory(false)} size="xl" centered scrollable>
         <Modal.Header closeButton style={{background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', borderBottom: 'none'}}>
           <Modal.Title style={{fontSize: '1.3rem', fontWeight: '600'}}>
             <i className="fas fa-history me-2"></i>Work Log History & Reports

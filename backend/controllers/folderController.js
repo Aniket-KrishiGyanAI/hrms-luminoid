@@ -1,6 +1,7 @@
 const Folder = require('../models/Folder');
 const File = require('../models/File');
 const Department = require('../models/Department');
+const logger = require('../utils/logger');
 
 const canAccessFolder = (folder, user, userDeptId) => {
   if (['ADMIN', 'HR'].includes(user.role)) return true;

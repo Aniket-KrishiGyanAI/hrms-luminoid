@@ -74,9 +74,9 @@ router.post(
 
 // Edit & delete routes (parameterized - must come after specific routes)
 router.put('/:id', (req, res, next) => {
-  console.log('PUT /:id route hit - ID:', req.params.id);
+  
   next();
-}, auth, authorize('HR', 'ADMIN'), editAttendance);
+}, auth, authorize('HR', 'ADMIN', 'MANAGER'), editAttendance);
 
 router.delete('/:id', auth, authorize('HR', 'ADMIN'), deleteAttendance);
 

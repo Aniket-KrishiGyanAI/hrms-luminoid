@@ -8,44 +8,73 @@
     padding-bottom: 80px !important;
   }
 
-  /* Header Card - Mobile - Compact & Professional */
+  /* Header Card - Mobile - Modern & Elevated */
   .employee-profile-page .profile-header-card {
-    border-radius: 0 0 16px 16px !important;
-    margin: -1rem -0.75rem 1rem !important;
-    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.2) !important;
-    background: linear-gradient(135deg, #047857 0%, #10b981 100%) !important;
+    border-radius: 0 0 24px 24px !important;
+    margin: -1rem -0.75rem 1.5rem !important;
+    box-shadow: 0 8px 32px rgba(16, 185, 129, 0.25) !important;
+    background: linear-gradient(135deg, #064e3b 0%, #047857 50%, #10b981 100%) !important;
+    position: relative;
+    overflow: hidden;
   }
 
   .employee-profile-page .profile-header-card::before {
-    display: none;
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -20%;
+    width: 200px;
+    height: 200px;
+    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+
+  .employee-profile-page .profile-header-card::after {
+    content: '';
+    position: absolute;
+    bottom: -30%;
+    left: -10%;
+    width: 150px;
+    height: 150px;
+    background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%);
+    border-radius: 50%;
   }
 
   .employee-profile-page .profile-header-card .card-body {
-    padding: 1rem !important;
+    padding: 1.25rem 1rem !important;
+    position: relative;
+    z-index: 1;
   }
 
-  /* Avatar - Mobile - Smaller */
+  /* Avatar - Mobile - Enhanced */
   .employee-profile-page .profile-avatar,
   .employee-profile-page .profile-avatar-placeholder {
-    width: 70px !important;
-    height: 70px !important;
-    border-width: 3px !important;
+    width: 85px !important;
+    height: 85px !important;
+    border: 4px solid rgba(255, 255, 255, 0.4) !important;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25) !important;
+  }
+
+  .employee-profile-page .profile-avatar-placeholder {
+    background: rgba(255, 255, 255, 0.2) !important;
+    backdrop-filter: blur(10px);
   }
 
   .employee-profile-page .profile-avatar-placeholder i {
-    font-size: 1.5rem !important;
+    font-size: 1.75rem !important;
   }
 
   .employee-profile-page .profile-upload-btn {
-    width: 28px !important;
-    height: 28px !important;
-    bottom: -2px !important;
-    right: -2px !important;
-    border-width: 2px !important;
+    width: 32px !important;
+    height: 32px !important;
+    bottom: 0 !important;
+    right: 0 !important;
+    border-width: 2.5px !important;
+    box-shadow: 0 3px 12px rgba(16, 185, 129, 0.4) !important;
   }
 
   .employee-profile-page .profile-upload-btn i {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
   }
 
   /* Header Layout - Horizontal on Mobile */
@@ -67,29 +96,33 @@
     text-align: left !important;
   }
 
-  /* Header Info - Mobile - Compact */
+  /* Header Info - Mobile - Enhanced Typography */
   .employee-profile-page .profile-header-card h2 {
-    font-size: 1.125rem !important;
+    font-size: 1.25rem !important;
     margin-top: 0 !important;
-    margin-bottom: 0.25rem !important;
+    margin-bottom: 0.375rem !important;
     font-weight: 700 !important;
     line-height: 1.3 !important;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    letter-spacing: -0.02em;
   }
 
   .employee-profile-page .profile-header-card p {
-    font-size: 0.8rem !important;
-    margin-bottom: 0.5rem !important;
+    font-size: 0.85rem !important;
+    margin-bottom: 0.625rem !important;
     opacity: 0.95 !important;
+    font-weight: 500;
   }
 
   .employee-profile-page .profile-header-card p i {
-    font-size: 0.75rem;
+    font-size: 0.8rem;
+    opacity: 0.9;
   }
 
-  /* Info Grid - Mobile - Compact */
+  /* Info Grid - Mobile - Modern Cards */
   .employee-profile-page .profile-header-card .row.g-3 {
-    gap: 0.375rem !important;
-    margin-top: 0.25rem !important;
+    gap: 0.5rem !important;
+    margin-top: 0.5rem !important;
   }
 
   .employee-profile-page .profile-header-card .row.g-3 > div {
@@ -98,32 +131,47 @@
   }
 
   .employee-profile-page .profile-header-card .row.g-3 .d-flex {
-    padding: 0.375rem 0.625rem;
-    background: rgba(255, 255, 255, 0.15);
-    border-radius: 8px;
-    backdrop-filter: blur(10px);
+    padding: 0.625rem 0.875rem;
+    background: rgba(255, 255, 255, 0.18);
+    border-radius: 12px;
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    transition: all 0.3s ease;
+  }
+
+  .employee-profile-page .profile-header-card .row.g-3 .d-flex:active {
+    transform: scale(0.98);
+    background: rgba(255, 255, 255, 0.22);
   }
 
   .employee-profile-page .profile-header-card small {
-    font-size: 0.7rem !important;
-    line-height: 1.4;
+    font-size: 0.75rem !important;
+    line-height: 1.5;
+    font-weight: 500;
   }
 
   .employee-profile-page .profile-header-card .row.g-3 i {
-    font-size: 0.7rem;
-    margin-right: 0.375rem !important;
+    font-size: 0.75rem;
+    margin-right: 0.5rem !important;
     flex-shrink: 0;
+    opacity: 0.95;
   }
 
   /* Remove Photo Button - Mobile */
   .employee-profile-page .btn-link {
     font-size: 0.7rem !important;
-    padding: 0.25rem 0 !important;
-    margin-top: 0.25rem !important;
+    padding: 0.375rem 0 !important;
+    margin-top: 0.5rem !important;
+    opacity: 0.9;
+    font-weight: 600;
+  }
+
+  .employee-profile-page .btn-link:hover {
+    opacity: 1;
   }
 
   .employee-profile-page .btn-link i {
-    font-size: 0.65rem;
+    font-size: 0.7rem;
   }
 
   /* Info Cards - Mobile */
@@ -252,25 +300,30 @@
 /* Extra Small Devices */
 @media (max-width: 576px) {
   .employee-profile-page .profile-header-card {
-    margin: -0.5rem -0.5rem 1rem !important;
+    margin: -0.5rem -0.5rem 1.25rem !important;
+    border-radius: 0 0 20px 20px !important;
   }
 
   .employee-profile-page .profile-header-card .card-body {
-    padding: 0.875rem !important;
+    padding: 1rem 0.875rem !important;
   }
 
   .employee-profile-page .profile-avatar,
   .employee-profile-page .profile-avatar-placeholder {
-    width: 64px !important;
-    height: 64px !important;
+    width: 75px !important;
+    height: 75px !important;
   }
 
   .employee-profile-page .profile-header-card h2 {
-    font-size: 1rem !important;
+    font-size: 1.125rem !important;
   }
 
   .employee-profile-page .profile-header-card p {
-    font-size: 0.75rem !important;
+    font-size: 0.8rem !important;
+  }
+
+  .employee-profile-page .profile-header-card small {
+    font-size: 0.7rem !important;
   }
 
   .employee-profile-page .section-title {

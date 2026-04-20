@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const { deleteProfileImage } = require('../utils/s3Utils');
+const logger = require('../utils/logger');
 
 const updateRole = async (req, res) => {
   try {
@@ -33,7 +34,7 @@ const updateUser = async (req, res) => {
     const { userId } = req.params;
     const { firstName, lastName, email, department, designation, joinDate, dateOfBirth } = req.body;
     
-    console.log('updateUser received:', { userId, firstName, lastName, email, department, designation, joinDate, dateOfBirth });
+    
 
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ message: 'User not found' });
@@ -48,7 +49,7 @@ const updateUser = async (req, res) => {
 
     await user.save();
     
-    console.log('User saved:', { joinDate: user.joinDate, dateOfBirth: user.dateOfBirth });
+    
 
     res.json({ message: 'User updated', user: { id: user._id, firstName: user.firstName, lastName: user.lastName, email: user.email, department: user.department, designation: user.designation, role: user.role, joinDate: user.joinDate, dateOfBirth: user.dateOfBirth } });
   } catch (error) {

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -17,54 +17,101 @@ import "./styles/mobile-responsive.css";
 import "./styles/desktop-enhanced.css";
 import "./styles/compact-pages.css";
 import "./styles/darkmode.css";
+import "./styles/smooth-transitions.css";
+import "./styles/modern-spinner.css";
 
 import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
+import ErrorBoundary from "./components/ErrorBoundary";
 import ProtectedRoute from "./components/ProtectedRoute";
-import Layout from "./components/Layout";
 import EnhancedLayout from "./components/EnhancedLayout";
 
+
 import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
-import ApplyLeave from "./pages/ApplyLeave";
-import MyLeaves from "./pages/MyLeaves";
-import Approvals from "./pages/Approvals";
-import LeaveTypes from "./pages/LeaveTypes";
-import EmployeeDirectory from "./pages/EmployeeDirectory";
-import TeamCalendar from "./pages/TeamCalendar";
-import Attendance from "./pages/Attendance";
-import Files from "./pages/Files";
-import Announcements from "./pages/Announcements";
-import EmployeeProfile from "./pages/EmployeeProfile";
-import Expenses from "./pages/Expenses";
-import Assets from "./pages/Assets";
-import Reports from "./pages/Reports";
-import Departments from "./pages/Departments";
-import DepartmentDetails from "./pages/DepartmentDetails";
-import Tasks from "./pages/Tasks";
-import TaskManagement from "./pages/TaskManagement";
-import TrainingMaterials from "./pages/TrainingMaterials";
-import FieldVisitsHub from "./pages/FieldVisitsHub";
-import FpoFormPage from "./pages/FpoFormPage";
-import FpoSubmissions from "./pages/FpoSubmissions";
-import JourneyFAB from "./components/JourneyFAB";
+
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const LeaveManagementHub = lazy(() => import("./pages/LeaveManagementHub"));
+const OrganizationHub = lazy(() => import("./pages/OrganizationHub"));
+const ApplyLeave = lazy(() => import("./pages/ApplyLeave"));
+const MyLeaves = lazy(() => import("./pages/MyLeaves"));
+const Approvals = lazy(() => import("./pages/Approvals"));
+const LeaveTypes = lazy(() => import("./pages/LeaveTypes"));
+const EmployeeDirectory = lazy(() => import("./pages/EmployeeDirectory"));
+const TeamCalendar = lazy(() => import("./pages/TeamCalendar"));
+const Attendance = lazy(() => import("./pages/Attendance"));
+const Files = lazy(() => import("./pages/Files"));
+const Announcements = lazy(() => import("./pages/Announcements"));
+const EmployeeProfile = lazy(() => import("./pages/EmployeeProfile"));
+const Expenses = lazy(() => import("./pages/Expenses"));
+const Assets = lazy(() => import("./pages/Assets"));
+const Reports = lazy(() => import("./pages/Reports"));
+const Departments = lazy(() => import("./pages/Departments"));
+const DepartmentDetails = lazy(() => import("./pages/DepartmentDetails"));
+const Tasks = lazy(() => import("./pages/Tasks"));
+const TaskManagement = lazy(() => import("./pages/TaskManagement"));
+const TrainingMaterials = lazy(() => import("./pages/TrainingMaterials"));
+const FieldVisitsHub = lazy(() => import("./pages/FieldVisitsHub"));
+const MyFieldWork = lazy(() => import("./pages/MyFieldWork"));
+const TeamFieldActivity = lazy(() => import("./pages/TeamFieldActivity"));
+const FpoFormPage = lazy(() => import("./pages/FpoFormPage"));
+const FpoSubmissions = lazy(() => import("./pages/FpoSubmissions"));
+
+const LoadingFallback = () => (
+  <div className="d-flex justify-content-center align-items-center" style={{ minHeight: "400px", padding: "2rem" }}>
+    <div className="modern-spinner">
+      <div className="spinner-ring"></div>
+      <div className="spinner-ring"></div>
+      <div className="spinner-ring"></div>
+      <div className="spinner-text">Loading...</div>
+    </div>
+  </div>
+);
 
 function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <Router>
-          <div className="App">
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+    <ErrorBoundary>
+      <ThemeProvider>
+        <AuthProvider>
+          <Router>
+            <div className="App">
+                <Routes>
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
               <Route
                 path="/dashboard"
                 element={
                   <ProtectedRoute>
                     <EnhancedLayout>
-                      <Dashboard />
+                      <Suspense fallback={<LoadingFallback />}>
+                        <Dashboard />
+                      </Suspense>
+                    </EnhancedLayout>
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/leave-management"
+                element={
+                  <ProtectedRoute>
+                    <EnhancedLayout>
+                      <Suspense fallback={<LoadingFallback />}>
+                        <LeaveManagementHub />
+                      </Suspense>
+                    </EnhancedLayout>
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/organization"
+                element={
+                  <ProtectedRoute roles={["MANAGER", "HR", "ADMIN"]}>
+                    <EnhancedLayout>
+                      <Suspense fallback={<LoadingFallback />}>
+                        <OrganizationHub />
+                      </Suspense>
                     </EnhancedLayout>
                   </ProtectedRoute>
                 }
@@ -75,7 +122,9 @@ function App() {
                 element={
                   <ProtectedRoute roles={["EMPLOYEE"]}>
                     <EnhancedLayout>
-                      <ApplyLeave />
+                      <Suspense fallback={<LoadingFallback />}>
+                        <ApplyLeave />
+                      </Suspense>
                     </EnhancedLayout>
                   </ProtectedRoute>
                 }
@@ -86,7 +135,9 @@ function App() {
                 element={
                   <ProtectedRoute roles={["EMPLOYEE"]}>
                     <EnhancedLayout>
-                      <MyLeaves />
+                      <Suspense fallback={<LoadingFallback />}>
+                        <MyLeaves />
+                      </Suspense>
                     </EnhancedLayout>
                   </ProtectedRoute>
                 }
@@ -97,7 +148,9 @@ function App() {
                 element={
                   <ProtectedRoute roles={["MANAGER", "HR", "ADMIN"]}>
                     <EnhancedLayout>
-                      <Approvals />
+                      <Suspense fallback={<LoadingFallback />}>
+                        <Approvals />
+                      </Suspense>
                     </EnhancedLayout>
                   </ProtectedRoute>
                 }
@@ -108,7 +161,9 @@ function App() {
                 element={
                   <ProtectedRoute roles={["HR", "ADMIN"]}>
                     <EnhancedLayout>
-                      <LeaveTypes />
+                      <Suspense fallback={<LoadingFallback />}>
+                        <LeaveTypes />
+                      </Suspense>
                     </EnhancedLayout>
                   </ProtectedRoute>
                 }
@@ -119,7 +174,9 @@ function App() {
                 element={
                   <ProtectedRoute roles={["MANAGER", "HR", "ADMIN"]}>
                     <EnhancedLayout>
-                      <EmployeeDirectory />
+                      <Suspense fallback={<LoadingFallback />}>
+                        <EmployeeDirectory />
+                      </Suspense>
                     </EnhancedLayout>
                   </ProtectedRoute>
                 }
@@ -130,7 +187,9 @@ function App() {
                 element={
                   <ProtectedRoute roles={["MANAGER", "HR", "ADMIN"]}>
                     <EnhancedLayout>
-                      <TeamCalendar />
+                      <Suspense fallback={<LoadingFallback />}>
+                        <TeamCalendar />
+                      </Suspense>
                     </EnhancedLayout>
                   </ProtectedRoute>
                 }
@@ -141,7 +200,9 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <EnhancedLayout>
-                      <Attendance />
+                      <Suspense fallback={<LoadingFallback />}>
+                        <Attendance />
+                      </Suspense>
                     </EnhancedLayout>
                   </ProtectedRoute>
                 }
@@ -152,7 +213,9 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <EnhancedLayout>
-                      <Files />
+                      <Suspense fallback={<LoadingFallback />}>
+                        <Files />
+                      </Suspense>
                     </EnhancedLayout>
                   </ProtectedRoute>
                 }
@@ -163,7 +226,9 @@ function App() {
                 element={
                   <ProtectedRoute roles={["HR", "ADMIN"]}>
                     <EnhancedLayout>
-                      <Announcements />
+                      <Suspense fallback={<LoadingFallback />}>
+                        <Announcements />
+                      </Suspense>
                     </EnhancedLayout>
                   </ProtectedRoute>
                 }
@@ -174,7 +239,9 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <EnhancedLayout>
-                      <EmployeeProfile />
+                      <Suspense fallback={<LoadingFallback />}>
+                        <EmployeeProfile />
+                      </Suspense>
                     </EnhancedLayout>
                   </ProtectedRoute>
                 }
@@ -184,7 +251,9 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <EnhancedLayout>
-                      <EmployeeProfile />
+                      <Suspense fallback={<LoadingFallback />}>
+                        <EmployeeProfile />
+                      </Suspense>
                     </EnhancedLayout>
                   </ProtectedRoute>
                 }
@@ -195,7 +264,9 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <EnhancedLayout>
-                      <Expenses />
+                      <Suspense fallback={<LoadingFallback />}>
+                        <Expenses />
+                      </Suspense>
                     </EnhancedLayout>
                   </ProtectedRoute>
                 }
@@ -206,7 +277,9 @@ function App() {
                 element={
                   <ProtectedRoute roles={["HR", "ADMIN"]}>
                     <EnhancedLayout>
-                      <Assets />
+                      <Suspense fallback={<LoadingFallback />}>
+                        <Assets />
+                      </Suspense>
                     </EnhancedLayout>
                   </ProtectedRoute>
                 }
@@ -217,7 +290,9 @@ function App() {
                 element={
                   <ProtectedRoute roles={["HR", "ADMIN"]}>
                     <EnhancedLayout>
-                      <Reports />
+                      <Suspense fallback={<LoadingFallback />}>
+                        <Reports />
+                      </Suspense>
                     </EnhancedLayout>
                   </ProtectedRoute>
                 }
@@ -228,7 +303,9 @@ function App() {
                 element={
                   <ProtectedRoute roles={["ADMIN"]}>
                     <EnhancedLayout>
-                      <Departments />
+                      <Suspense fallback={<LoadingFallback />}>
+                        <Departments />
+                      </Suspense>
                     </EnhancedLayout>
                   </ProtectedRoute>
                 }
@@ -239,7 +316,9 @@ function App() {
                 element={
                   <ProtectedRoute roles={["ADMIN", "HR", "MANAGER"]}>
                     <EnhancedLayout>
-                      <DepartmentDetails />
+                      <Suspense fallback={<LoadingFallback />}>
+                        <DepartmentDetails />
+                      </Suspense>
                     </EnhancedLayout>
                   </ProtectedRoute>
                 }
@@ -250,7 +329,9 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <EnhancedLayout>
-                      <Tasks />
+                      <Suspense fallback={<LoadingFallback />}>
+                        <Tasks />
+                      </Suspense>
                     </EnhancedLayout>
                   </ProtectedRoute>
                 }
@@ -261,7 +342,9 @@ function App() {
                 element={
                   <ProtectedRoute roles={["MANAGER", "HR", "ADMIN"]}>
                     <EnhancedLayout>
-                      <TaskManagement />
+                      <Suspense fallback={<LoadingFallback />}>
+                        <TaskManagement />
+                      </Suspense>
                     </EnhancedLayout>
                   </ProtectedRoute>
                 }
@@ -272,7 +355,9 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <EnhancedLayout>
-                      <TrainingMaterials />
+                      <Suspense fallback={<LoadingFallback />}>
+                        <TrainingMaterials />
+                      </Suspense>
                     </EnhancedLayout>
                   </ProtectedRoute>
                 }
@@ -286,7 +371,38 @@ function App() {
                     roles={["EMPLOYEE", "MANAGER", "HR", "ADMIN"]}
                   >
                     <EnhancedLayout>
-                      <FieldVisitsHub />
+                      <Suspense fallback={<LoadingFallback />}>
+                        <FieldVisitsHub />
+                      </Suspense>
+                    </EnhancedLayout>
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/my-field-work"
+                element={
+                  <ProtectedRoute
+                    requireFieldEmployee={true}
+                    roles={["EMPLOYEE"]}
+                  >
+                    <EnhancedLayout>
+                      <Suspense fallback={<LoadingFallback />}>
+                        <MyFieldWork />
+                      </Suspense>
+                    </EnhancedLayout>
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/team-field-activity"
+                element={
+                  <ProtectedRoute roles={["MANAGER", "HR", "ADMIN"]}>
+                    <EnhancedLayout>
+                      <Suspense fallback={<LoadingFallback />}>
+                        <TeamFieldActivity />
+                      </Suspense>
                     </EnhancedLayout>
                   </ProtectedRoute>
                 }
@@ -297,7 +413,9 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <EnhancedLayout>
-                      <FpoFormPage />
+                      <Suspense fallback={<LoadingFallback />}>
+                        <FpoFormPage />
+                      </Suspense>
                     </EnhancedLayout>
                   </ProtectedRoute>
                 }
@@ -308,14 +426,16 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <EnhancedLayout>
-                      <FpoSubmissions />
+                      <Suspense fallback={<LoadingFallback />}>
+                        <FpoSubmissions />
+                      </Suspense>
                     </EnhancedLayout>
                   </ProtectedRoute>
                 }
               />
-            </Routes>
+                </Routes>
 
-            <ToastContainer
+              <ToastContainer
               position="top-right"
               autoClose={4000}
               hideProgressBar={false}
@@ -328,11 +448,12 @@ function App() {
               theme="light"
               toastClassName="custom-toast"
             />
-            <JourneyFAB />
-          </div>
-        </Router>
-      </AuthProvider>
-    </ThemeProvider>
+
+            </div>
+          </Router>
+        </AuthProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
 

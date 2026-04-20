@@ -32,6 +32,7 @@ router.get('/', auth, getAllDepartments);
 router.get('/hierarchy', auth, getHierarchy);
 router.get('/employees-for-transfer', auth, getEmployeesForTransfer);
 router.get('/:id', auth, getDepartmentById);
+router.get('/:id/employees', auth, getDepartmentById);
 router.put('/:id', auth, authorize('ADMIN'), updateDepartment);
 router.delete('/:id', auth, authorize('ADMIN'), deleteDepartment);
 router.post('/assign', auth, authorize('ADMIN', 'HR'), assignEmployee);

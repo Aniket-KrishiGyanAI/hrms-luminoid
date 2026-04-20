@@ -4,6 +4,7 @@ const LeaveType = require('../models/LeaveType');
 const User = require('../models/User');
 const { validationResult } = require('express-validator');
 const { sendLeaveApplicationNotification, sendLeaveReminderNotification, sendLeaveApprovalNotification } = require('../utils/emailService');
+const logger = require('../utils/logger');
 
 const applyLeave = async (req, res) => {
   try {
@@ -97,11 +98,15 @@ const getLeaveRequests = async (req, res) => {
     const { status, userId, startDate, endDate, page = 1, limit = 10 } = req.query;
     const filter = {};
 
-    if (req.user.role === 'EMPLOYEE') {
-      filter.userId = req.user.id;
-    } else if (userId) {
+    // If userId is explicitly provided in query, use it (for admin viewing specific employee)
+    // If user is ADMIN and no userId specified, show all leaves
+    // Otherwise, always show the logged-in user's own leaves
+    if (userId) {
       filter.userId = userId;
+    } else if (req.user.role !== 'ADMIN') {
+      filter.userId = req.user.id;
     }
+    // If ADMIN and no userId specified, filter remains empty (shows all)
 
     if (status) filter.status = status;
     if (startDate && endDate) {
@@ -109,10 +114,11 @@ const getLeaveRequests = async (req, res) => {
     }
 
     const requests = await LeaveRequest.find(filter)
-      .populate('userId', 'firstName lastName email')
+      .populate('userId', 'firstName lastName email department')
       .populate('leaveTypeId', 'name color')
       .populate('managerApproval.approvedBy', 'firstName lastName')
       .populate('hrApproval.approvedBy', 'firstName lastName')
+      .populate('rejectedBy', 'firstName lastName')
       .sort({ createdAt: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit);
@@ -135,13 +141,17 @@ const getPendingApprovals = async (req, res) => {
     let filter = {};
 
     if (req.user.role === 'MANAGER') {
-      const teamMembers = await User.find({ managerId: req.user.id }).select('_id');
+      // ANY manager can see ALL pending leave requests
       filter = {
-        userId: { $in: teamMembers.map(m => m._id) },
-        status: 'PENDING'
+        status: 'PENDING',
+        userId: { $exists: true, $ne: null }
       };
     } else if (req.user.role === 'HR' || req.user.role === 'ADMIN') {
-      filter.status = { $in: ['PENDING', 'MANAGER_APPROVED'] };
+      // HR/ADMIN can see all pending and manager-approved requests
+      filter = {
+        status: { $in: ['PENDING', 'MANAGER_APPROVED'] },
+        userId: { $exists: true, $ne: null }
+      };
     }
 
     const requests = await LeaveRequest.find(filter)
@@ -149,8 +159,11 @@ const getPendingApprovals = async (req, res) => {
       .populate('leaveTypeId', 'name color')
       .sort({ createdAt: -1 });
 
+    // Filter out requests where userId is null (data integrity issue)
+    const validRequests = requests.filter(req => req.userId);
+
     // Get employee profiles to include employee IDs
-    const userIds = requests.map(req => req.userId._id);
+    const userIds = validRequests.map(req => req.userId._id);
     const profiles = await require('../models/EmployeeProfile').find({
       userId: { $in: userIds }
     }).select('userId professionalInfo.employeeId');
@@ -162,13 +175,14 @@ const getPendingApprovals = async (req, res) => {
     });
 
     // Add employeeId to each request
-    const requestsWithEmployeeId = requests.map(request => ({
+    const requestsWithEmployeeId = validRequests.map(request => ({
       ...request.toObject(),
       employeeId: employeeIdMap[request.userId._id.toString()]
     }));
 
     res.json(requestsWithEmployeeId);
   } catch (error) {
+    console.error('Error in getPendingApprovals:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
@@ -203,7 +217,7 @@ const approveReject = async (req, res) => {
 
     if (action === 'approve') {
       if (req.user.role === 'MANAGER' && leaveRequest.status === 'PENDING') {
-        // Manager approval
+        // ANY Manager can approve
         leaveRequest.status = 'MANAGER_APPROVED';
         leaveRequest.managerApproval = {
           approvedBy: req.user.id,
@@ -221,8 +235,18 @@ const approveReject = async (req, res) => {
         }
       } else if ((req.user.role === 'HR' || req.user.role === 'ADMIN') && 
                  (leaveRequest.status === 'PENDING' || leaveRequest.status === 'MANAGER_APPROVED')) {
-        // HR/Admin approval
+        // HR/Admin can approve at any stage
         leaveRequest.status = 'HR_APPROVED';
+        
+        // If manager hasn't approved yet, record manager approval too
+        if (!leaveRequest.managerApproval || !leaveRequest.managerApproval.approvedBy) {
+          leaveRequest.managerApproval = {
+            approvedBy: req.user.id,
+            approvedAt: new Date(),
+            comments: 'Auto-approved by HR/Admin'
+          };
+        }
+        
         leaveRequest.hrApproval = {
           approvedBy: req.user.id,
           approvedAt: new Date(),
@@ -258,13 +282,15 @@ const approveReject = async (req, res) => {
         });
       }
     } else if (action === 'reject') {
-      // Anyone with approval rights can reject at any stage
+      // ANY Manager, HR, or Admin can reject at any stage
       if (!['MANAGER', 'HR', 'ADMIN'].includes(req.user.role)) {
         return res.status(403).json({ message: 'You are not authorized to reject leave requests' });
       }
 
       leaveRequest.status = 'REJECTED';
       leaveRequest.rejectionReason = comments;
+      leaveRequest.rejectedBy = req.user.id;
+      leaveRequest.rejectedAt = new Date();
       
       await leaveRequest.save();
 
@@ -282,14 +308,12 @@ const approveReject = async (req, res) => {
         }
       }
     }
-
-    // Remove the duplicate save operation
-    // await leaveRequest.save();
     
     // Populate the response with updated data
     await leaveRequest.populate([
       { path: 'managerApproval.approvedBy', select: 'firstName lastName' },
-      { path: 'hrApproval.approvedBy', select: 'firstName lastName' }
+      { path: 'hrApproval.approvedBy', select: 'firstName lastName' },
+      { path: 'rejectedBy', select: 'firstName lastName' }
     ]);
     
     res.json({ 
@@ -374,6 +398,9 @@ const getTeamCalendar = async (req, res) => {
     })
     .populate('userId', 'firstName lastName email department')
     .populate('leaveTypeId', 'name color')
+    .populate('managerApproval.approvedBy', 'firstName lastName')
+    .populate('hrApproval.approvedBy', 'firstName lastName')
+    .populate('rejectedBy', 'firstName lastName')
     .sort({ startDate: 1 });
 
     // Get team members info
@@ -476,6 +503,9 @@ const getEmployeeDetails = async (req, res) => {
     // Get all leave requests
     const leaves = await LeaveRequest.find({ userId: employeeId })
       .populate('leaveTypeId', 'name color')
+      .populate('managerApproval.approvedBy', 'firstName lastName')
+      .populate('hrApproval.approvedBy', 'firstName lastName')
+      .populate('rejectedBy', 'firstName lastName')
       .sort({ startDate: -1 });
 
     // Get attendance records from Attendance model
@@ -586,6 +616,54 @@ const getEmployeeDetails = async (req, res) => {
   }
 };
 
+const deleteLeave = async (req, res) => {
+  try {
+    const leaveRequest = await LeaveRequest.findById(req.params.id);
+    
+    if (!leaveRequest) {
+      return res.status(404).json({ message: 'Leave request not found' });
+    }
+
+    // Only ADMIN can delete
+    if (req.user.role !== 'ADMIN') {
+      return res.status(403).json({ message: 'Only admins can delete leave requests' });
+    }
+
+    // Restore balance if leave was approved
+    if (leaveRequest.status === 'HR_APPROVED' && !leaveRequest.isLOP) {
+      const balance = await LeaveBalance.findOne({
+        userId: leaveRequest.userId,
+        leaveTypeId: leaveRequest.leaveTypeId,
+        year: leaveRequest.startDate.getFullYear()
+      });
+
+      if (balance) {
+        balance.used = Math.max(0, balance.used - leaveRequest.days);
+        await balance.save();
+      }
+    }
+
+    // Restore pending balance if leave was pending
+    if (['PENDING', 'MANAGER_APPROVED'].includes(leaveRequest.status) && !leaveRequest.isLOP) {
+      const balance = await LeaveBalance.findOne({
+        userId: leaveRequest.userId,
+        leaveTypeId: leaveRequest.leaveTypeId,
+        year: leaveRequest.startDate.getFullYear()
+      });
+
+      if (balance) {
+        balance.pending = Math.max(0, balance.pending - leaveRequest.days);
+        await balance.save();
+      }
+    }
+
+    await LeaveRequest.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Leave request deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
 module.exports = {
   applyLeave,
   getLeaveRequests,
@@ -595,5 +673,6 @@ module.exports = {
   getTeamCalendar,
   testLeaveReminder,
   checkConflicts,
-  getEmployeeDetails
+  getEmployeeDetails,
+  deleteLeave
 };

@@ -7,16 +7,14 @@ import VisitPlanner from './VisitPlanner';
 import ClientDirectory from './ClientDirectory';
 import FieldReports from './FieldReports';
 import SelfReportVisit from './SelfReportVisit';
-import JourneyPage from './JourneyPage';
-import JourneyManagerDashboard from './JourneyManagerDashboard';
+
 
 const TABS = [
   { key: 'self',       label: 'Log a Visit',      icon: 'plus-circle',    roles: ['EMPLOYEE'],                   Component: SelfReportVisit, fieldOnly: true },
   { key: 'today',      label: "Today's Visits",   icon: 'map-marker-alt', roles: ['EMPLOYEE'],                   Component: FieldVisits, fieldOnly: true },
-  { key: 'journey',    label: 'My Journey',        icon: 'route',          roles: ['EMPLOYEE'],                   Component: JourneyPage, fieldOnly: true },
   { key: 'history',    label: 'Visit History',     icon: 'history',        roles: ['EMPLOYEE'],                   Component: MyFieldVisits, fieldOnly: true },
   { key: 'planner',    label: 'Visit Planner',     icon: 'calendar-alt',   roles: ['MANAGER', 'HR', 'ADMIN'],     Component: VisitPlanner },
-  { key: 'journey-mgr',label: 'Journey Tracker',   icon: 'map-marked-alt', roles: ['MANAGER', 'HR', 'ADMIN'],     Component: JourneyManagerDashboard },
+
   { key: 'clients',    label: 'Client Directory',  icon: 'building',       roles: ['MANAGER', 'HR', 'ADMIN'],     Component: ClientDirectory },
   { key: 'reports',    label: 'Field Reports',     icon: 'chart-bar',      roles: ['MANAGER', 'HR', 'ADMIN'],     Component: FieldReports },
 ];
@@ -162,21 +160,6 @@ const FieldVisitsHub = () => {
                       boxShadow: '0 0 0 2px #ffffff, 0 0 8px rgba(16,185,129,0.6)'
                     }} />
                   )}
-
-                  {/* Journey Pulse */}
-                  {tab.key === 'journey' && !isActive && (
-                    <div style={{
-                      position: 'absolute',
-                      top: 8,
-                      right: 8,
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      background: '#f59e0b',
-                      boxShadow: '0 0 0 2px #ffffff, 0 0 8px rgba(245,158,11,0.6)',
-                      animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
-                    }} />
-                  )}
                 </button>
               );
             })}
@@ -311,20 +294,6 @@ const FieldVisitsHub = () => {
                   >
                     {tab.label}
                   </span>
-                  {tab.key === 'journey' && !active && (
-                    <span style={{ 
-                      width: 8, 
-                      height: 8, 
-                      borderRadius: '50%', 
-                      background: '#10b981', 
-                      display: 'inline-block',
-                      position: 'absolute',
-                      top: 8,
-                      right: 8,
-                      boxShadow: '0 0 0 2px #fff, 0 0 8px rgba(16,185,129,0.6)',
-                      animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
-                    }} />
-                  )}
                 </button>
               );
             })}

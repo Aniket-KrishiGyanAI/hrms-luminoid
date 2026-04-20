@@ -1,27 +1,33 @@
 const Announcement = require('../models/Announcement');
 const User = require('../models/User');
 const { sendAnnouncementNotification } = require('../utils/emailService');
+const logger = require('../utils/logger');
 
 const getAnnouncements = async (req, res) => {
   try {
     const now = new Date();
-    const query = {
-      isActive: true,
-      $or: [
-        { expiryDate: { $exists: false } },
-        { expiryDate: null },
-        { expiryDate: { $gte: now } }
-      ]
-    };
+    const isPrivileged = ['ADMIN', 'HR', 'MANAGER'].includes(req.user?.role);
 
-    // Filter by user role if targetRoles is specified
-    if (req.user?.role) {
-      query.$or = [
-        { targetRoles: { $size: 0 } },
-        { targetRoles: req.user.role },
-        ...query.$or
-      ];
-    }
+    const query = isPrivileged
+      ? { isActive: true }
+      : {
+          isActive: true,
+          $and: [
+            {
+              $or: [
+                { expiryDate: { $exists: false } },
+                { expiryDate: null },
+                { expiryDate: { $gte: now } }
+              ]
+            },
+            {
+              $or: [
+                { targetRoles: { $size: 0 } },
+                { targetRoles: req.user.role }
+              ]
+            }
+          ]
+        };
 
     const announcements = await Announcement.find(query)
       .populate('createdBy', 'firstName lastName')
@@ -39,18 +45,25 @@ const createAnnouncement = async (req, res) => {
       ...req.body,
       createdBy: req.user.id
     });
-    
+
     await announcement.save();
     await announcement.populate('createdBy', 'firstName lastName');
-    
-    // Send response immediately
+
     res.status(201).json(announcement);
-    
-    // Send email notification asynchronously (don't wait)
-    const creator = await User.findById(req.user.id);
-    sendAnnouncementNotification(announcement, `${creator.firstName} ${creator.lastName}`)
-      .catch(err => console.error('Email notification failed:', err));
-    
+
+    // Send email after response — fully wrapped so errors don't crash
+    (async () => {
+      try {
+        const creator = await User.findById(req.user.id);
+        const creatorName = `${creator.firstName} ${creator.lastName}`;
+        logger.info('Sending announcement emails', { title: announcement.title, creator: creatorName });
+        await sendAnnouncementNotification(announcement, creatorName);
+        logger.info('Announcement emails sent successfully');
+      } catch (err) {
+        logger.error('Announcement email failed', { error: err.message });
+      }
+    })();
+
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
@@ -63,7 +76,7 @@ const updateAnnouncement = async (req, res) => {
       req.body,
       { new: true }
     ).populate('createdBy', 'firstName lastName');
-    
+
     res.json(announcement);
   } catch (error) {
     res.status(400).json({ message: error.message });

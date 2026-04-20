@@ -9,6 +9,8 @@ const File = require('../models/File');
 const Department = require('../models/Department');
 const { ensureBalancesForUser } = require('./leaveBalanceController');
 const { getSmartQuote } = require('../utils/quotes');
+const { getCache, setCache } = require('../config/cache');
+const logger = require('../utils/logger');
 
 const getDailyQuote = (userRole) => {
   return getSmartQuote(userRole);
@@ -171,6 +173,10 @@ const getManagerDashboard = async (req, res) => {
 
 const getHRDashboard = async (req, res) => {
   try {
+    const cacheKey = `dashboard:hr:${new Date().toDateString()}`;
+    const cached = await getCache(cacheKey);
+    if (cached) return res.json(cached);
+
     const currentYear = new Date().getFullYear();
     const currentDate = new Date();
     const next30Days = new Date(currentDate.getTime() + 30 * 24 * 60 * 60 * 1000);
@@ -282,7 +288,7 @@ const getHRDashboard = async (req, res) => {
     const upcomingBirthdaysData = await User.find({
       isActive: true,
       dateOfBirth: { $exists: true }
-    }).select('firstName lastName dateOfBirth department');
+    }).select('firstName lastName dateOfBirth department').lean();
 
     const birthdaysInRange = upcomingBirthdaysData.filter(user => {
       const birthday = new Date(user.dateOfBirth);
@@ -297,28 +303,29 @@ const getHRDashboard = async (req, res) => {
       return aBirthday - bBirthday;
     });
 
-    const formattedBirthdays = await Promise.all(birthdaysInRange.map(async (user) => {
-      const userObj = user.toObject();
-      if (userObj.department && mongoose.Types.ObjectId.isValid(userObj.department)) {
-        const dept = await Department.findById(userObj.department);
-        userObj.department = dept?.name || userObj.department;
+    // Bulk fetch departments (fix N+1)
+    const deptIds = [...new Set(birthdaysInRange.map(u => u.department).filter(d => d && mongoose.Types.ObjectId.isValid(d)))];
+    const depts = await Department.find({ _id: { $in: deptIds } }).select('_id name').lean();
+    const deptMap = Object.fromEntries(depts.map(d => [d._id.toString(), d.name]));
+
+    const formattedBirthdays = birthdaysInRange.map(user => {
+      if (user.department && deptMap[user.department.toString()]) {
+        user.department = deptMap[user.department.toString()];
       }
-      return userObj;
-    }));
+      return user;
+    });
 
     const newHires = await User.find({
       isActive: true,
       joinDate: { $gte: new Date(currentDate.getTime() - 30 * 24 * 60 * 60 * 1000) }
-    }).select('firstName lastName joinDate department').sort({ joinDate: -1 });
+    }).select('firstName lastName joinDate department').sort({ joinDate: -1 }).lean();
 
-    const formattedNewHires = await Promise.all(newHires.map(async (user) => {
-      const userObj = user.toObject();
-      if (userObj.department && mongoose.Types.ObjectId.isValid(userObj.department)) {
-        const dept = await Department.findById(userObj.department);
-        userObj.department = dept?.name || userObj.department;
+    const formattedNewHires = newHires.map(user => {
+      if (user.department && deptMap[user.department.toString()]) {
+        user.department = deptMap[user.department.toString()];
       }
-      return userObj;
-    }));
+      return user;
+    });
 
     const recentActivities = await LeaveRequest.find()
       .populate('userId', 'firstName lastName')
@@ -326,7 +333,7 @@ const getHRDashboard = async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(10);
 
-    res.json({
+    const result = {
       motivationalQuote: getDailyQuote(req.user.role),
       totalEmployees,
       activeEmployees,
@@ -343,7 +350,10 @@ const getHRDashboard = async (req, res) => {
       upcomingBirthdays: formattedBirthdays,
       newHires: formattedNewHires,
       recentActivities
-    });
+    };
+
+    await setCache(cacheKey, result, 300);
+    res.json(result);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
@@ -357,7 +367,29 @@ const exportLeaveReport = async (req, res) => {
     if (startDate && endDate) {
       filter.startDate = { $gte: new Date(startDate), $lte: new Date(endDate) };
     }
-    if (userId) filter.userId = userId;
+    
+    // Role-based filtering
+    if (req.user.role === "MANAGER") {
+      // Managers can only export their team's data
+      const teamMembers = await User.find({ managerId: req.user.id }).select('_id');
+      const teamMemberIds = teamMembers.map(m => m._id);
+      
+      if (userId) {
+        // Check if requested user is in their team
+        const isInTeam = teamMemberIds.some(id => id.toString() === userId);
+        if (isInTeam || userId === req.user.id) {
+          filter.userId = userId;
+        } else {
+          return res.status(403).json({ message: 'Access denied. You can only export your team members data.' });
+        }
+      } else {
+        // Export all team members + self
+        filter.userId = { $in: [...teamMemberIds, req.user.id] };
+      }
+    } else if (userId) {
+      filter.userId = userId;
+    }
+    
     if (leaveTypeId) filter.leaveTypeId = leaveTypeId;
 
     const leaves = await LeaveRequest.find(filter)

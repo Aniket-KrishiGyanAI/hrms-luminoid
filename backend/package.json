@@ -6,12 +6,15 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "migrate:profiles": "node scripts/createMissingProfiles.js"
+    "migrate:profiles": "node scripts/createMissingProfiles.js",
+    "migrate:s3": "node scripts/migrateFilesToS3.js",
+    "create:indexes": "node scripts/createIndexes.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.995.0",
     "aws-sdk": "^2.1693.0",
     "bcryptjs": "^2.4.3",
+    "compression": "^1.8.1",
     "cors": "^2.8.5",
     "csv-parser": "^3.2.0",
     "dotenv": "^16.3.1",
@@ -26,6 +29,10 @@
     "multer-s3": "^3.0.1",
     "node-cron": "^3.0.2",
     "nodemailer": "^7.0.12",
+    "pdfkit": "^0.15.2",
+    "redis": "^4.6.13",
+    "sharp": "^0.33.2",
+    "winston": "^3.19.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

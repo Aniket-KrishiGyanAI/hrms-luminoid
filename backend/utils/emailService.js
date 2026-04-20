@@ -3,7 +3,7 @@ const User = require('../models/User');
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: process.env.SMTP_PORT || 587,
+  port: parseInt(process.env.SMTP_PORT) || 587,
   secure: false,
   auth: {
     user: process.env.SMTP_USER,
@@ -11,6 +11,15 @@ const transporter = nodemailer.createTransport({
   },
   tls: {
     rejectUnauthorized: false
+  }
+});
+
+// Verify transporter on startup
+transporter.verify((error) => {
+  if (error) {
+    console.error('[EMAIL] SMTP connection failed:', error.message);
+  } else {
+    
   }
 });
 
@@ -50,7 +59,7 @@ const sendHolidayNotification = async (employees, holiday) => {
 
   try {
     await Promise.all(emailPromises);
-    // console.log(`Holiday notification sent to ${employees.length} employees for ${holiday.name}`);
+    // 
   } catch (error) {
     console.error('Error sending holiday notifications:', error);
   }
@@ -96,7 +105,7 @@ const sendLeaveApplicationNotification = async (leaveRequest) => {
     });
     
     await Promise.all(emailPromises);
-    // console.log(`Leave application notification sent for ${employee.firstName} ${employee.lastName}`);
+    // 
   } catch (error) {
     console.error('Error sending leave application notification:', error);
   }
@@ -136,7 +145,7 @@ const sendLeaveReminderNotification = async (leaveRequest) => {
     };
     
     await transporter.sendMail(mailOptions);
-    // console.log(`Leave reminder sent to manager for ${employee.firstName} ${employee.lastName}`);
+    // 
   } catch (error) {
     console.error('Error sending leave reminder notification:', error);
   }
@@ -189,7 +198,7 @@ const sendHalfDayLOPNotification = async (user, attendance) => {
     };
     
     await transporter.sendMail(mailOptions);
-    // console.log(`${statusMessage} notification sent to ${user.firstName} ${user.lastName}`);
+    // 
   } catch (error) {
     console.error('Error sending attendance notification:', error);
   }
@@ -225,7 +234,7 @@ const sendLeaveApprovalNotification = async (leaveRequest, approverName, approva
     };
     
     await transporter.sendMail(mailOptions);
-    // console.log(`Leave approval notification sent to ${employee.firstName} ${employee.lastName}`);
+    // 
   } catch (error) {
     console.error('Error sending leave approval notification:', error);
   }
@@ -234,65 +243,75 @@ const sendLeaveApprovalNotification = async (leaveRequest, approverName, approva
 const sendAnnouncementNotification = async (announcement, creatorName) => {
   try {
     const filter = { isActive: true };
-    
-    // Filter by target roles if specified
+
     if (announcement.targetRoles && announcement.targetRoles.length > 0) {
       filter.role = { $in: announcement.targetRoles };
     }
-    
-    // Filter by target departments if specified
+
     if (announcement.targetDepartments && announcement.targetDepartments.length > 0) {
-      filter.department = { $in: announcement.targetDepartments };
+      filter.$or = [
+        { department: { $in: announcement.targetDepartments.map(d => d.toString()) } },
+        { 'department._id': { $in: announcement.targetDepartments } }
+      ];
     }
-    
-    const employees = await User.find(filter);
-    
-    // Send emails in batches to avoid rate limiting
+
+    const employees = await User.find(filter).select('email firstName lastName');
+
+    if (employees.length === 0) {
+      
+      return;
+    }
+
+    const priorityColor = announcement.priority === 'HIGH' ? '#dc3545' :
+                          announcement.priority === 'MEDIUM' ? '#f59e0b' : '#10b981';
+    const priorityBg    = announcement.priority === 'HIGH' ? '#fef2f2' :
+                          announcement.priority === 'MEDIUM' ? '#fffbeb' : '#ecfdf5';
+
     const batchSize = 5;
     for (let i = 0; i < employees.length; i += batchSize) {
       const batch = employees.slice(i, i + batchSize);
-      
+
       const emailPromises = batch.map(employee => {
-        const priorityColor = announcement.priority === 'High' ? '#dc3545' : 
-                             announcement.priority === 'Medium' ? '#ffc107' : '#28a745';
-        
         const mailOptions = {
           from: process.env.SMTP_FROM || 'noreply@company.com',
           to: employee.email,
-          subject: `[${announcement.priority} Priority] ${announcement.title}`,
+          subject: `[${announcement.priority}] ${announcement.title}`,
           html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: ${priorityColor};">📢 New Announcement</h2>
-              <p>Dear ${employee.firstName},</p>
-              
-              <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid ${priorityColor};">
-                <h3 style="color: #333; margin: 0 0 15px 0;">${announcement.title}</h3>
-                <p style="margin: 10px 0; color: #666; line-height: 1.6;">${announcement.content}</p>
-                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #dee2e6;">
-                  <p style="margin: 5px 0; font-size: 14px;"><strong>Priority:</strong> <span style="color: ${priorityColor};">${announcement.priority}</span></p>
-                  <p style="margin: 5px 0; font-size: 14px;"><strong>Posted by:</strong> ${creatorName}</p>
-                  ${announcement.expiryDate ? `<p style="margin: 5px 0; font-size: 14px;"><strong>Valid until:</strong> ${new Date(announcement.expiryDate).toLocaleDateString()}</p>` : ''}
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8fafc; padding: 0;">
+              <div style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); padding: 28px 36px; border-radius: 12px 12px 0 0;">
+                <h1 style="color: #fff; margin: 0; font-size: 20px; font-weight: 700;">📢 New Announcement</h1>
+                <p style="color: rgba(255,255,255,0.7); margin: 6px 0 0; font-size: 13px;">From: ${creatorName}</p>
+              </div>
+              <div style="background: #fff; margin: 0; padding: 28px 36px; border: 1px solid #e2e8f0; border-top: none;">
+                <p style="margin: 0 0 16px; color: #374151; font-size: 15px;">Dear <strong>${employee.firstName}</strong>,</p>
+                <div style="background: ${priorityBg}; border-left: 4px solid ${priorityColor}; border-radius: 0 8px 8px 0; padding: 20px 24px; margin-bottom: 20px;">
+                  <h2 style="color: #1e293b; margin: 0 0 12px; font-size: 18px;">${announcement.title}</h2>
+                  <p style="color: #475569; margin: 0; font-size: 14px; line-height: 1.7;">${announcement.content}</p>
+                </div>
+                <div style="display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: #64748b;">
+                  <span><strong>Priority:</strong> <span style="color: ${priorityColor}; font-weight: 700;">${announcement.priority}</span></span>
+                  ${announcement.expiryDate ? `<span><strong>Valid until:</strong> ${new Date(announcement.expiryDate).toLocaleDateString()}</span>` : ''}
                 </div>
               </div>
-              
-              <p>Best regards,<br>Management Team</p>
+              <div style="text-align: center; padding: 16px 36px 28px; color: #94a3b8; font-size: 12px;">
+                <p style="margin: 0;">This is an automated notification from Luminoid HRMS.</p>
+              </div>
             </div>
           `
         };
-        return transporter.sendMail(mailOptions).catch(err => {
-          console.error(`Failed to send to ${employee.email}:`, err.message);
-        });
+        return transporter.sendMail(mailOptions).catch(err =>
+          console.error(`Failed to send announcement email to ${employee.email}:`, err.message)
+        );
       });
-      
+
       await Promise.all(emailPromises);
-      
-      // Wait 2 seconds between batches to avoid rate limiting
+
       if (i + batchSize < employees.length) {
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
     }
+
     
-    // console.log(`Announcement notification sent to ${employees.length} employees`);
   } catch (error) {
     console.error('Error sending announcement notification:', error);
   }
@@ -352,7 +371,7 @@ const sendBirthdayWishes = async (employee) => {
     };
     
     await transporter.sendMail(mailOptions);
-    // console.log(`Birthday wishes sent to ${employee.firstName} ${employee.lastName}`);
+    // 
   } catch (error) {
     console.error('Error sending birthday wishes:', error);
   }
@@ -476,7 +495,6 @@ const sendExpenseDeadlineReminder = async (employees, daysLeft, lastDay, billing
 
   try {
     await Promise.all(emailPromises);
-    console.log(`Expense deadline reminder sent to ${employees.length} employees (${daysLeft} days left)`);
   } catch (error) {
     console.error('Error sending expense deadline reminders:', error);
   }

@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Table, Badge, Button, Modal, Form } from 'react-bootstrap';
 import { toast } from 'react-toastify';
+import Swal from 'sweetalert2';
+import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 
 const Approvals = () => {
+  const { user } = useAuth();
   const [requests, setRequests] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
@@ -49,7 +52,32 @@ const Approvals = () => {
     }
   };
 
-  const getStatusBadge = (status) => {
+  const handleDelete = async (request) => {
+    const result = await Swal.fire({
+      title: 'Delete Leave Request?',
+      html: `<p>Employee: <strong>${request.userId?.firstName} ${request.userId?.lastName}</strong></p>
+             <p>Leave Type: <strong>${request.leaveTypeId?.name}</strong></p>
+             <p>This action cannot be undone and will restore leave balance if applicable!</p>`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#dc3545',
+      cancelButtonColor: '#6c757d',
+      confirmButtonText: 'Yes, delete it!'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        await api.delete(`/api/leave-requests/${request._id}`);
+        toast.success('Leave request deleted successfully');
+        fetchPendingApprovals();
+      } catch (error) {
+        toast.error(error.response?.data?.message || 'Error deleting leave request');
+      }
+    }
+  };
+
+  const getStatusBadge = (request) => {
+    const { status, managerApproval, hrApproval, rejectedBy } = request;
     const variants = {
       PENDING: 'warning',
       MANAGER_APPROVED: 'info',
@@ -57,7 +85,32 @@ const Approvals = () => {
       REJECTED: 'danger',
       CANCELLED: 'secondary'
     };
-    return <Badge bg={variants[status] || 'secondary'}>{status}</Badge>;
+
+    let displayText = status;
+    let approverName = '';
+
+    if (status === 'MANAGER_APPROVED' && managerApproval?.approvedBy) {
+      approverName = `${managerApproval.approvedBy.firstName} ${managerApproval.approvedBy.lastName}`;
+      displayText = `Approved by ${approverName}`;
+    } else if (status === 'HR_APPROVED' && hrApproval?.approvedBy) {
+      approverName = `${hrApproval.approvedBy.firstName} ${hrApproval.approvedBy.lastName}`;
+      displayText = `Approved by ${approverName}`;
+    } else if (status === 'REJECTED' && rejectedBy) {
+      const rejectorName = `${rejectedBy.firstName} ${rejectedBy.lastName}`;
+      displayText = `Rejected by ${rejectorName}`;
+    } else if (status === 'REJECTED') {
+      displayText = 'Rejected';
+    } else if (status === 'CANCELLED') {
+      displayText = 'Cancelled';
+    } else if (status === 'PENDING') {
+      displayText = 'Pending';
+    }
+
+    return (
+      <Badge bg={variants[status] || 'secondary'} title={displayText}>
+        {displayText}
+      </Badge>
+    );
   };
 
   return (
@@ -124,7 +177,7 @@ const Approvals = () => {
                         <span className="fw-semibold">{request.days}</span>
                         {request.isLOP && <Badge bg="warning" className="ms-2">LOP</Badge>}
                       </td>
-                      <td>{getStatusBadge(request.status)}</td>
+                      <td>{getStatusBadge(request)}</td>
                       <td>
                         <span className="text-muted" title={request.reason}>
                           {request.reason?.length > 30 ? request.reason.substring(0, 30) + '...' : request.reason}
@@ -148,6 +201,16 @@ const Approvals = () => {
                             <i className="fas fa-times me-1"></i>
                             Reject
                           </Button>
+                          {user?.role === 'ADMIN' && (
+                            <Button
+                              size="sm"
+                              variant="outline-danger"
+                              onClick={() => handleDelete(request)}
+                              title="Admin: Delete leave request"
+                            >
+                              <i className="fas fa-trash"></i>
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>

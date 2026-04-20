@@ -7,7 +7,10 @@ const fileSchema = new mongoose.Schema({
   s3Url: { type: String, required: true },
   size: Number,
   mimeType: String,
-  type: { type: String, enum: ['ORGANIZATION', 'EMPLOYEE'], required: true },
+  type: { type: String, enum: ['ORGANIZATION', 'EMPLOYEE', 'HR_DOCUMENT'], required: true },
+  subType: { type: String, enum: ['SALARY_SLIP', 'OFFER_LETTER', 'APPRAISAL_LETTER', 'EXPERIENCE_LETTER', 'RELIEVING_LETTER', 'OTHER'], default: null },
+  month: { type: Number, min: 1, max: 12, default: null }, // for salary slips
+  year: { type: Number, default: null },
   category: String,
   uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   targetUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // For employee files
@@ -32,7 +35,8 @@ const fileSchema = new mongoose.Schema({
   verifiedAt: Date,
   expiryDate: Date,
   verificationNotes: String,
-  folderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Folder', default: null }
+  folderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Folder', default: null },
+  isHRGenerated: { type: Boolean, default: false }
 }, { timestamps: true });
 
 module.exports = mongoose.model('File', fileSchema);

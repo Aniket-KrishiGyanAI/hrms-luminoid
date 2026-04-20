@@ -7,6 +7,7 @@ import { toast } from 'react-toastify';
 const EmployeeManagement = () => {
   const { user } = useAuth();
   const [employees, setEmployees] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState('active');
@@ -25,6 +26,21 @@ const EmployeeManagement = () => {
     fetchEmployees();
   }, [filter]);
 
+  useEffect(() => {
+    fetchDepartments();
+  }, []);
+
+  const fetchDepartments = async () => {
+    try {
+      const response = await api.get('/api/departments');
+      console.log('Departments fetched:', response.data);
+      setDepartments(response.data.data || []);
+    } catch (error) {
+      console.error('Error fetching departments:', error);
+      toast.error('Failed to load departments');
+    }
+  };
+
   const fetchEmployees = async () => {
     try {
       const response = await api.get(`/api/employee-management/all?status=${filter}`);
@@ -38,8 +54,35 @@ const EmployeeManagement = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      await api.post('/api/employee-management/create', formData);
-      toast.success('Employee created successfully! Welcome email sent.');
+      const response = await api.post('/api/employee-management/create', formData);
+      
+      // Show success with password
+      if (response.data.employee?.tempPassword) {
+        await toast.promise(
+          Promise.resolve(),
+          {
+            pending: 'Creating employee...',
+            success: {
+              render() {
+                return (
+                  <div>
+                    <strong>Employee Created Successfully!</strong>
+                    <div style={{ marginTop: '8px', padding: '8px', background: '#f0fdf4', borderRadius: '6px' }}>
+                      <div><strong>Email:</strong> {response.data.employee.email}</div>
+                      <div><strong>Password:</strong> <code style={{ background: '#dcfce7', padding: '2px 6px', borderRadius: '4px' }}>{response.data.employee.tempPassword}</code></div>
+                    </div>
+                    <small style={{ color: '#059669', marginTop: '4px', display: 'block' }}>✓ Welcome email sent to employee</small>
+                  </div>
+                );
+              },
+              autoClose: 8000
+            }
+          }
+        );
+      } else {
+        toast.success('Employee created successfully! Welcome email sent.');
+      }
+      
       setShowAddModal(false);
       resetForm();
       fetchEmployees();
@@ -117,7 +160,12 @@ const EmployeeManagement = () => {
           </h1>
           <p className="text-muted mb-0">Add, remove, and manage employees</p>
         </div>
-        <Button variant="primary" onClick={() => setShowAddModal(true)}>
+        <Button variant="primary" onClick={() => {
+          setShowAddModal(true);
+          if (departments.length === 0) {
+            fetchDepartments();
+          }
+        }}>
           <i className="fas fa-user-plus me-2"></i>Add Employee
         </Button>
       </div>
@@ -230,57 +278,83 @@ const EmployeeManagement = () => {
       </Card>
 
       {/* Add Employee Modal */}
-      <Modal show={showAddModal} onHide={() => setShowAddModal(false)} size="lg">
-        <Modal.Header closeButton>
-          <Modal.Title>Add New Employee</Modal.Title>
+      <Modal show={showAddModal} onHide={() => setShowAddModal(false)} size="lg" centered>
+        <Modal.Header closeButton style={{ background: 'linear-gradient(135deg, #064e3b 0%, #10b981 100%)', color: 'white', border: 'none' }}>
+          <Modal.Title className="fw-bold">
+            <i className="fas fa-user-plus me-2"></i>
+            Add New Employee
+          </Modal.Title>
         </Modal.Header>
         <Form onSubmit={handleSubmit}>
-          <Modal.Body>
+          <Modal.Body style={{ padding: '30px', background: '#f0fdf4' }}>
+            <div style={{ background: '#dbeafe', padding: '12px 16px', borderRadius: '10px', marginBottom: '24px', border: '1px solid #93c5fd' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#1e40af' }}>
+                <i className="fas fa-info-circle"></i>
+                <span style={{ fontSize: '0.9rem', fontWeight: '500' }}>A welcome email with login credentials will be automatically sent to the employee</span>
+              </div>
+            </div>
+
+            <h6 style={{ color: '#059669', fontWeight: '700', marginBottom: '16px', fontSize: '0.95rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <i className="fas fa-user me-2"></i>Personal Information
+            </h6>
             <Row>
               <Col md={6}>
                 <Form.Group className="mb-3">
-                  <Form.Label>First Name *</Form.Label>
+                  <Form.Label style={{ fontWeight: '600', color: '#064e3b', fontSize: '0.9rem' }}>First Name *</Form.Label>
                   <Form.Control
                     type="text"
                     value={formData.firstName}
                     onChange={(e) => setFormData({...formData, firstName: e.target.value})}
                     required
+                    placeholder="Enter first name"
+                    style={{ borderRadius: '8px', padding: '10px 14px', border: '2px solid #e0e0e0' }}
                   />
                 </Form.Group>
               </Col>
               <Col md={6}>
                 <Form.Group className="mb-3">
-                  <Form.Label>Last Name *</Form.Label>
+                  <Form.Label style={{ fontWeight: '600', color: '#064e3b', fontSize: '0.9rem' }}>Last Name *</Form.Label>
                   <Form.Control
                     type="text"
                     value={formData.lastName}
                     onChange={(e) => setFormData({...formData, lastName: e.target.value})}
                     required
+                    placeholder="Enter last name"
+                    style={{ borderRadius: '8px', padding: '10px 14px', border: '2px solid #e0e0e0' }}
                   />
                 </Form.Group>
               </Col>
             </Row>
 
-            <Form.Group className="mb-3">
-              <Form.Label>Email *</Form.Label>
+            <Form.Group className="mb-4">
+              <Form.Label style={{ fontWeight: '600', color: '#064e3b', fontSize: '0.9rem' }}>Email Address *</Form.Label>
               <Form.Control
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData({...formData, email: e.target.value})}
                 required
+                placeholder="employee@company.com"
+                style={{ borderRadius: '8px', padding: '10px 14px', border: '2px solid #e0e0e0' }}
               />
-              <Form.Text className="text-muted">
-                A welcome email with login credentials will be sent to this address
+              <Form.Text style={{ color: '#6b7280', fontSize: '0.85rem', marginTop: '6px', display: 'block' }}>
+                <i className="fas fa-envelope me-1"></i>
+                Login credentials will be sent to this email
               </Form.Text>
             </Form.Group>
 
+            <hr style={{ margin: '24px 0', border: 'none', borderTop: '2px solid #d1fae5' }} />
+
+            <h6 style={{ color: '#059669', fontWeight: '700', marginBottom: '16px', fontSize: '0.95rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <i className="fas fa-briefcase me-2"></i>Work Information
+            </h6>
             <Row>
               <Col md={6}>
                 <Form.Group className="mb-3">
-                  <Form.Label>Role *</Form.Label>
+                  <Form.Label style={{ fontWeight: '600', color: '#064e3b', fontSize: '0.9rem' }}>Role *</Form.Label>
                   <Form.Select
                     value={formData.role}
                     onChange={(e) => setFormData({...formData, role: e.target.value})}
+                    style={{ borderRadius: '8px', padding: '10px 14px', border: '2px solid #e0e0e0' }}
                   >
                     <option value="EMPLOYEE">Employee</option>
                     <option value="MANAGER">Manager</option>
@@ -291,11 +365,12 @@ const EmployeeManagement = () => {
               </Col>
               <Col md={6}>
                 <Form.Group className="mb-3">
-                  <Form.Label>Join Date</Form.Label>
+                  <Form.Label style={{ fontWeight: '600', color: '#064e3b', fontSize: '0.9rem' }}>Join Date</Form.Label>
                   <Form.Control
                     type="date"
                     value={formData.joinDate}
                     onChange={(e) => setFormData({...formData, joinDate: e.target.value})}
+                    style={{ borderRadius: '8px', padding: '10px 14px', border: '2px solid #e0e0e0' }}
                   />
                 </Form.Group>
               </Col>
@@ -304,33 +379,70 @@ const EmployeeManagement = () => {
             <Row>
               <Col md={6}>
                 <Form.Group className="mb-3">
-                  <Form.Label>Department</Form.Label>
-                  <Form.Control
-                    type="text"
+                  <Form.Label style={{ fontWeight: '600', color: '#064e3b', fontSize: '0.9rem' }}>
+                    Department {departments.length > 0 && <small className="text-muted">({departments.length} available)</small>}
+                  </Form.Label>
+                  <Form.Select
                     value={formData.department}
-                    onChange={(e) => setFormData({...formData, department: e.target.value})}
-                    placeholder="e.g., IT, Sales, HR"
-                  />
+                    onChange={(e) => {
+                      console.log('Department selected:', e.target.value);
+                      setFormData({...formData, department: e.target.value});
+                    }}
+                    style={{ borderRadius: '8px', padding: '10px 14px', border: '2px solid #e0e0e0' }}
+                  >
+                    <option value="">Select Department</option>
+                    {departments.length === 0 ? (
+                      <option disabled>Loading departments...</option>
+                    ) : (
+                      departments.map(dept => (
+                        <option key={dept._id} value={dept.name}>{dept.name}</option>
+                      ))
+                    )}
+                  </Form.Select>
+                  {departments.length === 0 && (
+                    <Form.Text style={{ color: '#dc2626', fontSize: '0.85rem', marginTop: '6px', display: 'block' }}>
+                      <i className="fas fa-exclamation-triangle me-1"></i>
+                      No departments found. Please create departments first.
+                    </Form.Text>
+                  )}
                 </Form.Group>
               </Col>
               <Col md={6}>
                 <Form.Group className="mb-3">
-                  <Form.Label>Designation</Form.Label>
+                  <Form.Label style={{ fontWeight: '600', color: '#064e3b', fontSize: '0.9rem' }}>Designation</Form.Label>
                   <Form.Control
                     type="text"
                     value={formData.designation}
                     onChange={(e) => setFormData({...formData, designation: e.target.value})}
                     placeholder="e.g., Software Developer"
+                    style={{ borderRadius: '8px', padding: '10px 14px', border: '2px solid #e0e0e0' }}
                   />
                 </Form.Group>
               </Col>
             </Row>
           </Modal.Body>
-          <Modal.Footer>
-            <Button variant="secondary" onClick={() => setShowAddModal(false)}>
+          <Modal.Footer style={{ background: 'white', borderTop: '2px solid #d1fae5', padding: '16px 30px' }}>
+            <Button 
+              variant="secondary" 
+              onClick={() => setShowAddModal(false)}
+              style={{ borderRadius: '8px', padding: '10px 24px', fontWeight: '600' }}
+            >
+              <i className="fas fa-times me-2"></i>
               Cancel
             </Button>
-            <Button variant="primary" type="submit" disabled={loading}>
+            <Button 
+              variant="primary" 
+              type="submit" 
+              disabled={loading}
+              style={{ 
+                background: 'linear-gradient(135deg, #064e3b 0%, #10b981 100%)', 
+                border: 'none', 
+                borderRadius: '8px', 
+                padding: '10px 24px', 
+                fontWeight: '600',
+                boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+              }}
+            >
               {loading ? (
                 <>
                   <span className="spinner-border spinner-border-sm me-2"></span>

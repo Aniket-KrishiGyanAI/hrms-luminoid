@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Table, Badge, Button, Form, Row, Col, Card } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import Swal from 'sweetalert2';
+import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 
 const MyLeaves = () => {
+  const { user } = useAuth();
   const [leaves, setLeaves] = useState([]);
   const [filters, setFilters] = useState({
     status: '',
@@ -29,6 +31,7 @@ const MyLeaves = () => {
       const params = new URLSearchParams({
         page: pagination.currentPage,
         limit: 10,
+        userId: user.id, // Always fetch only current user's leaves
         ...filters
       });
 
@@ -43,6 +46,28 @@ const MyLeaves = () => {
       console.error('Error fetching leaves:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    const result = await Swal.fire({
+      title: 'Delete Leave Request?',
+      text: 'This action cannot be undone and will restore leave balance if applicable!',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#dc3545',
+      cancelButtonColor: '#6c757d',
+      confirmButtonText: 'Yes, delete it!'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        await api.delete(`/api/leave-requests/${id}`);
+        toast.success('Leave request deleted successfully');
+        fetchLeaves();
+      } catch (error) {
+        toast.error(error.response?.data?.message || 'Error deleting leave request');
+      }
     }
   };
 
@@ -68,7 +93,8 @@ const MyLeaves = () => {
     }
   };
 
-  const getStatusBadge = (status) => {
+  const getStatusBadge = (leave) => {
+    const { status, managerApproval, hrApproval, rejectedBy } = leave;
     const variants = {
       PENDING: 'warning',
       MANAGER_APPROVED: 'info',
@@ -76,7 +102,32 @@ const MyLeaves = () => {
       REJECTED: 'danger',
       CANCELLED: 'secondary'
     };
-    return <Badge bg={variants[status] || 'secondary'}>{status}</Badge>;
+
+    let displayText = status;
+    let approverName = '';
+
+    if (status === 'MANAGER_APPROVED' && managerApproval?.approvedBy) {
+      approverName = `${managerApproval.approvedBy.firstName} ${managerApproval.approvedBy.lastName}`;
+      displayText = `Approved by ${approverName}`;
+    } else if (status === 'HR_APPROVED' && hrApproval?.approvedBy) {
+      approverName = `${hrApproval.approvedBy.firstName} ${hrApproval.approvedBy.lastName}`;
+      displayText = `Approved by ${approverName}`;
+    } else if (status === 'REJECTED' && rejectedBy) {
+      const rejectorName = `${rejectedBy.firstName} ${rejectedBy.lastName}`;
+      displayText = `Rejected by ${rejectorName}`;
+    } else if (status === 'REJECTED') {
+      displayText = 'Rejected';
+    } else if (status === 'CANCELLED') {
+      displayText = 'Cancelled';
+    } else if (status === 'PENDING') {
+      displayText = 'Pending';
+    }
+
+    return (
+      <Badge bg={variants[status] || 'secondary'} title={displayText}>
+        {displayText}
+      </Badge>
+    );
   };
 
   const handleFilterChange = (e) => {
@@ -194,23 +245,36 @@ const MyLeaves = () => {
                           <span className="fw-semibold">{leave.days}</span>
                           {leave.isLOP && <Badge bg="warning" className="ms-2">LOP</Badge>}
                         </td>
-                        <td>{getStatusBadge(leave.status)}</td>
+                        <td>{getStatusBadge(leave)}</td>
                         <td>
                           <span className="text-muted" title={leave.reason}>
                             {leave.reason?.length > 30 ? leave.reason.substring(0, 30) + '...' : leave.reason}
                           </span>
                         </td>
                         <td>
-                          {leave.status === 'PENDING' && (
-                            <Button
-                              size="sm"
-                              variant="outline-danger"
-                              onClick={() => handleCancel(leave._id)}
-                            >
-                              <i className="fas fa-times me-1"></i>
-                              Cancel
-                            </Button>
-                          )}
+                          <div className="d-flex gap-1">
+                            {leave.status === 'PENDING' && (
+                              <Button
+                                size="sm"
+                                variant="outline-danger"
+                                onClick={() => handleCancel(leave._id)}
+                              >
+                                <i className="fas fa-times me-1"></i>
+                                Cancel
+                              </Button>
+                            )}
+                            {user?.role === 'ADMIN' && (
+                              <Button
+                                size="sm"
+                                variant="outline-danger"
+                                onClick={() => handleDelete(leave._id)}
+                                title="Admin: Delete leave request"
+                              >
+                                <i className="fas fa-trash me-1"></i>
+                                Delete
+                              </Button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}

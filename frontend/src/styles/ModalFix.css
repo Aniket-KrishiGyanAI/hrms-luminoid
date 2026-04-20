@@ -1,0 +1,67 @@
+/* Force Modal to Display Properly */
+.modal {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  z-index: 1050 !important;
+  display: none !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  outline: 0 !important;
+}
+
+.modal.show {
+  display: block !important;
+}
+
+.modal-backdrop {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  z-index: 1040 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background-color: #000 !important;
+}
+
+.modal-backdrop.show {
+  opacity: 0.5 !important;
+}
+
+.modal-dialog {
+  position: relative !important;
+  width: auto !important;
+  margin: 1.75rem auto !important;
+  pointer-events: none !important;
+}
+
+.modal-dialog-centered {
+  display: flex !important;
+  align-items: center !important;
+  min-height: calc(100% - 3.5rem) !important;
+}
+
+.modal-content {
+  position: relative !important;
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  pointer-events: auto !important;
+  background-color: #fff !important;
+  background-clip: padding-box !important;
+  border: 1px solid rgba(0, 0, 0, 0.2) !important;
+  border-radius: 16px !important;
+  outline: 0 !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3) !important;
+}
+
+.modal-lg {
+  max-width: 800px !important;
+}
+
+/* Ensure body doesn't scroll when modal is open */
+body.modal-open {
+  overflow: hidden !important;
+}

@@ -3,13 +3,19 @@ const EmployeeProfile = require('../models/EmployeeProfile');
 const LeaveBalance = require('../models/LeaveBalance');
 const { sendWelcomeEmail } = require('../utils/emailService');
 const mongoose = require('mongoose');
+const logger = require('../utils/logger');
 
 // Create single employee
 const createEmployee = async (req, res) => {
   try {
     const { email, firstName, lastName, role, department, designation, joinDate, managerId } = req.body;
 
-    console.log('Creating employee with data:', { email, firstName, lastName, role, department, designation, joinDate });
+    // Restrict HR from creating ADMIN or HR users
+    if (req.user.role === 'HR' && ['ADMIN', 'HR'].includes(role)) {
+      return res.status(403).json({ 
+        message: 'HR cannot create ADMIN or HR users. Only ADMIN can create these roles.' 
+      });
+    }
 
     // Check if user exists
     const existingUser = await User.findOne({ email: email.toLowerCase() });
@@ -41,7 +47,6 @@ const createEmployee = async (req, res) => {
     });
 
     await user.save();
-    console.log('User created:', user._id);
 
     // Create basic employee profile
     await EmployeeProfile.create({
@@ -51,7 +56,6 @@ const createEmployee = async (req, res) => {
         employmentType: 'FULL_TIME'
       }
     });
-    console.log('Employee profile created');
 
     // Initialize leave balances for all leave types
     const LeaveType = require('../models/LeaveType');
@@ -70,9 +74,7 @@ const createEmployee = async (req, res) => {
     
     if (leaveBalances.length > 0) {
       await LeaveBalance.insertMany(leaveBalances);
-      console.log('Leave balances created for all leave types');
     }
-    console.log('Leave balance created');
 
     // Send welcome email
     try {
@@ -82,9 +84,9 @@ const createEmployee = async (req, res) => {
         password: tempPassword,
         loginUrl: process.env.FRONTEND_URL || 'http://localhost:3000'
       });
-      console.log('Welcome email sent successfully');
+      logger.info('Welcome email sent successfully', { email });
     } catch (emailError) {
-      console.error('Email send failed:', emailError);
+      logger.error('Email send failed', { error: emailError.message });
       // Don't fail the request if email fails
     }
 
@@ -101,7 +103,7 @@ const createEmployee = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error creating employee:', error);
+    logger.error('Error creating employee', { error: error.message });
     res.status(500).json({ message: 'Error creating employee', error: error.message });
   }
 };
@@ -115,6 +117,13 @@ const deactivateEmployee = async (req, res) => {
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: 'Employee not found' });
+    }
+
+    // Restrict HR from deactivating ADMIN or HR users
+    if (req.user.role === 'HR' && ['ADMIN', 'HR'].includes(user.role)) {
+      return res.status(403).json({ 
+        message: 'HR cannot deactivate ADMIN or HR users. Only ADMIN can deactivate these roles.' 
+      });
     }
 
     // Soft delete with comprehensive exit details

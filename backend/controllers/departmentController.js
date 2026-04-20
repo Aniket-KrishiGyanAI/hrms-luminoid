@@ -2,9 +2,11 @@ const Department = require('../models/Department');
 const User = require('../models/User');
 const multer = require('multer');
 const xlsx = require('xlsx');
+const logger = require('../utils/logger');
 
 exports.createDepartment = async (req, res) => {
   try {
+    logger.info('createDepartment', { userId: req.user?.id });
     const { name, code, description, departmentHead, parentDepartment, location } = req.body;
     
     const department = await Department.create({
@@ -17,12 +19,15 @@ exports.createDepartment = async (req, res) => {
     await department.populate('departmentHead', 'firstName lastName email');
     res.status(201).json({ success: true, data: department });
   } catch (error) {
+    logger.error('createDepartment error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(400).json({ success: false, message: error.message });
   }
 };
 
 exports.getAllDepartments = async (req, res) => {
   try {
+    logger.info('getAllDepartments', { userId: req.user?.id });
     const { page = 1, limit = 10, sort = 'name', order = 'asc', search, status, location, departmentHead } = req.query;
     
     const query = {};
@@ -58,12 +63,15 @@ exports.getAllDepartments = async (req, res) => {
       }
     });
   } catch (error) {
+    logger.error('getAllDepartments error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
 exports.getDepartmentById = async (req, res) => {
   try {
+    logger.info('getDepartmentById', { userId: req.user?.id });
     const department = await Department.findById(req.params.id)
       .populate('departmentHead', 'firstName lastName email role')
       .populate('parentDepartment', 'name code')
@@ -89,12 +97,15 @@ exports.getDepartmentById = async (req, res) => {
     
     res.json({ success: true, data: { ...department.toObject(), employees, subDepartments, stats } });
   } catch (error) {
+    logger.error('getDepartmentById error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
 exports.updateDepartment = async (req, res) => {
   try {
+    logger.info('updateDepartment', { userId: req.user?.id });
     const updateData = { ...req.body };
     if (updateData.departmentHead === '') updateData.departmentHead = undefined;
     if (updateData.parentDepartment === '') updateData.parentDepartment = undefined;
@@ -111,12 +122,15 @@ exports.updateDepartment = async (req, res) => {
     
     res.json({ success: true, data: department });
   } catch (error) {
+    logger.error('updateDepartment error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(400).json({ success: false, message: error.message });
   }
 };
 
 exports.deleteDepartment = async (req, res) => {
   try {
+    logger.info('deleteDepartment', { userId: req.user?.id });
     const employeeCount = await User.countDocuments({ department: req.params.id });
     
     if (employeeCount > 0) {
@@ -134,12 +148,15 @@ exports.deleteDepartment = async (req, res) => {
     
     res.json({ success: true, message: 'Department deleted successfully' });
   } catch (error) {
+    logger.error('deleteDepartment error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
 exports.assignEmployee = async (req, res) => {
   try {
+    logger.info('assignEmployee', { userId: req.user?.id });
     const { employeeId, departmentId } = req.body;
     
     const department = await Department.findById(departmentId);
@@ -161,12 +178,15 @@ exports.assignEmployee = async (req, res) => {
     
     res.json({ success: true, data: user });
   } catch (error) {
+    logger.error('assignEmployee error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
 exports.bulkAssignEmployees = async (req, res) => {
   try {
+    logger.info('bulkAssignEmployees', { userId: req.user?.id });
     const { employeeIds, departmentId } = req.body;
     
     const department = await Department.findById(departmentId);
@@ -190,12 +210,15 @@ exports.bulkAssignEmployees = async (req, res) => {
     
     res.json({ success: true, message: `${employeeIds.length} employees assigned successfully` });
   } catch (error) {
+    logger.error('bulkAssignEmployees error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
 exports.bulkStatusChange = async (req, res) => {
   try {
+    logger.info('bulkStatusChange', { userId: req.user?.id });
     const { departmentIds, status } = req.body;
     
     await Department.updateMany(
@@ -205,12 +228,15 @@ exports.bulkStatusChange = async (req, res) => {
     
     res.json({ success: true, message: `${departmentIds.length} departments updated successfully` });
   } catch (error) {
+    logger.error('bulkStatusChange error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
 exports.bulkDelete = async (req, res) => {
   try {
+    logger.info('bulkDelete', { userId: req.user?.id });
     const { departmentIds } = req.body;
     
     // Check if any department has employees
@@ -235,12 +261,15 @@ exports.bulkDelete = async (req, res) => {
     
     res.json({ success: true, message: `${departmentIds.length} departments deleted successfully` });
   } catch (error) {
+    logger.error('bulkDelete error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
 exports.transferEmployees = async (req, res) => {
   try {
+    logger.info('transferEmployees', { userId: req.user?.id });
     const { employeeIds, fromDepartmentId, toDepartmentId } = req.body;
     
     if (!employeeIds || employeeIds.length === 0) {
@@ -262,12 +291,15 @@ exports.transferEmployees = async (req, res) => {
     
     res.json({ success: true, message: `${result.modifiedCount} employees transferred successfully` });
   } catch (error) {
+    logger.error('transferEmployees error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
 exports.addGoal = async (req, res) => {
   try {
+    logger.info('addGoal', { userId: req.user?.id });
     const { id } = req.params;
     const { title, description, targetDate, owner, milestones } = req.body;
     
@@ -296,12 +328,15 @@ exports.addGoal = async (req, res) => {
     
     res.json({ success: true, data: department });
   } catch (error) {
+    logger.error('addGoal error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
 exports.updateGoal = async (req, res) => {
   try {
+    logger.info('updateGoal', { userId: req.user?.id });
     const { id, goalId } = req.params;
     const { progress, status, owner } = req.body;
     
@@ -344,12 +379,15 @@ exports.updateGoal = async (req, res) => {
     
     res.json({ success: true, data: department });
   } catch (error) {
+    logger.error('updateGoal error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
 exports.addGoalComment = async (req, res) => {
   try {
+    logger.info('addGoalComment', { userId: req.user?.id });
     const { id, goalId } = req.params;
     const { text } = req.body;
     
@@ -376,12 +414,15 @@ exports.addGoalComment = async (req, res) => {
     
     res.json({ success: true, data: department });
   } catch (error) {
+    logger.error('addGoalComment error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
 exports.updateMilestone = async (req, res) => {
   try {
+    logger.info('updateMilestone', { userId: req.user?.id });
     const { id, goalId, milestoneId } = req.params;
     const { completed } = req.body;
     
@@ -423,12 +464,15 @@ exports.updateMilestone = async (req, res) => {
     
     res.json({ success: true, data: department });
   } catch (error) {
+    logger.error('updateMilestone error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
 exports.uploadDocument = async (req, res) => {
   try {
+    logger.info('uploadDocument', { userId: req.user?.id });
     const { id } = req.params;
     const { name, url } = req.body;
     
@@ -442,12 +486,15 @@ exports.uploadDocument = async (req, res) => {
     
     res.json({ success: true, data: department });
   } catch (error) {
+    logger.error('uploadDocument error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
 exports.importDepartments = async (req, res) => {
   try {
+    logger.info('importDepartments', { userId: req.user?.id });
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No file uploaded' });
     }
@@ -476,6 +523,8 @@ exports.importDepartments = async (req, res) => {
         
         results.success.push(row.code);
       } catch (error) {
+    logger.error('importDepartments error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
         results.errors.push({ code: row.code, error: error.message });
       }
     }
@@ -488,6 +537,7 @@ exports.importDepartments = async (req, res) => {
 
 exports.getHierarchy = async (req, res) => {
   try {
+    logger.info('getHierarchy', { userId: req.user?.id });
     const departments = await Department.find()
       .populate('departmentHead', 'firstName lastName')
       .populate('parentDepartment', 'name')
@@ -510,18 +560,23 @@ exports.getHierarchy = async (req, res) => {
     
     res.json({ success: true, data: tree });
   } catch (error) {
+    logger.error('getHierarchy error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
 exports.getEmployeesForTransfer = async (req, res) => {
   try {
+    logger.info('getEmployeesForTransfer', { userId: req.user?.id });
     const users = await User.find({ isActive: true })
       .select('firstName lastName email department designation')
       .sort({ firstName: 1 });
     
     res.json({ success: true, data: users });
   } catch (error) {
+    logger.error('getEmployeesForTransfer error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -533,6 +588,7 @@ async function updateEmployeeCount(departmentId) {
 
 exports.removeEmployeeFromDepartment = async (req, res) => {
   try {
+    logger.info('removeEmployeeFromDepartment', { userId: req.user?.id });
     const { id, empId } = req.params;
     
     const user = await User.findByIdAndUpdate(
@@ -549,6 +605,8 @@ exports.removeEmployeeFromDepartment = async (req, res) => {
     
     res.json({ success: true, message: 'Employee removed from department' });
   } catch (error) {
+    logger.error('removeEmployeeFromDepartment error', { error: error.message, stack: error.stack, userId: req.user?.id });
+
     res.status(500).json({ success: false, message: error.message });
   }
 };

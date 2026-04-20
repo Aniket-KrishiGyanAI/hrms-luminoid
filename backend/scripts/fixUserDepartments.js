@@ -9,7 +9,7 @@ const Department = require('../models/Department');
 
 async function run() {
   await mongoose.connect(process.env.MONGODB_URI);
-  console.log('Connected');
+  
 
   const users = await User.find({ department: { $exists: true, $ne: null } }).lean();
   const depts = await Department.find().select('_id name').lean();
@@ -23,14 +23,14 @@ async function run() {
     const deptId = nameMap[val.toLowerCase()];
     if (deptId) {
       await User.updateOne({ _id: u._id }, { department: deptId });
-      console.log(`Fixed: ${u.firstName} ${u.lastName} → ${val} → ${deptId}`);
+      
       fixed++;
     } else {
       console.warn(`No dept found for: ${u.firstName} ${u.lastName} → "${val}"`);
     }
   }
 
-  console.log(`Done. Fixed ${fixed} users.`);
+  
   await mongoose.disconnect();
 }
 

@@ -10,16 +10,42 @@ const TeamCalendar = () => {
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedDay, setSelectedDay] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [showEmployeeModal, setShowEmployeeModal] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [employeeDetails, setEmployeeDetails] = useState(null);
   const [loadingEmployee, setLoadingEmployee] = useState(false);
+  const [viewMode, setViewMode] = useState('month'); // 'month', 'week', 'day'
+  const [leaveTypes, setLeaveTypes] = useState([]);
+  const [publicHolidays, setPublicHolidays] = useState([]);
 
   useEffect(() => {
     fetchTeamCalendar();
+    fetchLeaveTypes();
+    fetchPublicHolidays();
   }, []);
+
+  const fetchLeaveTypes = async () => {
+    try {
+      const response = await api.get('/api/leave-types?active=true');
+      setLeaveTypes(response.data);
+    } catch (err) {
+      console.error('Error fetching leave types:', err);
+    }
+  };
+
+  const fetchPublicHolidays = async () => {
+    try {
+      const response = await api.get('/api/holidays');
+      setPublicHolidays(response.data);
+    } catch (err) {
+      console.error('Error fetching public holidays:', err);
+      // Set some default holidays if API fails
+      setPublicHolidays([]);
+    }
+  };
 
   const fetchTeamCalendar = async () => {
     try {
@@ -50,9 +76,8 @@ const TeamCalendar = () => {
   );
 
   const getCalendarDays = () => {
-    const year = new Date().getFullYear();
-    const firstDay = new Date(year, selectedMonth, 1);
-    const lastDay = new Date(year, selectedMonth + 1, 0);
+    const firstDay = new Date(selectedYear, selectedMonth, 1);
+    const lastDay = new Date(selectedYear, selectedMonth + 1, 0);
     const days = [];
     
     for (let i = 0; i < firstDay.getDay(); i++) {
@@ -68,8 +93,7 @@ const TeamCalendar = () => {
 
   const getLeavesForDay = (day) => {
     if (!day) return [];
-    const year = new Date().getFullYear();
-    const date = new Date(year, selectedMonth, day);
+    const date = new Date(selectedYear, selectedMonth, day);
     date.setHours(0, 0, 0, 0);
     
     return filteredLeaves.filter(leave => {
@@ -106,7 +130,8 @@ const TeamCalendar = () => {
     }
   };
 
-  const getStatusBadge = (status) => {
+  const getStatusBadge = (leave) => {
+    const { status, managerApproval, hrApproval, rejectedBy } = leave;
     const statusConfig = {
       PENDING: { bg: '#fbbf24', text: 'Pending' },
       MANAGER_APPROVED: { bg: '#3b82f6', text: 'Manager Approved' },
@@ -114,12 +139,90 @@ const TeamCalendar = () => {
       REJECTED: { bg: '#ef4444', text: 'Rejected' },
       CANCELLED: { bg: '#6b7280', text: 'Cancelled' }
     };
-    const config = statusConfig[status] || statusConfig.PENDING;
+
+    let displayText = statusConfig[status]?.text || 'Pending';
+    let bgColor = statusConfig[status]?.bg || '#fbbf24';
+
+    // Show approver name if available
+    if (status === 'MANAGER_APPROVED' && managerApproval?.approvedBy) {
+      const approverName = `${managerApproval.approvedBy.firstName} ${managerApproval.approvedBy.lastName}`;
+      displayText = `Approved by ${approverName}`;
+    } else if (status === 'HR_APPROVED' && hrApproval?.approvedBy) {
+      const approverName = `${hrApproval.approvedBy.firstName} ${hrApproval.approvedBy.lastName}`;
+      displayText = `Approved by ${approverName}`;
+    } else if (status === 'REJECTED' && rejectedBy) {
+      const rejectorName = `${rejectedBy.firstName} ${rejectedBy.lastName}`;
+      displayText = `Rejected by ${rejectorName}`;
+    }
+
     return (
-      <Badge style={{ background: config.bg, padding: '0.4rem 0.8rem', borderRadius: '6px' }}>
-        {config.text}
+      <Badge style={{ background: bgColor, padding: '0.4rem 0.8rem', borderRadius: '6px' }} title={displayText}>
+        {displayText}
       </Badge>
     );
+  };
+
+  const isWeekend = (day) => {
+    if (!day) return false;
+    const date = new Date(selectedYear, selectedMonth, day);
+    const dayOfWeek = date.getDay();
+    return dayOfWeek === 0 || dayOfWeek === 6;
+  };
+
+  const isPublicHoliday = (day) => {
+    if (!day) return false;
+    const date = new Date(selectedYear, selectedMonth, day);
+    return publicHolidays.some(holiday => {
+      const holidayDate = new Date(holiday.date);
+      return holidayDate.getDate() === day && 
+             holidayDate.getMonth() === selectedMonth && 
+             holidayDate.getFullYear() === selectedYear;
+    });
+  };
+
+  const getPublicHolidayName = (day) => {
+    if (!day) return null;
+    const date = new Date(selectedYear, selectedMonth, day);
+    const holiday = publicHolidays.find(h => {
+      const holidayDate = new Date(h.date);
+      return holidayDate.getDate() === day && 
+             holidayDate.getMonth() === selectedMonth && 
+             holidayDate.getFullYear() === selectedYear;
+    });
+    return holiday?.name;
+  };
+
+  const goToToday = () => {
+    const today = new Date();
+    setSelectedMonth(today.getMonth());
+    setSelectedYear(today.getFullYear());
+  };
+
+  const navigateMonth = (direction) => {
+    if (direction === 'prev') {
+      if (selectedMonth === 0) {
+        setSelectedMonth(11);
+        setSelectedYear(selectedYear - 1);
+      } else {
+        setSelectedMonth(selectedMonth - 1);
+      }
+    } else {
+      if (selectedMonth === 11) {
+        setSelectedMonth(0);
+        setSelectedYear(selectedYear + 1);
+      } else {
+        setSelectedMonth(selectedMonth + 1);
+      }
+    }
+  };
+
+  const getYearOptions = () => {
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let i = currentYear - 5; i <= currentYear + 5; i++) {
+      years.push(i);
+    }
+    return years;
   };
 
   const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -302,25 +405,43 @@ const TeamCalendar = () => {
 
       {/* Calendar Controls */}
       <div style={{ background: 'white', borderRadius: '16px', padding: '1.5rem', border: '1px solid #e2e8f0', marginBottom: '1.5rem' }}>
-        <Row className="align-items-center">
+        <Row className="align-items-center mb-3">
           <Col md={6}>
             <div className="d-flex align-items-center gap-3">
               <Button 
                 variant="link" 
-                onClick={() => setSelectedMonth(selectedMonth === 0 ? 11 : selectedMonth - 1)}
+                onClick={() => navigateMonth('prev')}
                 style={{ color: '#6366f1', textDecoration: 'none', fontSize: '1.25rem' }}
               >
                 <i className="fas fa-chevron-left"></i>
               </Button>
               <h4 style={{ color: '#1e293b', fontWeight: '700', margin: 0, fontSize: '1.5rem' }}>
-                {months[selectedMonth]} {new Date().getFullYear()}
+                {months[selectedMonth]} {selectedYear}
               </h4>
               <Button 
                 variant="link" 
-                onClick={() => setSelectedMonth(selectedMonth === 11 ? 0 : selectedMonth + 1)}
+                onClick={() => navigateMonth('next')}
                 style={{ color: '#6366f1', textDecoration: 'none', fontSize: '1.25rem' }}
               >
                 <i className="fas fa-chevron-right"></i>
+              </Button>
+              <Form.Select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                style={{ width: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}
+              >
+                {getYearOptions().map(year => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </Form.Select>
+              <Button
+                variant="outline-primary"
+                size="sm"
+                onClick={goToToday}
+                style={{ borderRadius: '8px', fontWeight: '600' }}
+              >
+                <i className="fas fa-calendar-day me-2"></i>
+                Today
               </Button>
             </div>
           </Col>
@@ -336,6 +457,78 @@ const TeamCalendar = () => {
                 style={{ border: '1px solid #e2e8f0', borderLeft: 'none' }}
               />
             </InputGroup>
+          </Col>
+        </Row>
+
+        {/* View Mode Toggle */}
+        <Row className="align-items-center">
+          <Col md={6}>
+            <div className="d-flex gap-2">
+              <Button
+                variant={viewMode === 'month' ? 'primary' : 'outline-secondary'}
+                size="sm"
+                onClick={() => setViewMode('month')}
+                style={{ borderRadius: '8px', fontWeight: '600' }}
+              >
+                <i className="fas fa-calendar me-2"></i>
+                Month
+              </Button>
+              <Button
+                variant={viewMode === 'week' ? 'primary' : 'outline-secondary'}
+                size="sm"
+                onClick={() => setViewMode('week')}
+                style={{ borderRadius: '8px', fontWeight: '600' }}
+              >
+                <i className="fas fa-calendar-week me-2"></i>
+                Week
+              </Button>
+              <Button
+                variant={viewMode === 'day' ? 'primary' : 'outline-secondary'}
+                size="sm"
+                onClick={() => setViewMode('day')}
+                style={{ borderRadius: '8px', fontWeight: '600' }}
+              >
+                <i className="fas fa-calendar-day me-2"></i>
+                Day
+              </Button>
+            </div>
+          </Col>
+          <Col md={6}>
+            {/* Calendar Legend */}
+            <div className="d-flex align-items-center justify-content-end gap-3 flex-wrap">
+              <small style={{ color: '#64748b', fontWeight: '600' }}>Legend:</small>
+              {leaveTypes.slice(0, 4).map(type => (
+                <div key={type._id} className="d-flex align-items-center gap-1">
+                  <div style={{
+                    width: '12px',
+                    height: '12px',
+                    borderRadius: '3px',
+                    background: type.color
+                  }}></div>
+                  <small style={{ color: '#64748b', fontSize: '0.75rem' }}>{type.name}</small>
+                </div>
+              ))}
+              <div className="d-flex align-items-center gap-1">
+                <div style={{
+                  width: '12px',
+                  height: '12px',
+                  borderRadius: '3px',
+                  background: '#fee2e2',
+                  border: '1px solid #ef4444'
+                }}></div>
+                <small style={{ color: '#64748b', fontSize: '0.75rem' }}>Holiday</small>
+              </div>
+              <div className="d-flex align-items-center gap-1">
+                <div style={{
+                  width: '12px',
+                  height: '12px',
+                  borderRadius: '3px',
+                  background: '#fef3c7',
+                  border: '1px solid #fbbf24'
+                }}></div>
+                <small style={{ color: '#64748b', fontSize: '0.75rem' }}>Weekend</small>
+              </div>
+            </div>
           </Col>
         </Row>
       </div>
@@ -361,7 +554,10 @@ const TeamCalendar = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '8px' }}>
           {getCalendarDays().map((day, index) => {
             const dayLeaves = getLeavesForDay(day);
-            const isToday = day === new Date().getDate() && selectedMonth === new Date().getMonth();
+            const isToday = day === new Date().getDate() && selectedMonth === new Date().getMonth() && selectedYear === new Date().getFullYear();
+            const isWeekendDay = isWeekend(day);
+            const isHoliday = isPublicHoliday(day);
+            const holidayName = getPublicHolidayName(day);
             
             return (
               <div 
@@ -370,26 +566,54 @@ const TeamCalendar = () => {
                   minHeight: '100px',
                   padding: '0.75rem',
                   borderRadius: '12px',
-                  background: day ? (isToday ? '#f0f9ff' : '#f8fafc') : 'transparent',
-                  border: isToday ? '2px solid #6366f1' : '1px solid #e2e8f0',
+                  background: day ? (
+                    isToday ? '#dbeafe' : 
+                    isHoliday ? '#fee2e2' : 
+                    isWeekendDay ? '#fef3c7' : 
+                    '#ffffff'
+                  ) : 'transparent',
+                  border: isToday ? '2px solid #3b82f6' : 
+                         isHoliday ? '2px solid #ef4444' : 
+                         isWeekendDay ? '1px solid #fbbf24' :
+                         '1px solid #e2e8f0',
                   position: 'relative',
                   cursor: day ? 'pointer' : 'default',
                   transition: 'all 0.2s'
                 }}
                 onClick={() => handleDayClick(day)}
                 onMouseEnter={(e) => day && dayLeaves.length > 0 && (e.currentTarget.style.background = '#f1f5f9')}
-                onMouseLeave={(e) => day && (e.currentTarget.style.background = isToday ? '#f0f9ff' : '#f8fafc')}
+                onMouseLeave={(e) => day && (e.currentTarget.style.background = isToday ? '#dbeafe' : isHoliday ? '#fee2e2' : isWeekendDay ? '#fef3c7' : '#ffffff')}
+                title={holidayName || ''}
               >
                 {day && (
                   <>
                     <div style={{ 
                       fontWeight: isToday ? '700' : '600', 
-                      color: isToday ? '#6366f1' : '#1e293b',
+                      color: isToday ? '#3b82f6' : isHoliday ? '#dc2626' : isWeekendDay ? '#d97706' : '#1e293b',
                       fontSize: '0.875rem',
-                      marginBottom: '0.5rem'
+                      marginBottom: '0.5rem',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
                     }}>
-                      {day}
+                      <span>{day}</span>
+                      {isHoliday && (
+                        <i className="fas fa-star" style={{ fontSize: '0.6rem', color: '#dc2626' }} title={holidayName}></i>
+                      )}
                     </div>
+                    {isHoliday && holidayName && (
+                      <div style={{
+                        fontSize: '0.65rem',
+                        color: '#dc2626',
+                        fontWeight: '600',
+                        marginBottom: '0.5rem',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {holidayName}
+                      </div>
+                    )}
                     {dayLeaves.slice(0, 2).map((leave, idx) => (
                       <div 
                         key={idx}
@@ -431,10 +655,13 @@ const TeamCalendar = () => {
       {/* Upcoming Leaves List */}
       <Row className="g-4 mt-1">
         <Col lg={8}>
-          <div style={{ background: 'white', borderRadius: '16px', padding: '1.5rem', border: '1px solid #e2e8f0' }}>
-            <h5 style={{ color: '#1e293b', fontWeight: '700', marginBottom: '1.5rem' }}>
-              <i className="fas fa-list me-2" style={{ color: '#6366f1' }}></i>
+          <div style={{ background: 'white', borderRadius: '16px', padding: '1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)' }}>
+            <h5 style={{ color: '#065f46', fontWeight: '700', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <i className="fas fa-list me-2" style={{ color: '#10b981' }}></i>
               Upcoming Leaves
+              <Badge style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', marginLeft: '0.5rem' }}>
+                {filteredLeaves.length}
+              </Badge>
             </h5>
             <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
               {filteredLeaves.length === 0 ? (
@@ -449,13 +676,22 @@ const TeamCalendar = () => {
                     style={{
                 padding: '1rem',
                 borderRadius: '12px',
-                background: '#f8fafc',
+                background: 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)',
                 marginBottom: '0.75rem',
-                border: '1px solid #e2e8f0',
-                transition: 'all 0.2s'
+                border: '2px solid #6ee7b7',
+                transition: 'all 0.2s',
+                boxShadow: '0 2px 8px rgba(16, 185, 129, 0.15)'
               }}
-              onMouseEnter={(e) => e.currentTarget.style.background = '#f1f5f9'}
-              onMouseLeave={(e) => e.currentTarget.style.background = '#f8fafc'}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'linear-gradient(135deg, #a7f3d0 0%, #6ee7b7 100%)';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.25)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(16, 185, 129, 0.15)';
+              }}
             >
               <div className="d-flex align-items-center justify-content-between">
                 <div className="d-flex align-items-center gap-3 flex-grow-1">
@@ -463,26 +699,27 @@ const TeamCalendar = () => {
                     width: '48px',
                     height: '48px',
                     borderRadius: '12px',
-                    background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                     color: 'white',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontWeight: '700',
-                    fontSize: '1rem'
+                    fontSize: '1rem',
+                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
                   }}>
                     {leave.userId.firstName.charAt(0)}{leave.userId.lastName.charAt(0)}
                   </div>
                   <div>
-                    <div style={{ fontWeight: '600', color: '#1e293b', fontSize: '1rem', marginBottom: '0.25rem' }}>
+                    <div style={{ fontWeight: '700', color: '#065f46', fontSize: '1rem', marginBottom: '0.25rem' }}>
                       {leave.userId.firstName} {leave.userId.lastName}
                     </div>
                     {leave.userId.department && (
-                      <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '0.25rem' }}>
+                      <div style={{ fontSize: '0.75rem', color: '#047857', marginBottom: '0.25rem', fontWeight: '600' }}>
                         {leave.userId.department}
                       </div>
                     )}
-                    <div style={{ fontSize: '0.875rem', color: '#64748b' }}>
+                    <div style={{ fontSize: '0.875rem', color: '#059669', fontWeight: '600' }}>
                       <i className="fas fa-calendar me-1"></i>
                       {formatDate(leave.startDate)} - {formatDate(leave.endDate)} • {leave.days} day{leave.days > 1 ? 's' : ''}
                     </div>
@@ -491,15 +728,16 @@ const TeamCalendar = () => {
                 <div className="d-flex align-items-center gap-2">
                   <Badge 
                     style={{ 
-                      background: leave.leaveTypeId?.color || '#6366f1',
+                      background: leave.leaveTypeId?.color || '#10b981',
                       padding: '0.5rem 1rem',
                       borderRadius: '8px',
-                      fontWeight: '500'
+                      fontWeight: '600',
+                      boxShadow: '0 2px 6px rgba(0, 0, 0, 0.15)'
                     }}
                   >
                     {leave.leaveTypeId?.name}
                   </Badge>
-                  {getStatusBadge(leave.status)}
+                  {getStatusBadge(leave)}
                 </div>
               </div>
             </div>
@@ -511,10 +749,13 @@ const TeamCalendar = () => {
         
         {/* Team Members List */}
         <Col lg={4}>
-          <div style={{ background: 'white', borderRadius: '16px', padding: '1.5rem', border: '1px solid #e2e8f0' }}>
-            <h5 style={{ color: '#1e293b', fontWeight: '700', marginBottom: '1.5rem' }}>
-              <i className="fas fa-users me-2" style={{ color: '#6366f1' }}></i>
-              Team Members ({teamMembers.length})
+          <div style={{ background: 'white', borderRadius: '16px', padding: '1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)' }}>
+            <h5 style={{ color: '#065f46', fontWeight: '700', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <i className="fas fa-users me-2" style={{ color: '#10b981' }}></i>
+              Team Members
+              <Badge style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', marginLeft: '0.5rem' }}>
+                {teamMembers.length}
+              </Badge>
             </h5>
             <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
               {teamMembers.map(member => {
@@ -533,49 +774,83 @@ const TeamCalendar = () => {
                     style={{
                       padding: '1rem',
                       borderRadius: '12px',
-                      background: isOnLeave ? '#fef2f2' : '#f8fafc',
+                      background: isOnLeave ? 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)' : 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)',
                       marginBottom: '0.75rem',
-                      border: isOnLeave ? '1px solid #fecaca' : '1px solid #e2e8f0',
-                      transition: 'all 0.2s',
-                      cursor: 'pointer'
+                      border: isOnLeave ? '2px solid #f59e0b' : '2px solid #10b981',
+                      transition: 'all 0.3s',
+                      cursor: 'pointer',
+                      boxShadow: isOnLeave ? '0 2px 8px rgba(245, 158, 11, 0.2)' : '0 2px 8px rgba(16, 185, 129, 0.2)'
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.transform = 'translateX(4px)'}
-                    onMouseLeave={(e) => e.currentTarget.style.transform = 'translateX(0)'}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateX(4px)';
+                      e.currentTarget.style.boxShadow = isOnLeave ? '0 4px 12px rgba(245, 158, 11, 0.3)' : '0 4px 12px rgba(16, 185, 129, 0.3)';
+                      e.currentTarget.style.borderColor = isOnLeave ? '#f59e0b' : '#059669';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateX(0)';
+                      e.currentTarget.style.boxShadow = isOnLeave ? '0 2px 8px rgba(245, 158, 11, 0.2)' : '0 2px 8px rgba(16, 185, 129, 0.2)';
+                      e.currentTarget.style.borderColor = isOnLeave ? '#f59e0b' : '#10b981';
+                    }}
                   >
                     <div className="d-flex align-items-center gap-3">
                       <div style={{
-                        width: '44px',
-                        height: '44px',
-                        borderRadius: '10px',
-                        background: isOnLeave ? 'linear-gradient(135deg, #f59e0b 0%, #f97316 100%)' : 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                        width: '50px',
+                        height: '50px',
+                        borderRadius: '12px',
+                        background: isOnLeave ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                         color: 'white',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         fontWeight: '700',
-                        fontSize: '0.95rem'
+                        fontSize: '1.1rem',
+                        boxShadow: isOnLeave ? '0 4px 12px rgba(245, 158, 11, 0.4)' : '0 4px 12px rgba(16, 185, 129, 0.4)',
+                        position: 'relative'
                       }}>
                         {member.firstName.charAt(0)}{member.lastName.charAt(0)}
+                        {isOnLeave && (
+                          <div style={{
+                            position: 'absolute',
+                            top: '-4px',
+                            right: '-4px',
+                            width: '16px',
+                            height: '16px',
+                            borderRadius: '50%',
+                            background: '#ef4444',
+                            border: '2px solid white',
+                            animation: 'pulse 2s infinite'
+                          }}></div>
+                        )}
                       </div>
                       <div className="flex-grow-1">
-                        <div style={{ fontWeight: '600', color: '#1e293b', fontSize: '0.9rem' }}>
+                        <div style={{ fontWeight: '700', color: isOnLeave ? '#92400e' : '#065f46', fontSize: '0.95rem', marginBottom: '0.25rem' }}>
                           {member.firstName} {member.lastName}
                         </div>
                         {member.department && (
-                          <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                          <div style={{ fontSize: '0.75rem', color: isOnLeave ? '#b45309' : '#047857', fontWeight: '500', marginBottom: '0.25rem' }}>
+                            <i className="fas fa-building me-1" style={{ fontSize: '0.7rem' }}></i>
                             {member.department}
                           </div>
                         )}
-                        {isOnLeave && (
-                          <Badge style={{ background: '#f97316', fontSize: '0.7rem', marginTop: '0.25rem' }}>
+                        {isOnLeave ? (
+                          <Badge style={{ background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', fontSize: '0.7rem', fontWeight: '600', padding: '0.25rem 0.6rem' }}>
+                            <i className="fas fa-plane me-1"></i>
                             On Leave
                           </Badge>
-                        )}
-                        {memberLeaves.length > 0 && !isOnLeave && (
-                          <div style={{ fontSize: '0.7rem', color: '#6366f1', marginTop: '0.25rem' }}>
-                            {memberLeaves.length} upcoming
+                        ) : memberLeaves.length > 0 ? (
+                          <div style={{ fontSize: '0.7rem', color: '#059669', fontWeight: '600' }}>
+                            <i className="fas fa-calendar-check me-1"></i>
+                            {memberLeaves.length} upcoming leave{memberLeaves.length > 1 ? 's' : ''}
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: '0.7rem', color: '#10b981', fontWeight: '600' }}>
+                            <i className="fas fa-check-circle me-1"></i>
+                            Available
                           </div>
                         )}
+                      </div>
+                      <div>
+                        <i className="fas fa-chevron-right" style={{ color: isOnLeave ? '#f59e0b' : '#10b981', fontSize: '0.9rem' }}></i>
                       </div>
                     </div>
                   </div>
@@ -590,7 +865,7 @@ const TeamCalendar = () => {
       <Modal show={showModal} onHide={() => setShowModal(false)} size="lg" centered>
         <Modal.Header closeButton style={{ border: 'none', paddingBottom: 0 }}>
           <Modal.Title style={{ color: '#1e293b', fontWeight: '700' }}>
-            Leaves on {months[selectedMonth]} {selectedDay?.day}, {new Date().getFullYear()}
+            Leaves on {months[selectedMonth]} {selectedDay?.day}, {selectedYear}
           </Modal.Title>
         </Modal.Header>
         <Modal.Body style={{ padding: '1.5rem' }}>
@@ -632,7 +907,7 @@ const TeamCalendar = () => {
                     )}
                   </div>
                 </div>
-                {getStatusBadge(leave.status)}
+                {getStatusBadge(leave)}
               </div>
               <div className="d-flex gap-4 mb-2">
                 <div>
@@ -667,63 +942,55 @@ const TeamCalendar = () => {
 
       {/* Employee Details Modal */}
       <Modal show={showEmployeeModal} onHide={() => setShowEmployeeModal(false)} size="lg" centered>
-        <Modal.Header closeButton style={{ border: 'none', paddingBottom: 0 }}>
-          <Modal.Title style={{ color: '#1e293b', fontWeight: '700', fontSize: '1.25rem' }}>
-            {selectedEmployee && `${selectedEmployee.firstName} ${selectedEmployee.lastName}`}
-            {employeeDetails?.employee?.department && (
-              <div style={{ fontSize: '0.875rem', color: '#64748b', fontWeight: '400', marginTop: '0.25rem' }}>
-                {employeeDetails.employee.department}
+        <Modal.Header closeButton style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', border: 'none', padding: '1.5rem' }}>
+          <Modal.Title style={{ color: 'white', fontWeight: '700', fontSize: '1.25rem', width: '100%' }}>
+            {selectedEmployee && (
+              <div className="d-flex align-items-center gap-3">
+                <div style={{
+                  width: '50px',
+                  height: '50px',
+                  borderRadius: '12px',
+                  background: 'rgba(255, 255, 255, 0.2)',
+                  backdropFilter: 'blur(10px)',
+                  color: 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: '700',
+                  fontSize: '1.2rem',
+                  border: '2px solid rgba(255, 255, 255, 0.3)'
+                }}>
+                  {selectedEmployee.firstName.charAt(0)}{selectedEmployee.lastName.charAt(0)}
+                </div>
+                <div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: '700' }}>
+                    {selectedEmployee.firstName} {selectedEmployee.lastName}
+                  </div>
+                  {employeeDetails?.employee?.department && (
+                    <div style={{ fontSize: '0.85rem', opacity: 0.9, fontWeight: '400', marginTop: '0.25rem' }}>
+                      <i className="fas fa-building me-2"></i>
+                      {employeeDetails.employee.department}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </Modal.Title>
         </Modal.Header>
-        <Modal.Body style={{ padding: '1.5rem' }}>
+        <Modal.Body style={{ padding: '1.5rem', background: '#f8fafc' }}>
           {loadingEmployee ? (
-            <div className="text-center py-5">
-              <Spinner animation="border" style={{ color: '#6366f1' }} />
-              <p className="text-muted mt-2">Loading employee details...</p>
+            <div className="text-center py-4">
+              <Spinner animation="border" style={{ color: '#10b981', width: '2.5rem', height: '2.5rem' }} />
+              <p className="text-muted mt-2" style={{ fontSize: '0.9rem', fontWeight: '500' }}>Loading...</p>
             </div>
           ) : employeeDetails ? (
             <>
-              {/* Monthly Attendance */}
-              {employeeDetails.monthlyPresent && employeeDetails.monthlyPresent.length > 0 && (
-                <div style={{ marginBottom: '1.5rem' }}>
-                  <h6 style={{ color: '#1e293b', fontWeight: '700', marginBottom: '1rem' }}>
-                    Monthly Attendance (Real-time Data)
-                  </h6>
-                  <div style={{ background: '#f8fafc', borderRadius: '12px', padding: '1rem', border: '1px solid #e2e8f0' }}>
-                    <Row className="g-2">
-                      {employeeDetails.monthlyPresent.map((month, index) => (
-                        <Col xs={6} md={4} lg={3} key={index}>
-                          <div style={{ 
-                            background: 'white', 
-                            borderRadius: '8px', 
-                            padding: '0.75rem', 
-                            border: '1px solid #e2e8f0',
-                            textAlign: 'center'
-                          }}>
-                            <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: '600', marginBottom: '0.5rem' }}>
-                              {month.month}
-                            </div>
-                            <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#10b981', marginBottom: '0.25rem' }}>
-                              {month.presentDays}
-                            </div>
-                            <div style={{ fontSize: '0.65rem', color: '#64748b', lineHeight: '1.4' }}>
-                              <div><span style={{ color: '#6366f1' }}>Days: {month.workingDays}</span></div>
-                              <div><span style={{ color: '#f59e0b' }}>Leave: {month.leaveDays}</span></div>
-                              <div><span style={{ color: '#ef4444' }}>Absent: {month.absentDays}</span></div>
-                            </div>
-                          </div>
-                        </Col>
-                      ))}
-                    </Row>
-                  </div>
-                </div>
-              )}
-
               {/* Leave Balances */}
-              <div style={{ marginBottom: '1.5rem' }}>
-                <h6 style={{ color: '#1e293b', fontWeight: '700', marginBottom: '1rem' }}>Leave Balances</h6>
+              <div style={{ marginBottom: '1rem' }}>
+                <h6 style={{ color: '#065f46', fontWeight: '700', marginBottom: '0.75rem', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <i className="fas fa-wallet" style={{ color: '#10b981' }}></i>
+                  Leave Balances
+                </h6>
                 {employeeDetails.balances && employeeDetails.balances.length > 0 ? (
                   <Row className="g-2">
                     {employeeDetails.balances.map(balance => {
@@ -735,85 +1002,80 @@ const TeamCalendar = () => {
                       const available = total - used - pending;
                       
                       return (
-                        <Col md={6} key={balance._id}>
-                          <div style={{ background: '#f8fafc', borderRadius: '10px', padding: '1rem', border: '1px solid #e2e8f0' }}>
-                            <div className="d-flex justify-content-between align-items-start mb-2">
-                              <Badge style={{ background: balance.leaveTypeId?.color || '#6366f1', fontSize: '0.875rem', padding: '0.4rem 0.8rem' }}>
-                                {balance.leaveTypeId?.name || 'N/A'}
-                              </Badge>
-                              <div style={{ fontSize: '1.75rem', fontWeight: '700', color: '#1e293b' }}>
-                                {available}
-                              </div>
+                        <Col xs={6} key={balance._id}>
+                          <div style={{ 
+                            background: 'white', 
+                            borderRadius: '10px', 
+                            padding: '0.75rem', 
+                            border: '1px solid #e2e8f0',
+                            textAlign: 'center'
+                          }}>
+                            <Badge style={{ 
+                              background: balance.leaveTypeId?.color || '#10b981', 
+                              fontSize: '0.7rem', 
+                              padding: '0.35rem 0.75rem',
+                              fontWeight: '600',
+                              marginBottom: '0.5rem'
+                            }}>
+                              {balance.leaveTypeId?.name || 'N/A'}
+                            </Badge>
+                            <div style={{ fontSize: '1.75rem', fontWeight: '700', color: available > 0 ? '#10b981' : '#ef4444', marginBottom: '0.25rem' }}>
+                              {available}
                             </div>
-                            <div style={{ fontSize: '0.75rem', color: '#64748b', lineHeight: '1.6' }}>
-                              <div className="d-flex justify-content-between mb-1">
-                                <span>Total Allocated:</span>
-                                <span style={{ fontWeight: '600', color: '#1e293b' }}>{total}</span>
-                              </div>
-                              <div className="d-flex justify-content-between mb-1">
-                                <span>Used:</span>
-                                <span style={{ fontWeight: '600', color: '#ef4444' }}>{used}</span>
-                              </div>
-                              <div className="d-flex justify-content-between mb-1">
-                                <span>Pending:</span>
-                                <span style={{ fontWeight: '600', color: '#f59e0b' }}>{pending}</span>
-                              </div>
-                              <div className="d-flex justify-content-between pt-1" style={{ borderTop: '1px solid #e2e8f0' }}>
-                                <span style={{ fontWeight: '600' }}>Available:</span>
-                                <span style={{ fontWeight: '700', color: '#10b981' }}>{available}</span>
-                              </div>
-                            </div>
+                            <div style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: '600' }}>Available</div>
+                            <div style={{ fontSize: '0.65rem', color: '#94a3b8', marginTop: '0.25rem' }}>Used: {used} | Pending: {pending}</div>
                           </div>
                         </Col>
                       );
                     })}
                   </Row>
                 ) : (
-                  <div className="text-center py-3" style={{ color: '#64748b', background: '#f8fafc', borderRadius: '10px' }}>
-                    No leave balances found
+                  <div className="text-center py-3" style={{ color: '#64748b', background: 'white', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '0.85rem' }}>
+                    No leave balances
                   </div>
                 )}
               </div>
 
               {/* Leave History */}
               <div>
-                <h6 style={{ color: '#1e293b', fontWeight: '700', marginBottom: '1rem' }}>Leave History</h6>
-                <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                <h6 style={{ color: '#065f46', fontWeight: '700', marginBottom: '0.75rem', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <i className="fas fa-history" style={{ color: '#10b981' }}></i>
+                  Recent Leaves (Last 5)
+                </h6>
+                <div style={{ maxHeight: '300px', overflowY: 'auto', background: 'white', borderRadius: '10px', padding: '0.75rem', border: '1px solid #e2e8f0' }}>
                   {employeeDetails.leaves && employeeDetails.leaves.length > 0 ? (
-                    employeeDetails.leaves.map(leave => (
+                    employeeDetails.leaves.slice(0, 5).map(leave => (
                       <div 
                         key={leave._id}
                         style={{
-                          padding: '1rem',
-                          borderRadius: '10px',
+                          padding: '0.75rem',
+                          borderRadius: '8px',
                           background: '#f8fafc',
-                          marginBottom: '0.75rem',
+                          marginBottom: '0.5rem',
                           border: '1px solid #e2e8f0'
                         }}
                       >
-                        <div className="d-flex justify-content-between align-items-start mb-2">
-                          <Badge style={{ background: leave.leaveTypeId?.color || '#6366f1', fontSize: '0.875rem', padding: '0.4rem 0.8rem' }}>
+                        <div className="d-flex justify-content-between align-items-center mb-2">
+                          <Badge style={{ 
+                            background: leave.leaveTypeId?.color || '#10b981', 
+                            fontSize: '0.7rem', 
+                            padding: '0.35rem 0.75rem',
+                            fontWeight: '600'
+                          }}>
                             {leave.leaveTypeId?.name || 'N/A'}
                           </Badge>
-                          {getStatusBadge(leave.status)}
+                          {getStatusBadge(leave)}
                         </div>
-                        <div style={{ fontSize: '0.875rem', color: '#1e293b', marginBottom: '0.5rem', fontWeight: '600' }}>
-                          <i className="fas fa-calendar me-2" style={{ color: '#6366f1' }}></i>
-                          {formatDate(leave.startDate)} - {formatDate(leave.endDate)}
-                          <span style={{ marginLeft: '0.5rem', color: '#64748b', fontWeight: '400' }}>({leave.days} day{leave.days > 1 ? 's' : ''})</span>
+                        <div style={{ fontSize: '0.8rem', color: '#1e293b', fontWeight: '600', marginBottom: '0.25rem' }}>
+                          <i className="fas fa-calendar" style={{ color: '#10b981', fontSize: '0.75rem', marginRight: '0.5rem' }}></i>
+                          {formatDate(leave.startDate)} - {formatDate(leave.endDate)} ({leave.days} day{leave.days > 1 ? 's' : ''})
                         </div>
-                        {leave.reason && (
-                          <div style={{ fontSize: '0.8rem', color: '#64748b', padding: '0.5rem', background: 'white', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                            <i className="fas fa-comment-dots me-2"></i>
-                            {leave.reason}
-                          </div>
-                        )}
                       </div>
                     ))
                   ) : (
-                    <div className="text-center py-4" style={{ color: '#64748b', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                      <i className="fas fa-calendar-times" style={{ fontSize: '2rem', marginBottom: '0.5rem', opacity: 0.5 }}></i>
-                      <div>No leave history found</div>
+                    <div className="text-center py-3" style={{ color: '#64748b', fontSize: '0.85rem' }}>
+                      <i className="fas fa-calendar-times" style={{ fontSize: '2rem', marginBottom: '0.5rem', opacity: 0.3 }}></i>
+                      <div>No leave history</div>
                     </div>
                   )}
                 </div>

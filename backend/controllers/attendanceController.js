@@ -2,6 +2,8 @@ const Attendance = require("../models/Attendance");
 const User = require("../models/User");
 const moment = require("moment-timezone");
 const { sendHalfDayLOPNotification } = require("../utils/emailService");
+const { delCache, clearPattern } = require("../config/cache");
+const logger = require('../utils/logger');
 
 function getDistanceInMeters(lat1, lon1, lat2, lon2) {
   const R = 6371000; // Earth radius in meters
@@ -105,6 +107,9 @@ const checkIn = async (req, res) => {
 
     await attendance.save();
 
+    // Clear attendance cache
+    await clearPattern(`cache:*/attendance*:${userId}`);
+
     res.json({ message: "Checked in successfully", attendance });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -132,31 +137,38 @@ const markHolidayAttendance = async (req, res) => {
     }
 
     // Get all active users
-    const users = await User.find({ isActive: true });
-    let markedCount = 0;
+    const users = await User.find({ isActive: true }).select('_id').lean();
+    const userIds = users.map(u => u._id);
 
-    for (const user of users) {
-      const existingAttendance = await Attendance.findOne({
-        userId: user._id,
+    // Bulk check existing attendance (fix N+1)
+    const existingAttendance = await Attendance.find({
+      userId: { $in: userIds },
+      date: targetDate,
+    }).select('userId').lean();
+
+    const existingUserIds = new Set(existingAttendance.map(a => a.userId.toString()));
+    const newAttendance = userIds
+      .filter(id => !existingUserIds.has(id.toString()))
+      .map(userId => ({
+        userId,
         date: targetDate,
-      });
+        status: "Present",
+        totalHours: 8,
+        isManualEntry: true,
+        notes: `Holiday: ${holiday.name}`,
+        approvedBy: req.user.id,
+      }));
 
-      if (!existingAttendance) {
-        await Attendance.create({
-          userId: user._id,
-          date: targetDate,
-          status: "Present",
-          totalHours: 8,
-          isManualEntry: true,
-          notes: `Holiday: ${holiday.name}`,
-          approvedBy: req.user.id,
-        });
-        markedCount++;
-      }
+    // Bulk insert
+    if (newAttendance.length > 0) {
+      await Attendance.insertMany(newAttendance);
     }
 
+    // Clear cache
+    await clearPattern('cache:*/attendance*');
+
     res.json({
-      message: `Holiday attendance marked for ${markedCount} employees`,
+      message: `Holiday attendance marked for ${newAttendance.length} employees`,
       holiday: holiday.name,
       date: targetDate,
     });
@@ -258,12 +270,15 @@ const checkOut = async (req, res) => {
 
     await attendance.save(); // pre-save hook calculates hours & status
 
+    // Clear attendance cache
+    await clearPattern(`cache:*/attendance*:${userId}`);
+
     return res.json({
       message: "Checked out successfully",
       attendance,
     });
   } catch (error) {
-    console.error("Check-out error:", error);
+    logger.error("Check-out error", { error: error.message });
     res.status(500).json({
       message: "Server error during check-out",
     });
@@ -285,10 +300,27 @@ const getAttendance = async (req, res) => {
     // Role-based filtering
     if (req.user.role === "EMPLOYEE") {
       filter.userId = req.user.id;
+    } else if (req.user.role === "MANAGER") {
+      // Managers can only see their team's attendance
+      const teamMembers = await User.find({ managerId: req.user.id }).select('_id');
+      const teamMemberIds = teamMembers.map(m => m._id);
+      
+      if (userId && userId !== "all" && userId.trim() !== "") {
+        // Check if requested user is in their team
+        const isInTeam = teamMemberIds.some(id => id.toString() === userId);
+        if (isInTeam || userId === req.user.id) {
+          filter.userId = userId;
+        } else {
+          return res.status(403).json({ message: 'Access denied. You can only view your team members attendance.' });
+        }
+      } else {
+        // Show all team members + self
+        filter.userId = { $in: [...teamMemberIds, req.user.id] };
+      }
     } else if (userId && userId !== "all" && userId.trim() !== "") {
       filter.userId = userId;
     }
-    // If userId is empty, "all", or not provided for admin/hr/manager, show all employees
+    // If userId is empty, "all", or not provided for admin/hr, show all employees
 
     if (startDate && endDate) {
       const start = new Date(startDate);
@@ -298,11 +330,6 @@ const getAttendance = async (req, res) => {
         $gte: start,
         $lte: end,
       };
-      console.log("📅 Query date range:", {
-        startDate,
-        endDate,
-        mongoQuery: { $gte: start, $lte: end },
-      });
     }
 
     // Exclude deleted records by default (only show if includeDeleted=true and user is ADMIN/HR)
@@ -345,6 +372,14 @@ const getTodayStatus = async (req, res) => {
       req.query.userId.trim() !== "" &&
       ["MANAGER", "HR", "ADMIN"].includes(req.user.role)
     ) {
+      // For managers, verify the user is in their team
+      if (req.user.role === "MANAGER") {
+        const teamMembers = await User.find({ managerId: req.user.id }).select('_id');
+        const isInTeam = teamMembers.some(m => m._id.toString() === req.query.userId);
+        if (!isInTeam && req.query.userId !== req.user.id) {
+          return res.status(403).json({ message: 'Access denied. You can only view your team members.' });
+        }
+      }
       userId = req.query.userId;
     } else if (
       (!req.query.userId ||
@@ -353,10 +388,19 @@ const getTodayStatus = async (req, res) => {
       ["MANAGER", "HR", "ADMIN"].includes(req.user.role)
     ) {
       // For "All" option, return aggregated data
-      const allAttendance = await Attendance.find({
+      let attendanceFilter = {
         date: today,
         isDeleted: { $ne: true },
-      }).populate("userId", "firstName lastName email");
+      };
+      
+      // For managers, filter to team only
+      if (req.user.role === "MANAGER") {
+        const teamMembers = await User.find({ managerId: req.user.id }).select('_id');
+        const teamMemberIds = teamMembers.map(m => m._id);
+        attendanceFilter.userId = { $in: [...teamMemberIds, req.user.id] };
+      }
+      
+      const allAttendance = await Attendance.find(attendanceFilter).populate("userId", "firstName lastName email");
 
       // Get total active employees count
       const totalActiveEmployees = await User.countDocuments({
@@ -447,10 +491,27 @@ const getAttendanceReport = async (req, res) => {
     // Role-based filtering
     if (req.user.role === "EMPLOYEE") {
       filter.userId = req.user.id;
+    } else if (req.user.role === "MANAGER") {
+      // Managers can only see their team's attendance
+      const teamMembers = await User.find({ managerId: req.user.id }).select('_id');
+      const teamMemberIds = teamMembers.map(m => m._id);
+      
+      if (userId && userId !== "all") {
+        // Check if requested user is in their team
+        const isInTeam = teamMemberIds.some(id => id.toString() === userId);
+        if (isInTeam || userId === req.user.id) {
+          filter.userId = userId;
+        } else {
+          return res.status(403).json({ message: 'Access denied. You can only view your team members attendance.' });
+        }
+      } else {
+        // Show all team members + self
+        filter.userId = { $in: [...teamMemberIds, req.user.id] };
+      }
     } else if (userId && userId !== "all") {
       filter.userId = userId;
     }
-    // If userId is "all" or empty for admin/hr/manager, show all employees
+    // If userId is "all" or empty for admin/hr, show all employees
 
     const attendance = await Attendance.find(filter)
       .populate("userId", "firstName lastName email")
@@ -538,6 +599,14 @@ const editAttendance = async (req, res) => {
     const attendance = await Attendance.findById(id);
     if (!attendance) {
       return res.status(404).json({ message: "Attendance record not found" });
+    }
+
+    // For managers, verify the attendance belongs to their team member
+    if (req.user.role === "MANAGER") {
+      const employee = await User.findById(attendance.userId);
+      if (!employee || (employee.managerId?.toString() !== req.user.id && attendance.userId.toString() !== req.user.id)) {
+        return res.status(403).json({ message: "Access denied. You can only edit your team members' attendance." });
+      }
     }
 
     if (checkIn) attendance.checkIn = new Date(checkIn);

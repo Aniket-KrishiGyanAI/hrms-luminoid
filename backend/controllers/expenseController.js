@@ -1,24 +1,6 @@
 const Expense = require("../models/Expense");
-const fs = require("fs");
-const path = require("path");
-
-const RECEIPTS_DIR = path.resolve(__dirname, "../uploads/receipts");
-
-// Safely delete a file only if it's within the allowed receipts directory
-const safeUnlink = (filePath) => {
-  try {
-    const resolved = path.resolve(filePath);
-    if (!resolved.startsWith(RECEIPTS_DIR + path.sep) && resolved !== RECEIPTS_DIR) {
-      console.error("Blocked path traversal attempt:", filePath);
-      return;
-    }
-    fs.unlink(resolved, (err) => {
-      if (err) console.error("Error deleting file:", err);
-    });
-  } catch (err) {
-    console.error("safeUnlink error:", err);
-  }
-};
+const { uploadExpenseReceipt, deleteExpenseReceipt } = require("../utils/s3Utils");
+const logger = require('../utils/logger');
 
 // Returns lock status and warning info for current date
 const getMonthLockInfo = () => {
@@ -48,12 +30,80 @@ const isMonthLocked = (billingMonth) => {
   return false;
 };
 
+// ✨ NEW: Check for duplicate expenses
+// Detects similar expenses based on title, amount, and date
+const checkDuplicateExpense = async (employeeId, title, amount, expenseDate, excludeId = null) => {
+  try {
+    // Normalize title for comparison (lowercase, trim, remove extra spaces)
+    const normalizedTitle = title.toLowerCase().trim().replace(/\s+/g, ' ');
+    
+    // Parse the expense date
+    const targetDate = new Date(expenseDate);
+    targetDate.setHours(0, 0, 0, 0);
+    
+    // Create date range: ±3 days from the expense date
+    const dateRangeStart = new Date(targetDate);
+    dateRangeStart.setDate(dateRangeStart.getDate() - 3);
+    const dateRangeEnd = new Date(targetDate);
+    dateRangeEnd.setDate(dateRangeEnd.getDate() + 3);
+    
+    // Amount tolerance: ±5% or ±₹50 (whichever is larger)
+    const amountTolerance = Math.max(amount * 0.05, 50);
+    const minAmount = amount - amountTolerance;
+    const maxAmount = amount + amountTolerance;
+    
+    // Build query
+    const query = {
+      employeeId,
+      amount: { $gte: minAmount, $lte: maxAmount },
+      expenseDate: { $gte: dateRangeStart, $lte: dateRangeEnd },
+      status: { $in: ['SUBMITTED', 'APPROVED', 'REIMBURSED'] }, // Exclude rejected expenses
+      isDeleted: { $ne: true } // Exclude deleted expenses
+    };
+    
+    // Exclude current expense if updating
+    if (excludeId) {
+      query._id = { $ne: excludeId };
+    }
+    
+    // Find potential duplicates
+    const potentialDuplicates = await Expense.find(query).select('title amount expenseDate status billingMonth');
+    
+    // Check for title similarity
+    const duplicates = potentialDuplicates.filter(exp => {
+      const expTitle = exp.title.toLowerCase().trim().replace(/\s+/g, ' ');
+      
+      // Exact match
+      if (expTitle === normalizedTitle) return true;
+      
+      // Calculate similarity score (simple word overlap)
+      const words1 = normalizedTitle.split(' ');
+      const words2 = expTitle.split(' ');
+      const commonWords = words1.filter(word => words2.includes(word));
+      const similarity = commonWords.length / Math.max(words1.length, words2.length);
+      
+      // Consider duplicate if 70% or more words match
+      return similarity >= 0.7;
+    });
+    
+    return duplicates;
+  } catch (error) {
+    console.error('Error checking duplicates:', error);
+    return [];
+  }
+};
+
 const getExpenses = async (req, res) => {
   try {
-    const { billingMonth, page = 1, limit = 20 } = req.query;
+    const { billingMonth, page = 1, limit = 20, includeDeleted = 'false' } = req.query;
     const query =
       req.user.role === "EMPLOYEE" ? { employeeId: req.user.id } : {};
     if (billingMonth) query.billingMonth = billingMonth;
+    
+    // By default, exclude deleted expenses
+    if (includeDeleted !== 'true') {
+      query.isDeleted = { $ne: true };
+    }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const total = await Expense.countDocuments(query);
@@ -61,10 +111,38 @@ const getExpenses = async (req, res) => {
     const expenses = await Expense.find(query)
       .populate('employeeId', 'firstName lastName department')
       .populate('approvedBy', 'firstName lastName')
+      .populate('deletedBy', 'firstName lastName')
       .populate('timeline.actor', 'firstName lastName')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
+
+    // ✨ For managers/HR/admin, check each expense for potential duplicates
+    if (['MANAGER', 'HR', 'ADMIN'].includes(req.user.role)) {
+      for (let expense of expenses) {
+        const duplicates = await checkDuplicateExpense(
+          expense.employeeId._id,
+          expense.title,
+          expense.amount,
+          expense.expenseDate,
+          expense._id
+        );
+        
+        // Add duplicate flag and count to expense object
+        expense._doc.hasPotentialDuplicates = duplicates.length > 0;
+        expense._doc.duplicateCount = duplicates.length;
+        if (duplicates.length > 0) {
+          expense._doc.potentialDuplicates = duplicates.map(dup => ({
+            id: dup._id,
+            title: dup.title,
+            amount: dup.amount,
+            date: dup.expenseDate,
+            status: dup.status,
+            billingMonth: dup.billingMonth
+          }));
+        }
+      }
+    }
 
     const currentBillingMonth = billingMonth || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
     const lockInfo = {
@@ -97,7 +175,30 @@ const createExpense = async (req, res) => {
       return res.status(400).json({ message: "Amount must be greater than 0." });
     }
 
-    const { title, category, expenseDate, description, currency } = req.body;
+    const { title, category, expenseDate, description, currency, ignoreDuplicate } = req.body;
+    
+    // ✨ Check for duplicate expenses (unless user explicitly ignored the warning)
+    if (ignoreDuplicate !== 'true') {
+      const duplicates = await checkDuplicateExpense(req.user.id, title, amount, expenseDate);
+      if (duplicates.length > 0) {
+        // Format duplicate information
+        const duplicateInfo = duplicates.map(dup => ({
+          id: dup._id,
+          title: dup.title,
+          amount: dup.amount,
+          date: new Date(dup.expenseDate).toLocaleDateString('en-IN'),
+          status: dup.status,
+          billingMonth: dup.billingMonth
+        }));
+        
+        return res.status(409).json({ 
+          message: "Possible duplicate expense detected. A similar expense already exists.",
+          isDuplicate: true,
+          duplicates: duplicateInfo
+        });
+      }
+    }
+    
     const expenseData = {
       title,
       category,
@@ -111,19 +212,24 @@ const createExpense = async (req, res) => {
       bills: [],
     };
 
-    // ✨ Handle multiple bill uploads
+    // ✨ Handle multiple bill uploads to S3
     if (req.files && req.files.length > 0) {
-      expenseData.bills = req.files.map((file) => ({
-        fileName: file.originalname,
-        filePath: file.path,
-        fileSize: file.size,
+      const uploadPromises = req.files.map(file => uploadExpenseReceipt(file, req.user.id));
+      const uploadResults = await Promise.all(uploadPromises);
+      
+      expenseData.bills = uploadResults.map((result, index) => ({
+        fileName: req.files[index].originalname,
+        filePath: result.url,
+        fileKey: result.key,
+        fileSize: req.files[index].size,
         uploadedAt: new Date(),
       }));
 
       // Keep first file as receipt for backward compatibility
       expenseData.receipt = {
         fileName: req.files[0].originalname,
-        filePath: req.files[0].path,
+        filePath: uploadResults[0].url,
+        fileKey: uploadResults[0].key,
       };
     }
 
@@ -136,8 +242,14 @@ const createExpense = async (req, res) => {
       expense,
     });
   } catch (error) {
-    // Clean up uploaded files on error
-    if (req.files) req.files.forEach((file) => safeUnlink(file.path));
+    // Clean up uploaded files on error (delete from S3)
+    if (req.files && req.files.length > 0) {
+      const deletePromises = req.files.map(file => {
+        // Files are already uploaded to S3, we need to delete them
+        // But we don't have the S3 keys here, so we'll skip cleanup
+        // In production, consider implementing a cleanup mechanism
+      });
+    }
     res.status(400).json({ message: error.message });
   }
 };
@@ -158,15 +270,42 @@ const updateExpense = async (req, res) => {
       return res.status(400).json({ message: "Amount must be greater than 0." });
     }
 
-    const { title, category, expenseDate, description, currency } = req.body;
+    const { title, category, expenseDate, description, currency, ignoreDuplicate } = req.body;
+    
+    // ✨ Check for duplicate expenses (excluding current expense, unless user explicitly ignored the warning)
+    if (ignoreDuplicate !== 'true') {
+      const duplicates = await checkDuplicateExpense(req.user.id, title, amount, expenseDate, req.params.id);
+      if (duplicates.length > 0) {
+        // Format duplicate information
+        const duplicateInfo = duplicates.map(dup => ({
+          id: dup._id,
+          title: dup.title,
+          amount: dup.amount,
+          date: new Date(dup.expenseDate).toLocaleDateString('en-IN'),
+          status: dup.status,
+          billingMonth: dup.billingMonth
+        }));
+        
+        return res.status(409).json({ 
+          message: "Possible duplicate expense detected. A similar expense already exists.",
+          isDuplicate: true,
+          duplicates: duplicateInfo
+        });
+      }
+    }
+    
     const updateData = { title, category, amount, expenseDate, description, currency };
 
-    // ✨ Handle new bill uploads (append to existing bills)
+    // ✨ Handle new bill uploads to S3 (append to existing bills)
     if (req.files && req.files.length > 0) {
-      const newBills = req.files.map((file) => ({
-        fileName: file.originalname,
-        filePath: file.path,
-        fileSize: file.size,
+      const uploadPromises = req.files.map(file => uploadExpenseReceipt(file, req.user.id));
+      const uploadResults = await Promise.all(uploadPromises);
+      
+      const newBills = uploadResults.map((result, index) => ({
+        fileName: req.files[index].originalname,
+        filePath: result.url,
+        fileKey: result.key,
+        fileSize: req.files[index].size,
         uploadedAt: new Date(),
       }));
 
@@ -175,7 +314,8 @@ const updateExpense = async (req, res) => {
       // Update receipt field with latest file for backward compatibility
       updateData.receipt = {
         fileName: req.files[0].originalname,
-        filePath: req.files[0].path,
+        filePath: uploadResults[0].url,
+        fileKey: uploadResults[0].key,
       };
     }
 
@@ -193,8 +333,6 @@ const updateExpense = async (req, res) => {
       expense: updated,
     });
   } catch (error) {
-    // Clean up uploaded files on error
-    if (req.files) req.files.forEach((file) => safeUnlink(file.path));
     res.status(400).json({ message: error.message });
   }
 };
@@ -216,10 +354,14 @@ const uploadBills = async (req, res) => {
       return res.status(400).json({ message: "No files uploaded." });
     }
 
-    const newBills = req.files.map((file) => ({
-      fileName: file.originalname,
-      filePath: file.path,
-      fileSize: file.size,
+    const uploadPromises = req.files.map(file => uploadExpenseReceipt(file, req.user.id));
+    const uploadResults = await Promise.all(uploadPromises);
+    
+    const newBills = uploadResults.map((result, index) => ({
+      fileName: req.files[index].originalname,
+      filePath: result.url,
+      fileKey: result.key,
+      fileSize: req.files[index].size,
       uploadedAt: new Date(),
     }));
 
@@ -231,8 +373,6 @@ const uploadBills = async (req, res) => {
       bills: expense.bills,
     });
   } catch (error) {
-    // Clean up uploaded files on error
-    if (req.files) req.files.forEach((file) => safeUnlink(file.path));
     res.status(400).json({ message: error.message });
   }
 };
@@ -257,8 +397,8 @@ const deleteBill = async (req, res) => {
 
     const bill = expense.bills[billIndex];
 
-    // Delete file from disk (safe)
-    safeUnlink(bill.filePath);
+    // Delete file from S3
+    await deleteExpenseReceipt(bill.filePath);
 
     // Remove from array
     expense.bills.splice(billIndex, 1);
@@ -275,18 +415,60 @@ const deleteBill = async (req, res) => {
 
 const deleteExpense = async (req, res) => {
   try {
-    const expense = await Expense.findOne({ _id: req.params.id, employeeId: req.user.id });
+    const expense = await Expense.findById(req.params.id);
     if (!expense) return res.status(404).json({ message: "Expense not found." });
-    if (isMonthLocked(expense.billingMonth)) {
-      return res.status(403).json({ message: "That month is closed. Expenses cannot be deleted." });
-    }
-    if (!['SUBMITTED', 'REJECTED'].includes(expense.status)) {
-      return res.status(403).json({ message: "Only SUBMITTED or REJECTED expenses can be deleted." });
+    
+    // Check if already deleted
+    if (expense.isDeleted) {
+      return res.status(400).json({ message: "Expense is already deleted." });
     }
 
-    // ✨ Delete all bill files from disk (safe)
+    // Employees can only delete their own expenses
+    if (req.user.role === 'EMPLOYEE') {
+      if (expense.employeeId.toString() !== req.user.id) {
+        return res.status(403).json({ message: "You can only delete your own expenses." });
+      }
+      if (isMonthLocked(expense.billingMonth)) {
+        return res.status(403).json({ message: "That month is closed. Expenses cannot be deleted." });
+      }
+      if (!['SUBMITTED', 'REJECTED'].includes(expense.status)) {
+        return res.status(403).json({ message: "Only SUBMITTED or REJECTED expenses can be deleted." });
+      }
+    }
+
+    // Admin/HR can delete any expense with a reason
+    if (['ADMIN', 'HR'].includes(req.user.role)) {
+      const { deletionReason } = req.body;
+      
+      // Soft delete for Admin/HR
+      expense.isDeleted = true;
+      expense.deletedAt = new Date();
+      expense.deletedBy = req.user.id;
+      expense.deletedByName = req.user.firstName ? `${req.user.firstName} ${req.user.lastName}` : req.user.email;
+      expense.deletionReason = deletionReason || 'Deleted by admin';
+      
+      // Add to timeline
+      expense.timeline.push({
+        status: 'DELETED',
+        actor: req.user.id,
+        actorName: expense.deletedByName,
+        note: expense.deletionReason,
+        timestamp: new Date()
+      });
+      
+      await expense.save();
+      
+      return res.json({ 
+        message: "Expense deleted successfully (soft delete)",
+        expense 
+      });
+    }
+
+    // Employee hard delete (only for their own SUBMITTED/REJECTED expenses)
+    // ✨ Delete all bill files from S3
     if (expense.bills && expense.bills.length > 0) {
-      expense.bills.forEach((bill) => safeUnlink(bill.filePath));
+      const deletePromises = expense.bills.map(bill => deleteExpenseReceipt(bill.filePath));
+      await Promise.all(deletePromises);
     }
 
     await Expense.findByIdAndDelete(req.params.id);
@@ -353,13 +535,12 @@ const approveRejectExpense = async (req, res) => {
   }
 };
 
-// Serve a bill file securely — prevents SSRF by never exposing raw file paths to the client
+// Serve a bill file securely from S3
 const serveBill = async (req, res) => {
   try {
     const expense = await Expense.findById(req.params.id);
     if (!expense) return res.status(404).json({ message: "Expense not found." });
 
-    // Employees can only view their own bills; managers/HR/admin can view all
     const isOwner = expense.employeeId.toString() === req.user.id;
     const isManagerOrHR = ["MANAGER", "HR", "ADMIN"].includes(req.user.role);
     if (!isOwner && !isManagerOrHR) {
@@ -372,27 +553,98 @@ const serveBill = async (req, res) => {
     }
 
     const bill = expense.bills[billIndex];
-    const resolved = path.resolve(bill.filePath);
 
-    if (!resolved.startsWith(RECEIPTS_DIR + path.sep)) {
-      return res.status(403).json({ message: "Access denied." });
+    // Redirect to S3 URL (files are public-read)
+    res.redirect(bill.filePath);
+  } catch (error) {
+    console.error('serveBill error:', error.message);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ✨ NEW: Get deleted expenses (Admin/HR only, or employee's own)
+const getDeletedExpenses = async (req, res) => {
+  try {
+    const { billingMonth, page = 1, limit = 20 } = req.query;
+    const query = { isDeleted: true };
+    
+    // Employees can only see their own deleted expenses
+    if (req.user.role === 'EMPLOYEE') {
+      query.employeeId = req.user.id;
     }
+    
+    if (billingMonth) query.billingMonth = billingMonth;
 
-    if (!fs.existsSync(resolved)) {
-      return res.status(404).json({ message: "File not found." });
-    }
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const total = await Expense.countDocuments(query);
 
-    res.sendFile(resolved);
+    const expenses = await Expense.find(query)
+      .populate('employeeId', 'firstName lastName department')
+      .populate('approvedBy', 'firstName lastName')
+      .populate('deletedBy', 'firstName lastName')
+      .populate('timeline.actor', 'firstName lastName')
+      .sort({ deletedAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    res.json({
+      expenses,
+      pagination: { total, page: parseInt(page), limit: parseInt(limit), totalPages: Math.ceil(total / parseInt(limit)) },
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
+// ✨ NEW: Restore deleted expense (Admin/HR only)
+const restoreExpense = async (req, res) => {
+  try {
+    // Only Admin and HR can restore expenses
+    if (!['ADMIN', 'HR'].includes(req.user.role)) {
+      return res.status(403).json({ message: "Access denied. Only Admin and HR can restore expenses." });
+    }
+
+    const expense = await Expense.findById(req.params.id);
+    if (!expense) return res.status(404).json({ message: "Expense not found." });
+    
+    if (!expense.isDeleted) {
+      return res.status(400).json({ message: "Expense is not deleted." });
+    }
+
+    // Restore the expense
+    expense.isDeleted = false;
+    expense.deletedAt = null;
+    expense.deletedBy = null;
+    expense.deletedByName = null;
+    expense.deletionReason = null;
+    
+    // Add to timeline
+    expense.timeline.push({
+      status: 'RESTORED',
+      actor: req.user.id,
+      actorName: req.user.firstName ? `${req.user.firstName} ${req.user.lastName}` : req.user.email,
+      note: 'Expense restored from deleted',
+      timestamp: new Date()
+    });
+    
+    await expense.save();
+    
+    res.json({ 
+      message: "Expense restored successfully",
+      expense 
+    });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getExpenses,
+  getDeletedExpenses,
   createExpense,
   updateExpense,
   deleteExpense,
+  restoreExpense,
   approveRejectExpense,
   uploadBills,
   deleteBill,

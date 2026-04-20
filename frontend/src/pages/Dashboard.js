@@ -14,6 +14,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../utils/api";
 import { toast } from "react-toastify";
 import { showAnnouncementNotification } from "../utils/notificationService";
+import { logger } from "../utils/logger";
 import DailyUpdates from "../components/DailyUpdates";
 import "../styles/Dashboard.css";
 
@@ -68,23 +69,38 @@ const Dashboard = () => {
     fetchFiles();
     addDefaultFPOLink();
     if (user?.isFieldEmployee) {
-      api.get('/api/journey/today').then(r => setJourneyData(r.data)).catch(() => {});
+      api
+        .get("/api/journey/today")
+        .then((r) => setJourneyData(r.data))
+        .catch(() => {});
     }
+
+    return () => {
+      setDashboardData(null);
+      setAnnouncements([]);
+      setHolidays([]);
+      setFavorites([]);
+      setFiles([]);
+    };
   }, [user?.role]);
 
   const addDefaultFPOLink = async () => {
     try {
       const response = await api.get("/api/favorites");
-      const hasFPOLink = response.data.some(fav => fav.url.includes('1FAIpQLSfWH86nivabf5ReP3M1Sm7ysMBElA-ZuDrhEVvfuajKrE3rsw'));
+      const hasFPOLink = response.data.some((fav) =>
+        fav.url.includes(
+          "1FAIpQLSfWH86nivabf5ReP3M1Sm7ysMBElA-ZuDrhEVvfuajKrE3rsw",
+        ),
+      );
       if (!hasFPOLink) {
         await api.post("/api/favorites", {
           title: "FPO Client Form",
           url: "https://docs.google.com/forms/d/e/1FAIpQLSfWH86nivabf5ReP3M1Sm7ysMBElA-ZuDrhEVvfuajKrE3rsw/viewform",
-          icon: "clipboard-list"
+          icon: "clipboard-list",
         });
       }
     } catch (error) {
-      console.error("Error adding FPO link:", error);
+      logger.error("Error adding FPO link:", error);
     }
   };
 
@@ -97,7 +113,7 @@ const Dashboard = () => {
       const response = await api.get(endpoint);
       setDashboardData(response.data);
     } catch (error) {
-      console.error("Error fetching dashboard data:", error);
+      logger.error("Error fetching dashboard data:", error);
     } finally {
       setLoading(false);
     }
@@ -119,7 +135,7 @@ const Dashboard = () => {
       announcementsRef.current = newAnnouncements;
       setAnnouncements(newAnnouncements);
     } catch (error) {
-      console.error("Error fetching announcements:", error);
+      logger.error("Error fetching announcements:", error);
     }
   };
 
@@ -128,7 +144,7 @@ const Dashboard = () => {
       const response = await api.get("/api/holidays");
       setHolidays(response.data);
     } catch (error) {
-      console.error("Error fetching holidays:", error);
+      logger.error("Error fetching holidays:", error);
     }
   };
 
@@ -137,7 +153,7 @@ const Dashboard = () => {
       const response = await api.get("/api/favorites");
       setFavorites(response.data);
     } catch (error) {
-      console.error("Error fetching favorites:", error);
+      logger.error("Error fetching favorites:", error);
     }
   };
 
@@ -146,7 +162,7 @@ const Dashboard = () => {
       const response = await api.get("/api/files");
       setFiles(response.data);
     } catch (error) {
-      console.error("Error fetching files:", error);
+      logger.error("Error fetching files:", error);
     }
   };
 
@@ -448,7 +464,12 @@ const Dashboard = () => {
                   <i className="fas fa-file-alt"></i>Documents
                 </button>
                 <button
-                  onClick={() => window.open('https://docs.google.com/forms/d/e/1FAIpQLSfWH86nivabf5ReP3M1Sm7ysMBElA-ZuDrhEVvfuajKrE3rsw/viewform', '_blank')}
+                  onClick={() =>
+                    window.open(
+                      "https://docs.google.com/forms/d/e/1FAIpQLSfWH86nivabf5ReP3M1Sm7ysMBElA-ZuDrhEVvfuajKrE3rsw/viewform",
+                      "_blank",
+                    )
+                  }
                   style={{
                     padding: "0.9rem 1rem",
                     borderRadius: "0.75rem",
@@ -475,23 +496,29 @@ const Dashboard = () => {
                       if (journeyData?.canStartJourney) {
                         setJourneyLoading(true);
                         try {
-                          await api.post('/api/journey/start');
-                          const r = await api.get('/api/journey/today');
+                          await api.post("/api/journey/start");
+                          const r = await api.get("/api/journey/today");
                           setJourneyData(r.data);
-                          toast.success('🚀 Journey started!');
-                        } catch (e) { toast.error(e.response?.data?.message || 'Failed'); }
-                        finally { setJourneyLoading(false); }
-                      } else if (journeyData?.journey?.status === 'ACTIVE') {
+                          toast.success("🚀 Journey started!");
+                        } catch (e) {
+                          toast.error(e.response?.data?.message || "Failed");
+                        } finally {
+                          setJourneyLoading(false);
+                        }
+                      } else if (journeyData?.journey?.status === "ACTIVE") {
                         setJourneyLoading(true);
                         try {
-                          await api.post('/api/journey/end');
-                          const r = await api.get('/api/journey/today');
+                          await api.post("/api/journey/end");
+                          const r = await api.get("/api/journey/today");
                           setJourneyData(r.data);
-                          toast.success('🏁 Journey ended!');
-                        } catch (e) { toast.error(e.response?.data?.message || 'Failed'); }
-                        finally { setJourneyLoading(false); }
+                          toast.success("🏁 Journey ended!");
+                        } catch (e) {
+                          toast.error(e.response?.data?.message || "Failed");
+                        } finally {
+                          setJourneyLoading(false);
+                        }
                       } else {
-                        navigate('/field-visits');
+                        navigate("/field-visits");
                       }
                     }}
                     disabled={journeyLoading}
@@ -506,25 +533,41 @@ const Dashboard = () => {
                       justifyContent: "center",
                       gap: "0.55rem",
                       cursor: "pointer",
-                      background: journeyData?.journey?.status === 'ACTIVE'
-                        ? "linear-gradient(135deg,#ef4444 0%,#dc2626 100%)"
-                        : "linear-gradient(135deg,#10b981 0%,#059669 100%)",
+                      background:
+                        journeyData?.journey?.status === "ACTIVE"
+                          ? "linear-gradient(135deg,#ef4444 0%,#dc2626 100%)"
+                          : "linear-gradient(135deg,#10b981 0%,#059669 100%)",
                       color: "#fff",
-                      position: 'relative'
+                      position: "relative",
                     }}
                   >
-                    {journeyLoading
-                      ? <span className="spinner-border spinner-border-sm" />
-                      : <i className={`fas fa-${journeyData?.journey?.status === 'ACTIVE' ? 'stop-circle' : 'route'}`}></i>}
-                    {journeyData?.journey?.status === 'ACTIVE'
+                    {journeyLoading ? (
+                      <span className="spinner-border spinner-border-sm" />
+                    ) : (
+                      <i
+                        className={`fas fa-${journeyData?.journey?.status === "ACTIVE" ? "stop-circle" : "route"}`}
+                      ></i>
+                    )}
+                    {journeyData?.journey?.status === "ACTIVE"
                       ? `End Journey · ${journeyData.journey.totalDistanceKm}km`
                       : journeyData?.canStartJourney
-                        ? 'Start Journey'
-                        : journeyData?.journey?.status === 'COMPLETED'
+                        ? "Start Journey"
+                        : journeyData?.journey?.status === "COMPLETED"
                           ? `Journey Done · ${journeyData.journey.totalDistanceKm}km`
-                          : 'My Journey'}
-                    {journeyData?.journey?.status === 'ACTIVE' && (
-                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#fff', position: 'absolute', top: 8, right: 8, animation: 'pulse 1.5s infinite' }} />
+                          : "My Journey"}
+                    {journeyData?.journey?.status === "ACTIVE" && (
+                      <span
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: "50%",
+                          background: "#fff",
+                          position: "absolute",
+                          top: 8,
+                          right: 8,
+                          animation: "pulse 1.5s infinite",
+                        }}
+                      />
                     )}
                   </button>
                 )}
@@ -544,13 +587,15 @@ const Dashboard = () => {
               >
                 <i className="fas fa-calendar-check"></i>
               </div>
-              <div className="stat-value">
-                {dashboardData.balances?.reduce(
-                  (sum, b) => sum + (b.available || 0),
-                  0,
-                ) || 0}
+              <div className="stat-content">
+                <div className="stat-value">
+                  {dashboardData.balances?.reduce(
+                    (sum, b) => sum + (b.available || 0),
+                    0,
+                  ) || 0}
+                </div>
+                <div className="stat-label">Total Leave Balance</div>
               </div>
-              <div className="stat-label">Total Leave Balance</div>
             </div>
             <div className="stat-card">
               <div
@@ -562,13 +607,15 @@ const Dashboard = () => {
               >
                 <i className="fas fa-clock"></i>
               </div>
-              <div className="stat-value">
-                {dashboardData.balances?.reduce(
-                  (sum, b) => sum + (b.pending || 0),
-                  0,
-                ) || 0}
+              <div className="stat-content">
+                <div className="stat-value">
+                  {dashboardData.balances?.reduce(
+                    (sum, b) => sum + (b.pending || 0),
+                    0,
+                  ) || 0}
+                </div>
+                <div className="stat-label">Pending Approvals</div>
               </div>
-              <div className="stat-label">Pending Approvals</div>
             </div>
             <div className="stat-card">
               <div
@@ -580,11 +627,13 @@ const Dashboard = () => {
               >
                 <i className="fas fa-umbrella-beach"></i>
               </div>
-              <div className="stat-value">
-                {holidays.filter((h) => new Date(h.date) >= new Date())
-                  .length || 0}
+              <div className="stat-content">
+                <div className="stat-value">
+                  {holidays.filter((h) => new Date(h.date) >= new Date())
+                    .length || 0}
+                </div>
+                <div className="stat-label">Upcoming Holidays</div>
               </div>
-              <div className="stat-label">Upcoming Holidays</div>
             </div>
             <div className="stat-card">
               <div
@@ -596,8 +645,10 @@ const Dashboard = () => {
               >
                 <i className="fas fa-bullhorn"></i>
               </div>
-              <div className="stat-value">{announcements.length || 0}</div>
-              <div className="stat-label">Active Announcements</div>
+              <div className="stat-content">
+                <div className="stat-value">{announcements.length || 0}</div>
+                <div className="stat-label">Active Announcements</div>
+              </div>
             </div>
           </div>
 
@@ -1213,65 +1264,155 @@ const Dashboard = () => {
 
           {/* Overview Stats */}
           <div className="stats-grid">
-            <div className="stat-card">
+            <div
+              className="stat-card"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                textAlign: "center",
+                padding: "1.5rem",
+              }}
+            >
               <div
                 className="stat-icon"
                 style={{
                   background:
                     "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+                  marginBottom: "1rem",
                 }}
               >
                 <i className="fas fa-users"></i>
               </div>
-              <div className="stat-value">{dashboardData.totalEmployees}</div>
-              <div className="stat-label">Total Employees</div>
-              <small style={{ color: "#10b981", fontSize: "0.8rem" }}>
-                <i className="fas fa-check-circle me-1"></i>
-                {dashboardData.activeEmployees} Active
-              </small>
+              <div
+                className="stat-content"
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  textAlign: "center",
+                }}
+              >
+                <div className="stat-value">{dashboardData.totalEmployees}</div>
+                <div className="stat-label">Total Employees</div>
+                <small className="stat-sub" style={{ color: "#10b981" }}>
+                  <i className="fas fa-check-circle me-1"></i>
+                  {dashboardData.activeEmployees} Active
+                </small>
+              </div>
             </div>
-            <div className="stat-card">
+            <div
+              className="stat-card"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                textAlign: "center",
+                padding: "1.5rem",
+              }}
+            >
               <div
                 className="stat-icon"
                 style={{
                   background:
                     "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+                  marginBottom: "1rem",
                 }}
               >
                 <i className="fas fa-user-clock"></i>
               </div>
-              <div className="stat-value">
-                {dashboardData.employeesOnLeaveToday}
+              <div
+                className="stat-content"
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  textAlign: "center",
+                }}
+              >
+                <div className="stat-value">
+                  {dashboardData.employeesOnLeaveToday}
+                </div>
+                <div className="stat-label">On Leave Today</div>
               </div>
-              <div className="stat-label">On Leave Today</div>
             </div>
-            <div className="stat-card">
+            <div
+              className="stat-card"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                textAlign: "center",
+                padding: "1.5rem",
+              }}
+            >
               <div
                 className="stat-icon"
                 style={{
                   background:
                     "linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)",
+                  marginBottom: "1rem",
                 }}
               >
                 <i className="fas fa-clock"></i>
               </div>
-              <div className="stat-value">{dashboardData.pendingApprovals}</div>
-              <div className="stat-label">Pending Approvals</div>
+              <div
+                className="stat-content"
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  textAlign: "center",
+                }}
+              >
+                <div className="stat-value">
+                  {dashboardData.pendingApprovals}
+                </div>
+                <div className="stat-label">Pending Approvals</div>
+              </div>
             </div>
-            <div className="stat-card">
+            <div
+              className="stat-card"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                textAlign: "center",
+                padding: "1.5rem",
+              }}
+            >
               <div
                 className="stat-icon"
                 style={{
                   background:
                     "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
+                  marginBottom: "1rem",
                 }}
               >
                 <i className="fas fa-file-alt"></i>
               </div>
-              <div className="stat-value">
-                {dashboardData.pendingDocVerifications || 0}
+              <div
+                className="stat-content"
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  textAlign: "center",
+                }}
+              >
+                <div className="stat-value">
+                  {dashboardData.pendingDocVerifications || 0}
+                </div>
+                <div className="stat-label">Pending Verifications</div>
               </div>
-              <div className="stat-label">Pending Verifications</div>
             </div>
           </div>
 
@@ -1429,40 +1570,189 @@ const Dashboard = () => {
             <Col md={6}>
               <Card className="modern-card h-100">
                 <Card.Header>
-                  <i className="fas fa-history me-2"></i>Recent Activities
+                  <span
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: "0.5rem",
+                        background: "linear-gradient(135deg,#6366f1,#8b5cf6)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <i
+                        className="fas fa-history"
+                        style={{ color: "#fff", fontSize: "0.72rem" }}
+                      ></i>
+                    </span>
+                    Recent Activities
+                  </span>
+                  <span
+                    style={{
+                      fontSize: "0.7rem",
+                      fontWeight: 600,
+                      color: "#6366f1",
+                      background: "#ede9fe",
+                      borderRadius: "1rem",
+                      padding: "0.2rem 0.65rem",
+                    }}
+                  >
+                    {dashboardData.recentActivities?.length || 0} entries
+                  </span>
                 </Card.Header>
-                <Card.Body style={{ maxHeight: "300px", overflowY: "auto" }}>
+                <Card.Body
+                  style={{ padding: 0, maxHeight: "340px", overflowY: "auto" }}
+                >
                   {dashboardData.recentActivities?.length > 0 ? (
-                    dashboardData.recentActivities.map((activity) => (
-                      <div
-                        key={activity._id}
-                        className="d-flex align-items-center mb-3 pb-3 border-bottom"
-                      >
-                        <div
-                          className="rounded-circle d-flex align-items-center justify-content-center me-3"
-                          style={{
-                            width: "40px",
-                            height: "40px",
-                            backgroundColor: "#f3f4f6",
-                          }}
-                        >
-                          <i className="fas fa-calendar-alt text-primary"></i>
-                        </div>
-                        <div className="flex-grow-1">
-                          <div className="fw-semibold">
-                            {activity.userId?.firstName}{" "}
-                            {activity.userId?.lastName}
+                    <div style={{ padding: "0.5rem 0" }}>
+                      {dashboardData.recentActivities.map((activity, idx) => {
+                        const statusColors = {
+                          PENDING: {
+                            bg: "#fef3c7",
+                            color: "#92400e",
+                            dot: "#f59e0b",
+                          },
+                          MANAGER_APPROVED: {
+                            bg: "#dbeafe",
+                            color: "#1e40af",
+                            dot: "#3b82f6",
+                          },
+                          HR_APPROVED: {
+                            bg: "#d1fae5",
+                            color: "#065f46",
+                            dot: "#10b981",
+                          },
+                          REJECTED: {
+                            bg: "#fee2e2",
+                            color: "#7f1d1d",
+                            dot: "#ef4444",
+                          },
+                          CANCELLED: {
+                            bg: "#f1f5f9",
+                            color: "#475569",
+                            dot: "#94a3b8",
+                          },
+                        };
+                        const sc =
+                          statusColors[activity.status] ||
+                          statusColors.CANCELLED;
+                        const initials = `${activity.userId?.firstName?.charAt(0) || ""}${activity.userId?.lastName?.charAt(0) || ""}`;
+                        const avatarColors = [
+                          "#6366f1",
+                          "#10b981",
+                          "#f59e0b",
+                          "#ef4444",
+                          "#06b6d4",
+                          "#8b5cf6",
+                        ];
+                        const avatarBg =
+                          avatarColors[idx % avatarColors.length];
+                        return (
+                          <div key={activity._id} className="activity-row-pro">
+                            <div
+                              style={{
+                                width: 38,
+                                height: 38,
+                                borderRadius: "50%",
+                                background: avatarBg,
+                                color: "#fff",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontWeight: 700,
+                                fontSize: "0.78rem",
+                                flexShrink: 0,
+                                letterSpacing: "0.5px",
+                              }}
+                            >
+                              {initials || (
+                                <i
+                                  className="fas fa-user"
+                                  style={{ fontSize: "0.8rem" }}
+                                ></i>
+                              )}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div
+                                style={{
+                                  fontWeight: 700,
+                                  fontSize: "0.85rem",
+                                  color: "#0f172a",
+                                  marginBottom: "0.1rem",
+                                }}
+                              >
+                                {activity.userId?.firstName}{" "}
+                                {activity.userId?.lastName}
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: "0.75rem",
+                                  color: "#64748b",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "0.35rem",
+                                }}
+                              >
+                                <i
+                                  className="fas fa-calendar-alt"
+                                  style={{
+                                    fontSize: "0.65rem",
+                                    color: "#6366f1",
+                                  }}
+                                ></i>
+                                {activity.leaveTypeId?.name}
+                                <span style={{ color: "#cbd5e1" }}>·</span>
+                                <strong style={{ color: "#334155" }}>
+                                  {activity.days}d
+                                </strong>
+                              </div>
+                            </div>
+                            <span
+                              style={{
+                                fontSize: "0.68rem",
+                                fontWeight: 700,
+                                padding: "0.25rem 0.6rem",
+                                borderRadius: "1rem",
+                                background: sc.bg,
+                                color: sc.color,
+                                whiteSpace: "nowrap",
+                                flexShrink: 0,
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.3rem",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  width: 6,
+                                  height: 6,
+                                  borderRadius: "50%",
+                                  background: sc.dot,
+                                  flexShrink: 0,
+                                }}
+                              ></span>
+                              {activity.status.replace(/_/g, " ")}
+                            </span>
                           </div>
-                          <small className="text-muted">
-                            Applied for {activity.leaveTypeId?.name} -{" "}
-                            {activity.days} days
-                          </small>
-                        </div>
-                        {getStatusBadge(activity.status)}
-                      </div>
-                    ))
+                        );
+                      })}
+                    </div>
                   ) : (
-                    <p className="text-muted mb-0">No recent activities</p>
+                    <div className="empty-state">
+                      <div className="empty-icon">
+                        <i className="fas fa-history"></i>
+                      </div>
+                      <div className="empty-text">No recent activities</div>
+                    </div>
                   )}
                 </Card.Body>
               </Card>
@@ -1470,49 +1760,190 @@ const Dashboard = () => {
             <Col md={6}>
               <Card className="modern-card h-100">
                 <Card.Header>
-                  <i className="fas fa-chart-bar me-2"></i>Leave Statistics
-                </Card.Header>
-                <Card.Body>
-                  {dashboardData.leaveStats?.map((stat) => {
-                    const total = dashboardData.leaveStats.reduce(
-                      (sum, s) => sum + s.count,
+                  <span
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: "0.5rem",
+                        background: "linear-gradient(135deg,#10b981,#059669)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <i
+                        className="fas fa-chart-bar"
+                        style={{ color: "#fff", fontSize: "0.72rem" }}
+                      ></i>
+                    </span>
+                    Leave Statistics
+                  </span>
+                  <span
+                    style={{
+                      fontSize: "0.7rem",
+                      fontWeight: 600,
+                      color: "#059669",
+                      background: "#d1fae5",
+                      borderRadius: "1rem",
+                      padding: "0.2rem 0.65rem",
+                    }}
+                  >
+                    {dashboardData.leaveStats?.reduce(
+                      (s, x) => s + x.count,
                       0,
-                    );
-                    const percentage =
-                      total > 0 ? Math.round((stat.count / total) * 100) : 0;
-                    return (
-                      <div key={stat._id} className="mb-3">
-                        <div className="d-flex justify-content-between align-items-center mb-1">
-                          <span className="fw-semibold">
-                            <i
-                              className={`fas fa-${getStatusIcon(stat._id)} me-2`}
-                              style={{ color: "#6366f1" }}
-                            ></i>
-                            {stat._id.replace("_", " ")}
-                          </span>
-                          <span>
-                            <Badge bg="light" text="dark" className="me-1">
-                              {stat.count} requests
-                            </Badge>
-                            <Badge bg="primary">{stat.totalDays} days</Badge>
-                          </span>
-                        </div>
-                        <div
-                          className="progress"
-                          style={{ height: "8px", backgroundColor: "#e2e8f0" }}
-                        >
-                          <div
-                            className="progress-bar"
-                            style={{
-                              width: `${percentage}%`,
-                              backgroundColor: "#6366f1",
-                              transition: "width 0.6s ease",
-                            }}
-                          ></div>
-                        </div>
+                    ) || 0}{" "}
+                    total
+                  </span>
+                </Card.Header>
+                <Card.Body style={{ padding: "1.25rem 1.4rem" }}>
+                  {dashboardData.leaveStats?.length > 0 ? (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "1rem",
+                      }}
+                    >
+                      {(() => {
+                        const total = dashboardData.leaveStats.reduce(
+                          (sum, s) => sum + s.count,
+                          0,
+                        );
+                        const statColors = [
+                          { bar: "#6366f1", bg: "#ede9fe", text: "#4f46e5" },
+                          { bar: "#10b981", bg: "#d1fae5", text: "#059669" },
+                          { bar: "#f59e0b", bg: "#fef3c7", text: "#d97706" },
+                          { bar: "#ef4444", bg: "#fee2e2", text: "#dc2626" },
+                          { bar: "#06b6d4", bg: "#cffafe", text: "#0891b2" },
+                        ];
+                        return dashboardData.leaveStats.map((stat, idx) => {
+                          const pct =
+                            total > 0
+                              ? Math.round((stat.count / total) * 100)
+                              : 0;
+                          const sc = statColors[idx % statColors.length];
+                          return (
+                            <div key={stat._id}>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  alignItems: "center",
+                                  marginBottom: "0.45rem",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "0.5rem",
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      width: 8,
+                                      height: 8,
+                                      borderRadius: "50%",
+                                      background: sc.bar,
+                                      flexShrink: 0,
+                                    }}
+                                  ></span>
+                                  <span
+                                    style={{
+                                      fontWeight: 700,
+                                      fontSize: "0.82rem",
+                                      color: "#0f172a",
+                                      textTransform: "capitalize",
+                                    }}
+                                  >
+                                    {stat._id.replace(/_/g, " ").toLowerCase()}
+                                  </span>
+                                </div>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "0.4rem",
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      fontSize: "0.68rem",
+                                      fontWeight: 700,
+                                      background: sc.bg,
+                                      color: sc.text,
+                                      borderRadius: "0.4rem",
+                                      padding: "0.15rem 0.5rem",
+                                    }}
+                                  >
+                                    {stat.count} req
+                                  </span>
+                                  <span
+                                    style={{
+                                      fontSize: "0.68rem",
+                                      fontWeight: 700,
+                                      background: "#f1f5f9",
+                                      color: "#475569",
+                                      borderRadius: "0.4rem",
+                                      padding: "0.15rem 0.5rem",
+                                    }}
+                                  >
+                                    {stat.totalDays}d
+                                  </span>
+                                  <span
+                                    style={{
+                                      fontSize: "0.7rem",
+                                      fontWeight: 700,
+                                      color: sc.text,
+                                      minWidth: 32,
+                                      textAlign: "right",
+                                    }}
+                                  >
+                                    {pct}%
+                                  </span>
+                                </div>
+                              </div>
+                              <div
+                                style={{
+                                  height: 7,
+                                  borderRadius: "1rem",
+                                  background: "#f1f5f9",
+                                  overflow: "hidden",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    height: "100%",
+                                    borderRadius: "1rem",
+                                    width: `${pct}%`,
+                                    background: `linear-gradient(90deg, ${sc.bar}, ${sc.bg})`,
+                                    transition:
+                                      "width 0.7s cubic-bezier(0.4,0,0.2,1)",
+                                    minWidth: pct > 0 ? 6 : 0,
+                                  }}
+                                ></div>
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  ) : (
+                    <div className="empty-state">
+                      <div className="empty-icon">
+                        <i className="fas fa-chart-bar"></i>
                       </div>
-                    );
-                  })}
+                      <div className="empty-text">No statistics available</div>
+                    </div>
+                  )}
                 </Card.Body>
               </Card>
             </Col>
