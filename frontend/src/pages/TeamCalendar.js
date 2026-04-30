@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Row, Col, Card, Badge, Spinner, Alert, Form, InputGroup, Button, Table, Modal } from 'react-bootstrap';
 import api from '../utils/api';
 import { toast } from 'react-toastify';
+import Swal from 'sweetalert2';
 
 const TeamCalendar = () => {
   const [teamMembers, setTeamMembers] = useState([]);
@@ -20,6 +21,15 @@ const TeamCalendar = () => {
   const [viewMode, setViewMode] = useState('month'); // 'month', 'week', 'day'
   const [leaveTypes, setLeaveTypes] = useState([]);
   const [publicHolidays, setPublicHolidays] = useState([]);
+  const [showHolidayModal, setShowHolidayModal] = useState(false);
+  const [showHolidayListModal, setShowHolidayListModal] = useState(false);
+  const [editingHoliday, setEditingHoliday] = useState(null);
+  const [holidayForm, setHolidayForm] = useState({
+    name: '',
+    date: '',
+    type: 'FESTIVAL',
+    description: ''
+  });
 
   useEffect(() => {
     fetchTeamCalendar();
@@ -223,6 +233,64 @@ const TeamCalendar = () => {
       years.push(i);
     }
     return years;
+  };
+
+  const handleAddHoliday = async (e) => {
+    e.preventDefault();
+    try {
+      if (editingHoliday) {
+        await api.put(`/api/holidays/${editingHoliday._id}`, holidayForm);
+        toast.success('Holiday updated successfully');
+      } else {
+        await api.post('/api/holidays', holidayForm);
+        toast.success('Holiday added successfully');
+      }
+      setShowHolidayModal(false);
+      setHolidayForm({ name: '', date: '', type: 'FESTIVAL', description: '' });
+      setEditingHoliday(null);
+      fetchPublicHolidays();
+    } catch (error) {
+      toast.error(editingHoliday ? 'Error updating holiday' : 'Error adding holiday');
+    }
+  };
+
+  const handleEditHoliday = (holiday) => {
+    setEditingHoliday(holiday);
+    setHolidayForm({
+      name: holiday.name,
+      date: new Date(holiday.date).toISOString().split('T')[0],
+      type: holiday.type,
+      description: holiday.description || ''
+    });
+    setShowHolidayModal(true);
+  };
+
+  const handleDeleteHoliday = async (holidayId) => {
+    const result = await Swal.fire({
+      title: 'Delete Holiday?',
+      text: 'This action cannot be undone!',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#dc3545',
+      cancelButtonColor: '#6c757d',
+      confirmButtonText: 'Yes, delete it!'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        await api.delete(`/api/holidays/${holidayId}`);
+        toast.success('Holiday deleted successfully');
+        fetchPublicHolidays();
+      } catch (error) {
+        toast.error('Error deleting holiday');
+      }
+    }
+  };
+
+  const handleCloseHolidayModal = () => {
+    setShowHolidayModal(false);
+    setEditingHoliday(null);
+    setHolidayForm({ name: '', date: '', type: 'FESTIVAL', description: '' });
   };
 
   const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -446,17 +514,35 @@ const TeamCalendar = () => {
             </div>
           </Col>
           <Col md={6}>
-            <InputGroup>
-              <InputGroup.Text style={{ background: 'white', border: '1px solid #e2e8f0' }}>
-                <i className="fas fa-search" style={{ color: '#94a3b8' }}></i>
-              </InputGroup.Text>
-              <Form.Control
-                placeholder="Search team members..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={{ border: '1px solid #e2e8f0', borderLeft: 'none' }}
-              />
-            </InputGroup>
+            <div className="d-flex justify-content-end gap-2">
+              <InputGroup style={{ maxWidth: '400px' }}>
+                <InputGroup.Text style={{ background: 'white', border: '1px solid #e2e8f0' }}>
+                  <i className="fas fa-search" style={{ color: '#94a3b8' }}></i>
+                </InputGroup.Text>
+                <Form.Control
+                  placeholder="Search team members..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  style={{ border: '1px solid #e2e8f0', borderLeft: 'none' }}
+                />
+              </InputGroup>
+              <Button
+                variant="primary"
+                onClick={() => setShowHolidayModal(true)}
+                style={{ borderRadius: '8px', fontWeight: '600', whiteSpace: 'nowrap' }}
+              >
+                <i className="fas fa-calendar-plus me-2"></i>
+                Add Holiday
+              </Button>
+              <Button
+                variant="outline-primary"
+                onClick={() => setShowHolidayListModal(true)}
+                style={{ borderRadius: '8px', fontWeight: '600', whiteSpace: 'nowrap' }}
+              >
+                <i className="fas fa-list me-2"></i>
+                Manage Holidays
+              </Button>
+            </div>
           </Col>
         </Row>
 
@@ -654,7 +740,7 @@ const TeamCalendar = () => {
 
       {/* Upcoming Leaves List */}
       <Row className="g-4 mt-1">
-        <Col lg={8}>
+        <Col lg={12}>
           <div style={{ background: 'white', borderRadius: '16px', padding: '1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)' }}>
             <h5 style={{ color: '#065f46', fontWeight: '700', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <i className="fas fa-list me-2" style={{ color: '#10b981' }}></i>
@@ -746,9 +832,11 @@ const TeamCalendar = () => {
             </div>
           </div>
         </Col>
-        
-        {/* Team Members List */}
-        <Col lg={4}>
+      </Row>
+
+      {/* Team Members Cards */}
+      <Row className="g-4 mt-1">
+        <Col lg={12}>
           <div style={{ background: 'white', borderRadius: '16px', padding: '1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)' }}>
             <h5 style={{ color: '#065f46', fontWeight: '700', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <i className="fas fa-users me-2" style={{ color: '#10b981' }}></i>
@@ -757,7 +845,7 @@ const TeamCalendar = () => {
                 {teamMembers.length}
               </Badge>
             </h5>
-            <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
+            <Row className="g-3">
               {teamMembers.map(member => {
                 const memberLeaves = filteredLeaves.filter(l => l.userId._id === member._id);
                 const isOnLeave = memberLeaves.some(leave => {
@@ -768,95 +856,119 @@ const TeamCalendar = () => {
                 });
                 
                 return (
-                  <div 
-                    key={member._id}
-                    onClick={() => handleEmployeeClick(member)}
-                    style={{
-                      padding: '1rem',
-                      borderRadius: '12px',
-                      background: isOnLeave ? 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)' : 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)',
-                      marginBottom: '0.75rem',
-                      border: isOnLeave ? '2px solid #f59e0b' : '2px solid #10b981',
-                      transition: 'all 0.3s',
-                      cursor: 'pointer',
-                      boxShadow: isOnLeave ? '0 2px 8px rgba(245, 158, 11, 0.2)' : '0 2px 8px rgba(16, 185, 129, 0.2)'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'translateX(4px)';
-                      e.currentTarget.style.boxShadow = isOnLeave ? '0 4px 12px rgba(245, 158, 11, 0.3)' : '0 4px 12px rgba(16, 185, 129, 0.3)';
-                      e.currentTarget.style.borderColor = isOnLeave ? '#f59e0b' : '#059669';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'translateX(0)';
-                      e.currentTarget.style.boxShadow = isOnLeave ? '0 2px 8px rgba(245, 158, 11, 0.2)' : '0 2px 8px rgba(16, 185, 129, 0.2)';
-                      e.currentTarget.style.borderColor = isOnLeave ? '#f59e0b' : '#10b981';
-                    }}
-                  >
-                    <div className="d-flex align-items-center gap-3">
-                      <div style={{
-                        width: '50px',
-                        height: '50px',
+                  <Col xs={12} sm={6} md={4} lg={3} xl={2} key={member._id}>
+                    <div 
+                      onClick={() => handleEmployeeClick(member)}
+                      style={{
+                        background: 'white',
                         borderRadius: '12px',
-                        background: isOnLeave ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                        color: 'white',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: '700',
-                        fontSize: '1.1rem',
-                        boxShadow: isOnLeave ? '0 4px 12px rgba(245, 158, 11, 0.4)' : '0 4px 12px rgba(16, 185, 129, 0.4)',
+                        padding: '1.25rem',
+                        border: '2px solid #e2e8f0',
+                        transition: 'all 0.3s',
+                        cursor: 'pointer',
+                        textAlign: 'center',
+                        height: '100%',
                         position: 'relative'
-                      }}>
-                        {member.firstName.charAt(0)}{member.lastName.charAt(0)}
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'translateY(-8px)';
+                        e.currentTarget.style.boxShadow = '0 12px 24px rgba(0, 0, 0, 0.15)';
+                        e.currentTarget.style.borderColor = isOnLeave ? '#f59e0b' : '#10b981';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = 'none';
+                        e.currentTarget.style.borderColor = '#e2e8f0';
+                      }}
+                    >
+                      {isOnLeave && (
+                        <div style={{
+                          position: 'absolute',
+                          top: '8px',
+                          right: '8px',
+                          background: '#ef4444',
+                          color: 'white',
+                          padding: '0.2rem 0.5rem',
+                          borderRadius: '6px',
+                          fontSize: '0.65rem',
+                          fontWeight: '700',
+                          zIndex: 1
+                        }}>
+                          <i className="fas fa-plane me-1"></i>
+                          Away
+                        </div>
+                      )}
+                      <div style={{ marginBottom: '1rem', position: 'relative', display: 'inline-block' }}>
+                        {member.profileImage ? (
+                          <img
+                            src={member.profileImage}
+                            alt={`${member.firstName} ${member.lastName}`}
+                            style={{
+                              width: '80px',
+                              height: '80px',
+                              borderRadius: '50%',
+                              objectFit: 'cover',
+                              border: '3px solid ' + (isOnLeave ? '#f59e0b' : '#10b981')
+                            }}
+                          />
+                        ) : (
+                          <div style={{
+                            width: '80px',
+                            height: '80px',
+                            borderRadius: '50%',
+                            background: isOnLeave ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                            color: 'white',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: '700',
+                            fontSize: '1.8rem',
+                            margin: '0 auto',
+                            border: '3px solid ' + (isOnLeave ? '#f59e0b' : '#10b981')
+                          }}>
+                            {member.firstName.charAt(0)}{member.lastName.charAt(0)}
+                          </div>
+                        )}
                         {isOnLeave && (
                           <div style={{
                             position: 'absolute',
-                            top: '-4px',
-                            right: '-4px',
-                            width: '16px',
-                            height: '16px',
+                            bottom: '0',
+                            right: '0',
+                            width: '20px',
+                            height: '20px',
                             borderRadius: '50%',
                             background: '#ef4444',
-                            border: '2px solid white',
-                            animation: 'pulse 2s infinite'
+                            border: '3px solid white'
                           }}></div>
                         )}
                       </div>
-                      <div className="flex-grow-1">
-                        <div style={{ fontWeight: '700', color: isOnLeave ? '#92400e' : '#065f46', fontSize: '0.95rem', marginBottom: '0.25rem' }}>
-                          {member.firstName} {member.lastName}
+                      <div style={{ fontWeight: '700', color: '#1e293b', fontSize: '0.95rem', marginBottom: '0.25rem' }}>
+                        {member.firstName} {member.lastName}
+                      </div>
+                      {member.department && (
+                        <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '0.75rem' }}>
+                          <i className="fas fa-building me-1" style={{ fontSize: '0.7rem' }}></i>
+                          {member.department}
                         </div>
-                        {member.department && (
-                          <div style={{ fontSize: '0.75rem', color: isOnLeave ? '#b45309' : '#047857', fontWeight: '500', marginBottom: '0.25rem' }}>
-                            <i className="fas fa-building me-1" style={{ fontSize: '0.7rem' }}></i>
-                            {member.department}
-                          </div>
-                        )}
-                        {isOnLeave ? (
-                          <Badge style={{ background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', fontSize: '0.7rem', fontWeight: '600', padding: '0.25rem 0.6rem' }}>
-                            <i className="fas fa-plane me-1"></i>
-                            On Leave
-                          </Badge>
-                        ) : memberLeaves.length > 0 ? (
-                          <div style={{ fontSize: '0.7rem', color: '#059669', fontWeight: '600' }}>
-                            <i className="fas fa-calendar-check me-1"></i>
-                            {memberLeaves.length} upcoming leave{memberLeaves.length > 1 ? 's' : ''}
-                          </div>
-                        ) : (
-                          <div style={{ fontSize: '0.7rem', color: '#10b981', fontWeight: '600' }}>
-                            <i className="fas fa-check-circle me-1"></i>
-                            Available
-                          </div>
-                        )}
-                      </div>
-                      <div>
-                        <i className="fas fa-chevron-right" style={{ color: isOnLeave ? '#f59e0b' : '#10b981', fontSize: '0.9rem' }}></i>
-                      </div>
+                      )}
+                      {isOnLeave ? (
+                        <Badge bg="danger" style={{ fontSize: '0.7rem', fontWeight: '600', padding: '0.35rem 0.75rem' }}>
+                          On Leave
+                        </Badge>
+                      ) : memberLeaves.length > 0 ? (
+                        <Badge bg="warning" style={{ fontSize: '0.7rem', fontWeight: '600', padding: '0.35rem 0.75rem' }}>
+                          {memberLeaves.length} Upcoming
+                        </Badge>
+                      ) : (
+                        <Badge bg="success" style={{ fontSize: '0.7rem', fontWeight: '600', padding: '0.35rem 0.75rem' }}>
+                          Available
+                        </Badge>
+                      )}
                     </div>
-                  </div>
+                  </Col>
                 );
               })}
-            </div>
+            </Row>
           </div>
         </Col>
       </Row>
@@ -1088,6 +1200,144 @@ const TeamCalendar = () => {
             </div>
           )}
         </Modal.Body>
+      </Modal>
+
+      {/* Add Holiday Modal */}
+      <Modal show={showHolidayModal} onHide={handleCloseHolidayModal} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>{editingHoliday ? 'Edit Holiday' : 'Add Holiday'}</Modal.Title>
+        </Modal.Header>
+        <Form onSubmit={handleAddHoliday}>
+          <Modal.Body>
+            <Form.Group className="mb-3">
+              <Form.Label>Holiday Name</Form.Label>
+              <Form.Control
+                type="text"
+                value={holidayForm.name}
+                onChange={(e) => setHolidayForm({ ...holidayForm, name: e.target.value })}
+                required
+              />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Date</Form.Label>
+              <Form.Control
+                type="date"
+                value={holidayForm.date}
+                onChange={(e) => setHolidayForm({ ...holidayForm, date: e.target.value })}
+                required
+              />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Type</Form.Label>
+              <Form.Select
+                value={holidayForm.type}
+                onChange={(e) => setHolidayForm({ ...holidayForm, type: e.target.value })}
+              >
+                <option value="FESTIVAL">Festival</option>
+                <option value="NATIONAL">National</option>
+                <option value="REGIONAL">Regional</option>
+              </Form.Select>
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Description (Optional)</Form.Label>
+              <Form.Control
+                as="textarea"
+                rows={2}
+                value={holidayForm.description}
+                onChange={(e) => setHolidayForm({ ...holidayForm, description: e.target.value })}
+              />
+            </Form.Group>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={handleCloseHolidayModal}>
+              Cancel
+            </Button>
+            <Button variant="primary" type="submit">
+              {editingHoliday ? 'Update Holiday' : 'Add Holiday'}
+            </Button>
+          </Modal.Footer>
+        </Form>
+      </Modal>
+
+      {/* Manage Holidays Modal */}
+      <Modal show={showHolidayListModal} onHide={() => setShowHolidayListModal(false)} size="lg" centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Manage Holidays</Modal.Title>
+        </Modal.Header>
+        <Modal.Body style={{ maxHeight: '500px', overflowY: 'auto' }}>
+          {publicHolidays.length === 0 ? (
+            <div className="text-center py-4">
+              <i className="fas fa-calendar-times" style={{ fontSize: '3rem', color: '#cbd5e1', marginBottom: '1rem' }}></i>
+              <p style={{ color: '#64748b' }}>No holidays found</p>
+            </div>
+          ) : (
+            <Table hover responsive>
+              <thead>
+                <tr>
+                  <th>Holiday Name</th>
+                  <th>Date</th>
+                  <th>Type</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {publicHolidays.map(holiday => (
+                  <tr key={holiday._id}>
+                    <td>
+                      <div style={{ fontWeight: '600', color: '#1e293b' }}>{holiday.name}</div>
+                      {holiday.description && (
+                        <small style={{ color: '#64748b' }}>{holiday.description}</small>
+                      )}
+                    </td>
+                    <td>
+                      <span style={{ fontWeight: '500' }}>
+                        {new Date(holiday.date).toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })}
+                      </span>
+                    </td>
+                    <td>
+                      <Badge bg={
+                        holiday.type === 'FESTIVAL' ? 'warning' :
+                        holiday.type === 'NATIONAL' ? 'info' : 'secondary'
+                      }>
+                        {holiday.type}
+                      </Badge>
+                    </td>
+                    <td>
+                      <div className="d-flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline-primary"
+                          onClick={() => {
+                            setShowHolidayListModal(false);
+                            handleEditHoliday(holiday);
+                          }}
+                        >
+                          <i className="fas fa-edit"></i>
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline-danger"
+                          onClick={() => handleDeleteHoliday(holiday._id)}
+                        >
+                          <i className="fas fa-trash"></i>
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowHolidayListModal(false)}>
+            Close
+          </Button>
+        </Modal.Footer>
       </Modal>
     </div>
   );
