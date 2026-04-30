@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { Row, Col, Card, Button, Table, Badge, Form, Modal } from "react-bootstrap";
 import { toast } from "react-toastify";
 import moment from "moment-timezone";
@@ -34,6 +35,7 @@ const Attendance = () => {
     holidayDays: 0,
     workingDaysThisWeek: 0,
   });
+  const [weeklyHoursData, setWeeklyHoursData] = useState([]);
 
   // Edit/Delete states
   const [showEditModal, setShowEditModal] = useState(false);
@@ -198,126 +200,78 @@ const Attendance = () => {
   const fetchWeekSummary = async (userId = "") => {
     try {
       const today = moment.tz('Asia/Kolkata');
-      const startOfWeek = today.clone().startOf('isoWeek'); // Monday
-      const endOfWeek = startOfWeek.clone().add(4, 'days').endOf('day'); // Friday
+      const startOfWeek = today.clone().startOf('week'); // Sunday
+      const endOfWeek = startOfWeek.clone().add(6, 'days').endOf('day'); // Saturday
 
       const startDate = startOfWeek.format('YYYY-MM-DD');
       const endDate = endOfWeek.format('YYYY-MM-DD');
 
-      console.log('📅 Fetching week summary for:', startDate, 'to', endDate);
-
-      // Fetch attendance records
       let url = `/api/attendance?startDate=${startDate}&endDate=${endDate}&limit=1000`;
-      if (userId && userId.trim() !== "") {
-        url += `&userId=${userId}`;
-      }
+      if (userId && userId.trim() !== "") url += `&userId=${userId}`;
 
-      // Fetch holidays for the week
       const holidaysUrl = `/api/holidays?startDate=${startDate}&endDate=${endDate}`;
 
       const [attendanceRes, holidaysRes] = await Promise.all([
-        api.get(url).catch(err => {
-          console.error('❌ Attendance API error:', err);
-          return { data: { attendance: [] } };
-        }),
-        api.get(holidaysUrl).catch(err => {
-          console.warn('⚠️ Holidays API error (continuing without holidays):', err.message);
-          return { data: [] };
-        })
+        api.get(url).catch(() => ({ data: { attendance: [] } })),
+        api.get(holidaysUrl).catch(() => ({ data: [] }))
       ]);
-
-      console.log('✅ Attendance response:', attendanceRes.data);
-      console.log('✅ Holidays response:', holidaysRes.data);
 
       const records = (attendanceRes.data.attendance || []).filter(r => !r.isDeleted);
       const holidays = Array.isArray(holidaysRes.data) ? holidaysRes.data : holidaysRes.data.holidays || [];
 
-      console.log('📊 Records found:', records.length);
-      console.log('📋 Full records array:', JSON.stringify(records, null, 2));
-      console.log('🏖️ Holidays found:', holidays.length, holidays);
-
-      // Create a map of holidays by date for quick lookup
       const holidayDatesSet = new Set(
-        holidays.map(h => {
-          const holidayDate = moment.tz(h.date, 'Asia/Kolkata').format('YYYY-MM-DD');
-          console.log('Holiday date:', h.date, '→', holidayDate);
-          return holidayDate;
-        })
+        holidays.map(h => moment.utc(h.date).utcOffset('+05:30').format('YYYY-MM-DD'))
       );
 
-      // Initialize summary
-      let summary = {
-        presentDays: 0,
-        lateDays: 0,
-        absentDays: 0,
-        holidayDays: 0,
-        workingDaysThisWeek: 0,
-        totalHours: 0,
-      };
-
-      // Create attendance map by date
       const attendanceByDate = {};
       records.forEach(r => {
-        const dateStr = moment.tz(r.date, 'Asia/Kolkata').format('YYYY-MM-DD');
+        if (!r.date) return;
+        const dateStr = moment.utc(r.date).utcOffset('+05:30').format('YYYY-MM-DD');
         attendanceByDate[dateStr] = r;
-        console.log('Attendance on', dateStr, ':', r.status, '| Hours:', r.totalHours);
       });
 
-      // Loop through Mon-Fri
-      for (let i = 0; i < 5; i++) {
-        const currentDay = startOfWeek.clone().add(i, 'days');
-        const dateStr = currentDay.format('YYYY-MM-DD');
-        const dayName = currentDay.format('dddd');
+      let summary = { presentDays: 0, lateDays: 0, absentDays: 0, holidayDays: 0, workingDaysThisWeek: 0, totalHours: 0 };
+      const chartData = [];
 
-        console.log(`📆 Checking ${dayName} (${dateStr})`);
+      for (let i = 0; i < 7; i++) {
+        const day = startOfWeek.clone().add(i, 'days');
+        const dateStr = day.format('YYYY-MM-DD');
+        const dayName = day.format('ddd');
+        const dayOfWeek = day.day(); // 0=Sun, 6=Sat
 
-        // Check if it's a holiday
-        if (holidayDatesSet.has(dateStr)) {
-          console.log(`  → Holiday found`);
+        // Sunday and Saturday are always holidays
+        if (dayOfWeek === 0 || dayOfWeek === 6 || holidayDatesSet.has(dateStr)) {
           summary.holidayDays++;
-          continue; // Skip holidays from working day count
+          chartData.push({ day: dayName, hours: 0, date: dateStr, isWeekend: true });
+          continue;
         }
 
         summary.workingDaysThisWeek++;
-
-        // Check if there's an attendance record for this day
         const record = attendanceByDate[dateStr];
+        const hours = parseFloat((record?.totalHours || 0).toFixed(2));
+
         if (!record) {
-          console.log(`  → Absent (no record)`);
+          summary.absentDays++;
+        } else if (record.status === 'Present') {
+          summary.presentDays++;
+          summary.totalHours += hours;
+        } else if (record.status === 'Late') {
+          summary.presentDays++;
+          summary.lateDays++;
+          summary.totalHours += hours;
+        } else if (record.status === 'Absent') {
           summary.absentDays++;
         } else {
-          if (record.status === "Present") {
-            console.log(`  → Present | Hours: ${record.totalHours}`);
-            summary.presentDays++;
-          } else if (record.status === "Late") {
-            console.log(`  → Late | Hours: ${record.totalHours}`);
-            summary.presentDays++; // Late counts as present
-            summary.lateDays++;
-          } else if (record.status === "Absent") {
-            console.log(`  → Absent | Hours: ${record.totalHours}`);
-            summary.absentDays++;
-          }
-          const hoursToAdd = record.totalHours || 0;
-          summary.totalHours += hoursToAdd;
-          console.log(`     Added ${hoursToAdd}h | Running total: ${summary.totalHours}h`);
+          summary.totalHours += hours;
         }
+
+        chartData.push({ day: dayName, hours, date: dateStr, isWeekend: false });
       }
 
-      console.log('✅ Final summary:', summary);
-      console.log('📊 Hours breakdown:');
-      console.log('  - Total Hours Worked:', summary.totalHours);
-      console.log('  - Working Days This Week:', summary.workingDaysThisWeek);
-      console.log('  - Target Hours (working days × 8):', summary.workingDaysThisWeek * 8);
-      console.log('  - Present Days:', summary.presentDays);
-      console.log('  - Absent Days:', summary.absentDays);
-      console.log('  - Holiday Days:', summary.holidayDays);
-      console.log('  - Late Days:', summary.lateDays);
-      if (summary.presentDays > 0) {
-        console.log('  - Avg Hours/Day:', (summary.totalHours / summary.presentDays).toFixed(2));
-      }
       setWeekSummary(summary);
+      setWeeklyHoursData(chartData);
     } catch (error) {
-      console.error("❌ Error fetching week summary:", error);
+      console.error('❌ Error fetching week summary:', error);
       setWeekSummary({ presentDays: 0, totalHours: 0, lateDays: 0, absentDays: 0, holidayDays: 0, workingDaysThisWeek: 0 });
     }
   };
@@ -1525,62 +1479,59 @@ const Attendance = () => {
             </Card.Header>
             <Card.Body>
               {(selectedUser && selectedUser !== '') || user?.role === 'EMPLOYEE' ? (
-                // Individual employee view
+                // Individual employee view - Weekly Hours Chart
                 <>
-                  {/* Weekly Performance Score */}
-                  <div className="mb-3 p-3 text-center" style={{ background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)', borderRadius: '12px', border: '2px solid #3b82f6' }}>
-                    <div className="mb-2">
-                      <i className="fas fa-trophy fa-2x" style={{ color: '#1e3a8a' }}></i>
-                    </div>
-                    <h2 className="fw-bold mb-1" style={{ color: '#1e3a8a' }}>
-                      {weekSummary.workingDaysThisWeek > 0 ? Math.round((weekSummary.presentDays / weekSummary.workingDaysThisWeek) * 100) : 0}%
-                    </h2>
-                    <small className="text-muted fw-semibold">Weekly Attendance Score</small>
-                    <div className="mt-2">
-                      <small style={{ color: '#1e3a8a' }}>
-                        {weekSummary.workingDaysThisWeek === 0 ? '📆 No working days' :
-                         weekSummary.presentDays === weekSummary.workingDaysThisWeek && weekSummary.lateDays === 0 ? '🌟 Perfect Week!' : 
-                         weekSummary.presentDays === weekSummary.workingDaysThisWeek && weekSummary.lateDays > 0 ? '✅ Full Week (with late arrivals)' :
-                         weekSummary.presentDays >= weekSummary.workingDaysThisWeek - 1 ? '✅ Great Job!' : 
-                         weekSummary.presentDays >= weekSummary.workingDaysThisWeek - 2 ? '👍 Keep Going!' : '⚠️ Needs Improvement'}
-                      </small>
-                    </div>
-                    {weekSummary.lateDays > 0 && (
-                      <div className="mt-2">
-                        <small style={{ color: '#d97706', fontSize: '0.7rem' }}>
-                          <i className="fas fa-clock me-1"></i>
-                          {weekSummary.lateDays} late arrival{weekSummary.lateDays > 1 ? 's' : ''} this week
-                        </small>
-                      </div>
-                    )}
-                    {weekSummary.holidayDays > 0 && (
-                      <div className="mt-2">
-                        <small style={{ color: '#059669', fontSize: '0.7rem' }}>
-                          <i className="fas fa-calendar-check me-1"></i>
-                          {weekSummary.holidayDays} public holiday{weekSummary.holidayDays > 1 ? 's' : ''} (not counted)
-                        </small>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Present Days */}
                   <div className="mb-3">
-                    <div className="d-flex justify-content-between align-items-center mb-2">
-                      <small className="text-muted fw-semibold">Present Days (incl. Late)</small>
-                      <span className="fw-bold" style={{ color: '#065f46' }}>
-                        {weekSummary.presentDays}/{weekSummary.workingDaysThisWeek}
+                    <div className="d-flex justify-content-between align-items-center mb-3">
+                      <small className="text-muted fw-semibold">Weekly Working Hours</small>
+                      <span className="fw-bold" style={{ color: '#1e3a8a' }}>
+                        {weekSummary.totalHours.toFixed(1)}h total
                       </span>
                     </div>
-                    <div className="progress" style={{ height: '10px', borderRadius: '10px' }}>
-                      <div
-                        className="progress-bar"
-                        style={{ 
-                          width: weekSummary.workingDaysThisWeek > 0 ? `${(weekSummary.presentDays / weekSummary.workingDaysThisWeek) * 100}%` : '0%',
-                          background: weekSummary.presentDays === weekSummary.workingDaysThisWeek ? 'linear-gradient(90deg, #065f46 0%, #10b981 100%)' :
-                                     weekSummary.presentDays >= weekSummary.workingDaysThisWeek - 1 ? 'linear-gradient(90deg, #0891b2 0%, #06b6d4 100%)' :
-                                     'linear-gradient(90deg, #d97706 0%, #f59e0b 100%)'
-                        }}
-                      ></div>
+                    
+                    {/* Recharts Line Chart */}
+                    <div style={{ width: '100%', height: 180 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={weeklyHoursData} margin={{ top: 15, right: 10, left: -20, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                          <XAxis dataKey="day" tick={({ x, y, payload }) => {
+                            const isWeekend = payload.value === 'Sun' || payload.value === 'Sat';
+                            return <text x={x} y={y + 12} textAnchor="middle" fontSize={11} fontWeight={600} fill={isWeekend ? '#ef4444' : '#64748b'}>{payload.value}</text>;
+                          }} axisLine={false} tickLine={false} />
+                          <YAxis domain={[0, 10]} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `${v}h`} />
+                          <Tooltip formatter={(val, name, props) => [props.payload.isWeekend ? 'Weekend' : `${val}h`, 'Hours']} contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: '0.8rem' }} />
+                          <ReferenceLine y={8} stroke="#10b981" strokeDasharray="4 4" strokeWidth={1.5} />
+                          <Line type="monotone" dataKey="hours" stroke="#3b82f6" strokeWidth={3}
+                            dot={(props) => {
+                              const { cx, cy, payload } = props;
+                              const color = payload.isWeekend ? '#ef4444' : '#3b82f6';
+                              return <circle key={payload.date} cx={cx} cy={cy} r={5} fill={color} stroke="white" strokeWidth={2} />;
+                            }}
+                            activeDot={{ r: 7 }}
+                            label={{ position: 'top', fontSize: 10, fill: '#1e3a8a', fontWeight: 700, formatter: (v) => v > 0 ? `${v}h` : '' }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* Summary Stats */}
+                  <div className="row g-2">
+                    <div className="col-6">
+                      <div className="text-center p-2" style={{ background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+                        <div className="fw-bold" style={{ color: '#065f46', fontSize: '1.25rem' }}>
+                          {weekSummary.presentDays}/{weekSummary.workingDaysThisWeek}
+                        </div>
+                        <small style={{ color: '#065f46', fontSize: '0.7rem' }}>Present Days</small>
+                      </div>
+                    </div>
+                    <div className="col-6">
+                      <div className="text-center p-2" style={{ background: weekSummary.lateDays > 0 ? '#fef3c7' : '#f3f4f6', borderRadius: '8px', border: `1px solid ${weekSummary.lateDays > 0 ? '#fbbf24' : '#e5e7eb'}` }}>
+                        <div className="fw-bold" style={{ color: weekSummary.lateDays > 0 ? '#92400e' : '#6b7280', fontSize: '1.25rem' }}>
+                          {weekSummary.lateDays}
+                        </div>
+                        <small style={{ color: weekSummary.lateDays > 0 ? '#92400e' : '#6b7280', fontSize: '0.7rem' }}>Late Days</small>
+                      </div>
                     </div>
                   </div>
                 </>
@@ -1589,121 +1540,92 @@ const Attendance = () => {
                 <>
                   {todayStatus?.isAggregated && todayStatus?.summary ? (
                     <>
-                      {/* Today's Attendance Score */}
-                      <div className="mb-3 p-3 text-center" style={{ background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)', borderRadius: '12px', border: '2px solid #3b82f6' }}>
-                        <div className="mb-2">
-                          <i className="fas fa-users fa-2x" style={{ color: '#1e3a8a' }}></i>
-                        </div>
-                        <h2 className="fw-bold mb-1" style={{ color: '#1e3a8a' }}>
+                      {/* Attendance Rate */}
+                      <div className="mb-3 d-flex align-items-center justify-content-between p-2" style={{ background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)', borderRadius: '12px', border: '2px solid #3b82f6' }}>
+                        <small className="fw-semibold text-muted">Today's Attendance Rate</small>
+                        <span className="fw-bold" style={{ color: '#1e3a8a', fontSize: '1.1rem' }}>
                           {todayStatus.summary.totalEmployees > 0 ? Math.round((todayStatus.summary.checkedIn / todayStatus.summary.totalEmployees) * 100) : 0}%
-                        </h2>
-                        <small className="text-muted fw-semibold">Today's Attendance Rate</small>
-                        <div className="mt-2">
-                          <small style={{ color: '#1e3a8a' }}>
-                            {todayStatus.summary.checkedIn} / {todayStatus.summary.totalEmployees} employees
-                          </small>
-                        </div>
+                        </span>
                       </div>
 
-                      {/* Checked In */}
-                      <div className="mb-3">
-                        <div className="d-flex justify-content-between align-items-center mb-2">
-                          <small className="text-muted fw-semibold">Checked In</small>
-                          <span className="fw-bold" style={{ color: '#065f46' }}>
-                            {todayStatus.summary.checkedIn}/{todayStatus.summary.totalEmployees}
-                          </span>
-                        </div>
-                        <div className="progress" style={{ height: '10px', borderRadius: '10px' }}>
-                          <div
-                            className="progress-bar"
-                            style={{ 
-                              width: `${todayStatus.summary.totalEmployees > 0 ? (todayStatus.summary.checkedIn / todayStatus.summary.totalEmployees) * 100 : 0}%`,
-                              background: 'linear-gradient(90deg, #065f46 0%, #10b981 100%)'
-                            }}
-                          ></div>
-                        </div>
-                      </div>
-
-                      {/* Checked Out */}
-                      <div className="mb-3">
-                        <div className="d-flex justify-content-between align-items-center mb-2">
-                          <small className="text-muted fw-semibold">Checked Out</small>
-                          <span className="fw-bold" style={{ color: '#991b1b' }}>
-                            {todayStatus.summary.checkedOut}/{todayStatus.summary.checkedIn}
-                          </span>
-                        </div>
-                        <div className="progress" style={{ height: '10px', borderRadius: '10px' }}>
-                          <div
-                            className="progress-bar"
-                            style={{ 
-                              width: `${todayStatus.summary.checkedIn > 0 ? (todayStatus.summary.checkedOut / todayStatus.summary.checkedIn) * 100 : 0}%`,
-                              background: 'linear-gradient(90deg, #991b1b 0%, #dc2626 100%)'
-                            }}
-                          ></div>
-                        </div>
-                        <small className="text-muted">
-                          {todayStatus.summary.checkedIn - todayStatus.summary.checkedOut} still working
-                        </small>
-                      </div>
-
-                      {/* Work Mode Breakdown */}
-                      <div className="mb-3">
-                        <small className="text-muted fw-semibold d-block mb-2">Work Mode Distribution</small>
-                        <div className="row g-2">
-                          <div className="col-4">
-                            <div className="text-center p-2" style={{ background: '#eff6ff', borderRadius: '8px', border: '1px solid #3b82f6' }}>
-                              <div className="fw-bold" style={{ color: '#1e3a8a', fontSize: '1.25rem' }}>
-                                {todayStatus.summary.workModeStats?.OFFICE || 0}
+                      {/* Present Employees */}
+                      {todayStatus.summary.presentEmployees?.filter(e => e.status === 'Present').length > 0 && (
+                        <div className="mb-3">
+                          <div className="d-flex align-items-center mb-2">
+                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', display: 'inline-block', marginRight: 6 }}></span>
+                            <small className="fw-bold" style={{ color: '#065f46' }}>Present ({todayStatus.summary.presentEmployees.filter(e => e.status === 'Present').length})</small>
+                          </div>
+                          <div className="d-flex flex-wrap gap-2">
+                            {todayStatus.summary.presentEmployees.filter(e => e.status === 'Present').map(emp => (
+                              <div key={emp._id} className="d-flex flex-column align-items-center" style={{ width: 48 }}>
+                                <div style={{ width: 38, height: 38, borderRadius: '50%', border: '2px solid #10b981', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.12)', background: 'linear-gradient(135deg,#059669,#10b981)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                  {emp.profileImage
+                                    ? <img src={emp.profileImage} alt={emp.firstName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
+                                    : null}
+                                  <span style={{ fontSize: '0.7rem', color: 'white', fontWeight: 700, display: emp.profileImage ? 'none' : 'flex' }}>{emp.firstName?.[0]}{emp.lastName?.[0]}</span>
+                                </div>
+                                <small style={{ fontSize: '0.62rem', color: '#065f46', fontWeight: 600, marginTop: 3, textAlign: 'center', width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{emp.firstName}</small>
                               </div>
-                              <small style={{ color: '#1e3a8a', fontSize: '0.7rem' }}>Office</small>
-                            </div>
-                          </div>
-                          <div className="col-4">
-                            <div className="text-center p-2" style={{ background: '#f0fdf4', borderRadius: '8px', border: '1px solid #10b981' }}>
-                              <div className="fw-bold" style={{ color: '#065f46', fontSize: '1.25rem' }}>
-                                {todayStatus.summary.workModeStats?.REMOTE || 0}
-                              </div>
-                              <small style={{ color: '#065f46', fontSize: '0.7rem' }}>Remote</small>
-                            </div>
-                          </div>
-                          <div className="col-4">
-                            <div className="text-center p-2" style={{ background: '#fef2f2', borderRadius: '8px', border: '1px solid #f43f5e' }}>
-                              <div className="fw-bold" style={{ color: '#be123c', fontSize: '1.25rem' }}>
-                                {todayStatus.summary.workModeStats?.HYBRID || 0}
-                              </div>
-                              <small style={{ color: '#be123c', fontSize: '0.7rem' }}>Hybrid</small>
-                            </div>
+                            ))}
                           </div>
                         </div>
-                      </div>
+                      )}
 
-                      {/* Status Breakdown */}
-                      <div className="row g-2">
-                        <div className="col-6">
-                          <div className="text-center p-2" style={{ 
-                            background: (todayStatus.summary.statusCounts?.Late || 0) > 0 ? '#fef3c7' : '#f3f4f6', 
-                            borderRadius: '8px', 
-                            border: (todayStatus.summary.statusCounts?.Late || 0) > 0 ? '1px solid #fbbf24' : '1px solid #e5e7eb'
-                          }}>
-                            <div className="fw-bold" style={{ color: (todayStatus.summary.statusCounts?.Late || 0) > 0 ? '#92400e' : '#6b7280', fontSize: '1.25rem' }}>
-                              {todayStatus.summary.statusCounts?.Late || 0}
-                            </div>
-                            <small style={{ color: (todayStatus.summary.statusCounts?.Late || 0) > 0 ? '#92400e' : '#6b7280', fontSize: '0.7rem' }}>Late Today</small>
+                      {/* Late Employees */}
+                      {todayStatus.summary.lateEmployees?.length > 0 && (
+                        <div className="mb-3">
+                          <div className="d-flex align-items-center mb-2">
+                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#f59e0b', display: 'inline-block', marginRight: 6 }}></span>
+                            <small className="fw-bold" style={{ color: '#92400e' }}>Late ({todayStatus.summary.lateEmployees.length})</small>
+                          </div>
+                          <div className="d-flex flex-wrap gap-2">
+                            {todayStatus.summary.lateEmployees.map(emp => (
+                              <div key={emp._id} className="d-flex flex-column align-items-center" style={{ width: 48 }}>
+                                <div style={{ width: 38, height: 38, borderRadius: '50%', border: '2px solid #f59e0b', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.12)', background: 'linear-gradient(135deg,#d97706,#f59e0b)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                  {emp.profileImage
+                                    ? <img src={emp.profileImage} alt={emp.firstName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
+                                    : null}
+                                  <span style={{ fontSize: '0.7rem', color: 'white', fontWeight: 700, display: emp.profileImage ? 'none' : 'flex' }}>{emp.firstName?.[0]}{emp.lastName?.[0]}</span>
+                                </div>
+                                <small style={{ fontSize: '0.62rem', color: '#92400e', fontWeight: 600, marginTop: 3, textAlign: 'center', width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{emp.firstName}</small>
+                              </div>
+                            ))}
                           </div>
                         </div>
-                        <div className="col-6">
-                          <div className="text-center p-2" style={{ 
-                            background: (todayStatus.summary.totalEmployees - todayStatus.summary.checkedIn) > 0 ? '#fee2e2' : '#f3f4f6', 
-                            borderRadius: '8px', 
-                            border: (todayStatus.summary.totalEmployees - todayStatus.summary.checkedIn) > 0 ? '1px solid #f87171' : '1px solid #e5e7eb'
-                          }}>
-                            <div className="fw-bold" style={{ color: (todayStatus.summary.totalEmployees - todayStatus.summary.checkedIn) > 0 ? '#991b1b' : '#6b7280', fontSize: '1.25rem' }}>
-                              {todayStatus.summary.totalEmployees - todayStatus.summary.checkedIn}
-                            </div>
-                            <small style={{ color: (todayStatus.summary.totalEmployees - todayStatus.summary.checkedIn) > 0 ? '#991b1b' : '#6b7280', fontSize: '0.7rem' }}>Absent Today</small>
+                      )}
+
+                      {/* Absent Employees */}
+                      {todayStatus.summary.absentEmployees?.length > 0 && (
+                        <div className="mb-2">
+                          <div className="d-flex align-items-center mb-2">
+                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', display: 'inline-block', marginRight: 6 }}></span>
+                            <small className="fw-bold" style={{ color: '#991b1b' }}>Absent ({todayStatus.summary.absentEmployees.length})</small>
+                          </div>
+                          <div className="d-flex flex-wrap gap-2">
+                            {todayStatus.summary.absentEmployees.slice(0, 12).map(emp => (
+                              <div key={emp._id} className="d-flex flex-column align-items-center" style={{ width: 48 }}>
+                                <div style={{ width: 38, height: 38, borderRadius: '50%', border: '2px solid #ef4444', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.12)', background: 'linear-gradient(135deg,#dc2626,#ef4444)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                  {emp.profileImage
+                                    ? <img src={emp.profileImage} alt={emp.firstName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
+                                    : null}
+                                  <span style={{ fontSize: '0.7rem', color: 'white', fontWeight: 700, display: emp.profileImage ? 'none' : 'flex' }}>{emp.firstName?.[0]}{emp.lastName?.[0]}</span>
+                                </div>
+                                <small style={{ fontSize: '0.62rem', color: '#991b1b', fontWeight: 600, marginTop: 3, textAlign: 'center', width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{emp.firstName}</small>
+                              </div>
+                            ))}
+                            {todayStatus.summary.absentEmployees.length > 12 && (
+                              <div className="d-flex flex-column align-items-center" style={{ width: 48 }}>
+                                <div style={{ width: 38, height: 38, borderRadius: '50%', background: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', color: '#64748b', fontWeight: 700, border: '2px solid #cbd5e1' }}>
+                                  +{todayStatus.summary.absentEmployees.length - 12}
+                                </div>
+                                <small style={{ fontSize: '0.62rem', color: '#64748b', marginTop: 3 }}>more</small>
+                              </div>
+                            )}
                           </div>
                         </div>
-                      </div>
+                      )}
+
+
                     </>
                   ) : (
                     <div className="text-center py-4">
