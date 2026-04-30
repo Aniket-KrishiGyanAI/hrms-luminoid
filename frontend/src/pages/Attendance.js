@@ -169,13 +169,24 @@ const Attendance = () => {
     try {
       // Calculate date range from selected month
       const [year, month] = selectedMonth.split('-');
-      const startDate = new Date(year, month - 1, 1).toISOString().split('T')[0];
-      const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+      const startDate = `${year}-${month}-01`;
+      // Get last day of the month properly (month is 1-indexed in the string, so we use it directly)
+      const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+      const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+      
+      console.log('📅 Fetching attendance for:', { selectedMonth, startDate, endDate, lastDay });
+      
+      console.log('📅 Fetching attendance for:', { selectedMonth, startDate, endDate, lastDay });
       
       let url = `/api/attendance?page=${page}&limit=${PAGE_SIZE}&startDate=${startDate}&endDate=${endDate}`;
       if (userId) url += `&userId=${userId}`;
       if (showDeleted) url += `&includeDeleted=true`;
+      
+      console.log('🔗 API URL:', url);
+      
       const response = await api.get(url);
+      console.log('✅ Attendance response:', response.data);
+      
       setAttendanceHistory(response.data.attendance || response.data);
       setTotalRecords(response.data.total || 0);
       setCurrentPage(page);
