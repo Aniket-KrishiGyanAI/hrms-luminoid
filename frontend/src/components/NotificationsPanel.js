@@ -207,14 +207,6 @@ const NotificationsPanel = () => {
             </div>
           )}
         </div>
-
-        {notifications.length > 0 && (
-          <div className="notification-dropdown-footer">
-            <button className="view-all-btn" onClick={() => { setShow(false); navigate('/notifications'); }}>
-              View all notifications
-            </button>
-          </div>
-        )}
       </Dropdown.Menu>
     </Dropdown>
   );
