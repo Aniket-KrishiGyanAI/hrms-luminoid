@@ -1892,10 +1892,9 @@
   font-size: 0.8rem;
   color: #64748b;
   line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  white-space: normal;
+  word-wrap: break-word;
+  max-width: 100%;
 }
 
 .category-tag {

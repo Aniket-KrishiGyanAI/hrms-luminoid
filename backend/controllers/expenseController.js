@@ -8,7 +8,7 @@ const getMonthLockInfo = () => {
   const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const today = now.getDate();
   const daysLeft = lastDay - today;
-  const locked = today >= lastDay;
+  const locked = today > lastDay;
 
   return {
     isLocked: locked,
@@ -25,7 +25,7 @@ const isMonthLocked = (billingMonth) => {
   if (billingMonth < currentMonth) return true;
   if (billingMonth === currentMonth) {
     const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    return now.getDate() >= lastDay;
+    return now.getDate() > lastDay;
   }
   return false;
 };
@@ -538,27 +538,92 @@ const approveRejectExpense = async (req, res) => {
 // Serve a bill file securely from S3
 const serveBill = async (req, res) => {
   try {
+    console.log('=== serveBill START ===');
+    console.log('Expense ID:', req.params.id);
+    console.log('Bill Index:', req.params.billIndex);
+    console.log('User:', req.user?.email);
+    
     const expense = await Expense.findById(req.params.id);
-    if (!expense) return res.status(404).json({ message: "Expense not found." });
+    if (!expense) {
+      console.error('serveBill: Expense not found', req.params.id);
+      return res.status(404).send('<h1>Expense not found</h1>');
+    }
 
     const isOwner = expense.employeeId.toString() === req.user.id;
     const isManagerOrHR = ["MANAGER", "HR", "ADMIN"].includes(req.user.role);
     if (!isOwner && !isManagerOrHR) {
-      return res.status(403).json({ message: "Access denied." });
+      console.error('serveBill: Access denied for user', req.user.id);
+      return res.status(403).send('<h1>Access Denied</h1>');
     }
 
     const billIndex = parseInt(req.params.billIndex);
     if (isNaN(billIndex) || billIndex < 0 || billIndex >= expense.bills.length) {
-      return res.status(400).json({ message: "Invalid bill index." });
+      console.error('serveBill: Invalid bill index', billIndex, 'Total bills:', expense.bills.length);
+      return res.status(400).send(`<h1>Invalid bill index. Total bills: ${expense.bills.length}</h1>`);
     }
 
     const bill = expense.bills[billIndex];
+    console.log('Bill details:', { 
+      fileName: bill.fileName, 
+      hasFileKey: !!bill.fileKey, 
+      hasFilePath: !!bill.filePath,
+      fileKey: bill.fileKey,
+      filePath: bill.filePath?.substring(0, 100) 
+    });
 
-    // Redirect to S3 URL (files are public-read)
-    res.redirect(bill.filePath);
+    // Try to stream file from S3
+    if (bill.fileKey) {
+      const s3 = require('../config/s3');
+      try {
+        const params = {
+          Bucket: process.env.AWS_S3_BUCKET,
+          Key: bill.fileKey
+        };
+        
+        console.log('Fetching from S3:', params);
+        
+        // Get file from S3
+        const s3Object = await s3.getObject(params).promise();
+        
+        console.log('S3 Object retrieved:', {
+          ContentType: s3Object.ContentType,
+          ContentLength: s3Object.ContentLength
+        });
+        
+        // Determine content type
+        const contentType = s3Object.ContentType || 
+          (bill.fileName.match(/\.pdf$/i) ? 'application/pdf' : 
+           bill.fileName.match(/\.(jpg|jpeg)$/i) ? 'image/jpeg' :
+           bill.fileName.match(/\.png$/i) ? 'image/png' : 'application/octet-stream');
+        
+        // Set headers
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Content-Disposition', `inline; filename="${bill.fileName}"`);
+        res.setHeader('Content-Length', s3Object.ContentLength);
+        res.setHeader('Cache-Control', 'public, max-age=31536000');
+        
+        console.log('Streaming file with Content-Type:', contentType);
+        console.log('=== serveBill SUCCESS ===');
+        return res.send(s3Object.Body);
+      } catch (s3Error) {
+        console.error('S3 error:', s3Error);
+        // Fallback to redirect if streaming fails
+        if (bill.filePath) {
+          console.log('Falling back to redirect:', bill.filePath);
+          return res.redirect(bill.filePath);
+        }
+        return res.status(500).send(`<h1>S3 Error</h1><pre>${s3Error.message}</pre>`);
+      }
+    } else if (bill.filePath) {
+      console.log('Redirecting to filePath:', bill.filePath);
+      return res.redirect(bill.filePath);
+    } else {
+      console.error('No fileKey or filePath found');
+      return res.status(404).send('<h1>Bill file not found - no fileKey or filePath</h1>');
+    }
   } catch (error) {
-    console.error('serveBill error:', error.message);
-    res.status(500).json({ message: error.message });
+    console.error('serveBill error:', error);
+    res.status(500).send(`<h1>Server Error</h1><pre>${error.message}</pre>`);
   }
 };
 

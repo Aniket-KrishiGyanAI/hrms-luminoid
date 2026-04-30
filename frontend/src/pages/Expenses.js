@@ -1173,7 +1173,16 @@ const handleMarkReimbursed = async () => {
                                   </span>
                                 )}
                               </div>
-                              {expense.description && <div className="table-desc">{expense.description}</div>}
+                              {expense.description && (
+                                <div className="table-desc" style={{ 
+                                  whiteSpace: 'normal', 
+                                  wordWrap: 'break-word',
+                                  maxWidth: '100%',
+                                  overflow: 'visible'
+                                }}>
+                                  {expense.description}
+                                </div>
+                              )}
                             </div>
                           </td>
                           <td className="td-category">
@@ -1322,10 +1331,13 @@ const handleMarkReimbursed = async () => {
                                             className="inline-bill-view"
                                             onClick={async () => {
                                               try {
-                                                const res = await api.get(`/api/expenses/${expense._id}/bills/${idx}/view`, { responseType: 'blob' });
-                                                const url = URL.createObjectURL(res.data);
+                                                const token = localStorage.getItem('token');
+                                                const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+                                                const url = `${apiUrl}/api/expenses/${expense._id}/bills/${idx}/view?token=${token}`;
+                                                console.log('Opening bill URL:', url);
                                                 window.open(url, '_blank');
                                               } catch (e) {
+                                                console.error('Error opening bill:', e);
                                                 Swal.fire('Error', 'Could not open bill', 'error');
                                               }
                                             }}
@@ -1493,10 +1505,13 @@ const handleMarkReimbursed = async () => {
                                   className="accordion-bill-btn"
                                   onClick={async () => {
                                     try {
-                                      const res = await api.get(`/api/expenses/${expense._id}/bills/${idx}/view`, { responseType: 'blob' });
-                                      const url = URL.createObjectURL(res.data);
+                                      const token = localStorage.getItem('token');
+                                      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+                                      const url = `${apiUrl}/api/expenses/${expense._id}/bills/${idx}/view?token=${token}`;
+                                      console.log('Opening bill URL:', url);
                                       window.open(url, '_blank');
                                     } catch (e) {
+                                      console.error('Error opening bill:', e);
                                       Swal.fire('Error', 'Could not open bill', 'error');
                                     }
                                   }}

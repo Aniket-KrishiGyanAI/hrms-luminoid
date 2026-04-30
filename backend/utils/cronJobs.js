@@ -189,22 +189,22 @@ cron.schedule('0 0 * * *', async () => {
 });
 
 // Expense deadline reminder — runs daily at 9:00 AM
-// Sends reminder on the last 3 days of every month to all active employees
+// Sends reminder ONLY on the last day of the month to all active employees
 cron.schedule('0 9 * * *', async () => {
   const now = new Date();
   const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const today = now.getDate();
-  const daysLeft = lastDay - today;
 
-  // Only send on last 2 days (daysLeft = 0, 1 means today is lastDay or lastDay-1)
-  if (daysLeft > 1) return;
+  // Only send on the last day of the month
+  if (today !== lastDay) return;
 
   const billingMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
   try {
     const employees = await User.find({ role: 'EMPLOYEE', isActive: { $ne: false } }, 'firstName lastName email');
     if (employees.length === 0) return;
-    await sendExpenseDeadlineReminder(employees, daysLeft === 0 ? 1 : daysLeft, lastDay, billingMonth);
+    // Send email indicating today is the last day (daysLeft = 0)
+    await sendExpenseDeadlineReminder(employees, 0, lastDay, billingMonth);
   } catch (error) {
     console.error('Error in expense deadline reminder job:', error);
   }

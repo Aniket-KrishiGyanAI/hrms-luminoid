@@ -5,7 +5,12 @@ const tokenBlacklist = require('../utils/tokenBlacklist');
 
 const auth = async (req, res, next) => {
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
+    // Try to get token from Authorization header first, then from query parameter
+    let token = req.header('Authorization')?.replace('Bearer ', '');
+    if (!token && req.query.token) {
+      token = req.query.token;
+    }
+    
     if (!token) {
       return res.status(401).json({ message: 'Access denied. No token provided.' });
     }

@@ -417,16 +417,37 @@ const sendExpenseDeadlineReminder = async (employees, daysLeft, lastDay, billing
   const [year, month] = billingMonth.split('-');
   const monthName = new Date(year, month - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
 
-  const urgencyColor   = daysLeft === 1 ? '#dc2626' : '#ea580c';
-  const urgencyBg      = daysLeft === 1 ? '#fee2e2' : '#ffedd5';
-  const urgencyBorder  = daysLeft === 1 ? '#fca5a5' : '#fdba74';
-  const urgencyLabel   = daysLeft === 1 ? '🚨 LAST DAY TOMORROW!' : '⚠️ Only 2 Days Left!';
+  // Handle different urgency levels based on days left
+  let urgencyColor, urgencyBg, urgencyBorder, urgencyLabel, daysLeftText;
+  
+  if (daysLeft === 0) {
+    // Today is the last day
+    urgencyColor = '#dc2626';
+    urgencyBg = '#fee2e2';
+    urgencyBorder = '#fca5a5';
+    urgencyLabel = '🚨 LAST DAY TODAY!';
+    daysLeftText = 'today (last day)';
+  } else if (daysLeft === 1) {
+    // Tomorrow is the last day
+    urgencyColor = '#dc2626';
+    urgencyBg = '#fee2e2';
+    urgencyBorder = '#fca5a5';
+    urgencyLabel = '🚨 LAST DAY TOMORROW!';
+    daysLeftText = '1 day';
+  } else {
+    // 2 or more days left
+    urgencyColor = '#ea580c';
+    urgencyBg = '#ffedd5';
+    urgencyBorder = '#fdba74';
+    urgencyLabel = `⚠️ Only ${daysLeft} Days Left!`;
+    daysLeftText = `${daysLeft} days`;
+  }
 
   const emailPromises = employees.map(employee => {
     const mailOptions = {
       from: process.env.SMTP_FROM || 'noreply@company.com',
       to: employee.email,
-      subject: `[Action Required] Submit Your ${monthName} Expenses — ${daysLeft} Day${daysLeft > 1 ? 's' : ''} Left`,
+      subject: `[Action Required] Submit Your ${monthName} Expenses — ${daysLeft === 0 ? 'Last Day' : daysLeftText + ' Left'}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8fafc; padding: 0;">
 
@@ -437,11 +458,13 @@ const sendExpenseDeadlineReminder = async (employees, daysLeft, lastDay, billing
           </div>
 
           <!-- Urgency Banner -->
-          <div style="background: ${urgencyBg}; border: 1.5px solid ${urgencyBorder}; border-radius: 8px; margin: 24px 40px 0; padding: 16px 20px; display: flex; align-items: center;">
-            <p style="margin: 0; color: ${urgencyColor}; font-size: 16px; font-weight: 700;">${urgencyLabel}</p>
-            <p style="margin: 4px 0 0; color: ${urgencyColor}; font-size: 13px;">
-              The expense submission window for <strong>${monthName}</strong> closes on the <strong>${lastDay}th</strong>.
-              After that, no expenses can be submitted or claimed.
+          <div style="background: ${urgencyBg}; border: 1.5px solid ${urgencyBorder}; border-radius: 8px; margin: 24px 40px 0; padding: 16px 20px;">
+            <p style="margin: 0 0 8px; color: ${urgencyColor}; font-size: 16px; font-weight: 700;">${urgencyLabel}</p>
+            <p style="margin: 0; color: ${urgencyColor}; font-size: 13px;">
+              ${daysLeft === 0 
+                ? `Today is the <strong>last day</strong> to submit expenses for <strong>${monthName}</strong>. Submit before midnight!` 
+                : `The expense submission window for <strong>${monthName}</strong> closes on the <strong>${lastDay}th</strong>. After that, no expenses can be submitted or claimed.`
+              }
             </p>
           </div>
 
@@ -450,7 +473,7 @@ const sendExpenseDeadlineReminder = async (employees, daysLeft, lastDay, billing
             <p style="margin: 0 0 16px; color: #334155; font-size: 15px;">Dear <strong>${employee.firstName}</strong>,</p>
             <p style="margin: 0 0 16px; color: #475569; font-size: 14px; line-height: 1.6;">
               This is a reminder to submit all your pending expense claims for <strong>${monthName}</strong>.
-              You have <strong style="color: ${urgencyColor};">${daysLeft} day${daysLeft > 1 ? 's' : ''}</strong> remaining.
+              You have <strong style="color: ${urgencyColor};">${daysLeft === 0 ? 'until midnight today' : daysLeftText}</strong> remaining.
             </p>
 
             <!-- Checklist -->
@@ -465,7 +488,7 @@ const sendExpenseDeadlineReminder = async (employees, daysLeft, lastDay, billing
 
             <div style="background: #fee2e2; border-radius: 8px; padding: 14px 18px; margin: 16px 0; border-left: 4px solid #dc2626;">
               <p style="margin: 0; color: #991b1b; font-size: 13px; font-weight: 600;">
-                ❌ After ${lastDay}th ${monthName}, the system will be locked and no new expenses can be submitted or claimed for this month.
+                ❌ After ${daysLeft === 0 ? 'midnight today' : `${lastDay}th ${monthName}`}, the system will be locked and no new expenses can be submitted or claimed for this month.
               </p>
             </div>
           </div>
