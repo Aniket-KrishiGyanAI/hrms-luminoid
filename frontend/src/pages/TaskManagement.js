@@ -370,6 +370,12 @@ const TaskManagement = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (taskForm.assignedTo.length === 0) {
+      toast.error('Please select at least one employee to assign the task');
+      return;
+    }
+    
     setLoadingStates(prev => ({ ...prev, submit: true }));
     try {
       const finalTaskType = taskForm.taskType === 'OTHER' && customTaskType ? customTaskType : taskForm.taskType;

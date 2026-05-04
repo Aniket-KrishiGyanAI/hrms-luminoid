@@ -179,9 +179,9 @@ const Approvals = () => {
                       </td>
                       <td>{getStatusBadge(request)}</td>
                       <td>
-                        <span className="text-muted" title={request.reason}>
-                          {request.reason?.length > 30 ? request.reason.substring(0, 30) + '...' : request.reason}
-                        </span>
+                        <div style={{ maxWidth: '300px', whiteSpace: 'normal', wordWrap: 'break-word' }}>
+                          <span className="text-muted">{request.reason || 'N/A'}</span>
+                        </div>
                       </td>
                       <td>
                         <div className="d-flex gap-1">

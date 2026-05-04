@@ -15,7 +15,7 @@ import api from "../utils/api";
 import { toast } from "react-toastify";
 import { showAnnouncementNotification } from "../utils/notificationService";
 import { logger } from "../utils/logger";
-import DailyUpdates from "../components/DailyUpdates";
+import TopPerformers from "../components/TopPerformers";
 import "../styles/Dashboard.css";
 
 const Dashboard = () => {
@@ -656,11 +656,11 @@ const Dashboard = () => {
             <Col md={6}>
               <Card className="modern-card h-100">
                 <Card.Header>
-                  <i className="fas fa-comments me-2"></i>Daily Updates
+                  <i className="fas fa-trophy me-2"></i>Top Performers This Week
                 </Card.Header>
                 <Card.Body className="p-0">
                   <div style={{ maxHeight: "400px", overflowY: "auto" }}>
-                    <DailyUpdates />
+                    <TopPerformers />
                   </div>
                 </Card.Body>
               </Card>
@@ -1101,11 +1101,11 @@ const Dashboard = () => {
             <Col md={6}>
               <Card className="modern-card h-100">
                 <Card.Header>
-                  <i className="fas fa-comments me-2"></i>Daily Updates
+                  <i className="fas fa-trophy me-2"></i>Top Performers This Week
                 </Card.Header>
                 <Card.Body className="p-0">
                   <div style={{ maxHeight: "400px", overflowY: "auto" }}>
-                    <DailyUpdates />
+                    <TopPerformers />
                   </div>
                 </Card.Body>
               </Card>
@@ -1421,11 +1421,11 @@ const Dashboard = () => {
             <Col md={6}>
               <Card className="modern-card h-100">
                 <Card.Header>
-                  <i className="fas fa-comments me-2"></i>Daily Updates
+                  <i className="fas fa-trophy me-2"></i>Top Performers This Week
                 </Card.Header>
                 <Card.Body className="p-0">
                   <div style={{ maxHeight: "400px", overflowY: "auto" }}>
-                    <DailyUpdates />
+                    <TopPerformers />
                   </div>
                 </Card.Body>
               </Card>
@@ -1500,62 +1500,94 @@ const Dashboard = () => {
               <Card className="modern-card h-100">
                 <Card.Header className="d-flex justify-content-between align-items-center">
                   <span>
-                    <i className="fas fa-sitemap me-2"></i>Department
-                    Distribution
+                    <i className="fas fa-chart-line me-2"></i>Department Distribution
                   </span>
-                  <Badge style={{ background: "#6366f1", fontSize: "0.75rem" }}>
-                    {dashboardData.departmentStats?.length || 0} Total
+                  <Badge style={{ background: "linear-gradient(135deg, #10b981 0%, #059669 100%)", fontSize: "0.75rem" }}>
+                    {dashboardData.departmentStats?.reduce((sum, d) => sum + d.count, 0) || 0} Total
                   </Badge>
                 </Card.Header>
-                <Card.Body>
+                <Card.Body style={{ padding: "1.5rem" }}>
                   {dashboardData.departmentStats?.length > 0 ? (
-                    <div className="dept-grid">
-                      {dashboardData.departmentStats.map((dept, index) => {
-                        const colors = [
-                          { bg: "#667eea", light: "#e0e7ff" },
-                          { bg: "#f093fb", light: "#fce7f3" },
-                          { bg: "#4facfe", light: "#dbeafe" },
-                          { bg: "#43e97b", light: "#d1fae5" },
-                          { bg: "#fa709a", light: "#ffe4e6" },
-                          { bg: "#30cfd0", light: "#cffafe" },
-                        ];
-                        const color = colors[index % colors.length];
-                        return (
-                          <div
-                            key={index}
-                            className="dept-card"
-                            style={{
-                              borderColor: color.bg,
-                              background: color.light,
-                            }}
-                            onClick={() =>
-                              dept.departmentId &&
-                              navigate(`/departments/${dept.departmentId}`)
-                            }
-                          >
-                            <div
-                              className="dept-icon"
-                              style={{ background: color.bg }}
-                            >
-                              <i className="fas fa-users"></i>
-                            </div>
-                            <div
-                              className="dept-count"
-                              style={{ color: color.bg }}
-                            >
-                              {dept.count}
-                            </div>
-                            <div className="dept-name">
-                              {dept._id || "Unassigned"}
-                            </div>
-                          </div>
-                        );
-                      })}
+                    <div style={{ position: "relative", width: "100%", height: "280px" }}>
+                      <svg viewBox="0 0 600 280" style={{ width: "100%", height: "100%" }} preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                          <linearGradient id="deptLineGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stopColor="#10b981" stopOpacity="0.2" />
+                            <stop offset="100%" stopColor="#10b981" stopOpacity="0.05" />
+                          </linearGradient>
+                          <filter id="deptShadow">
+                            <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.15" />
+                          </filter>
+                        </defs>
+                        {(() => {
+                          const data = dashboardData.departmentStats;
+                          const padding = { left: 50, right: 30, top: 30, bottom: 60 };
+                          const chartWidth = 600 - padding.left - padding.right;
+                          const chartHeight = 280 - padding.top - padding.bottom;
+                          const stepX = chartWidth / (data.length - 1);
+                          const maxCount = Math.max(...data.map(d => d.count));
+                          
+                          const points = data.map((d, i) => ({
+                            x: padding.left + (i * stepX),
+                            y: padding.top + chartHeight - ((d.count / maxCount) * chartHeight),
+                            count: d.count,
+                            name: d._id || "Unassigned",
+                            departmentId: d.departmentId
+                          }));
+                          
+                          const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ');
+                          const areaD = `${pathD} L ${points[points.length - 1].x},${padding.top + chartHeight} L ${padding.left},${padding.top + chartHeight} Z`;
+                          
+                          const ySteps = 5;
+                          const yGridLines = Array.from({ length: ySteps + 1 }, (_, i) => {
+                            const value = Math.round((maxCount / ySteps) * i);
+                            const y = padding.top + chartHeight - ((value / maxCount) * chartHeight);
+                            return { y, value };
+                          });
+                          
+                          return (
+                            <g>
+                              {yGridLines.map((line, i) => (
+                                <g key={`grid-${i}`}>
+                                  <line x1={padding.left} y1={line.y} x2={600 - padding.right} y2={line.y} stroke="#e2e8f0" strokeWidth="1" strokeDasharray="4,4" />
+                                  <text x={padding.left - 10} y={line.y + 4} textAnchor="end" fontSize="11" fill="#64748b" fontWeight="500">{line.value}</text>
+                                </g>
+                              ))}
+                              <path d={areaD} fill="url(#deptLineGradient)" />
+                              <path d={pathD} stroke="#10b981" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" filter="url(#deptShadow)" />
+                              {points.map((p, i) => (
+                                <g key={i} style={{ cursor: p.departmentId ? 'pointer' : 'default' }}>
+                                  <circle 
+                                    cx={p.x} 
+                                    cy={p.y} 
+                                    r="6" 
+                                    fill="#fff" 
+                                    stroke="#10b981" 
+                                    strokeWidth="3"
+                                    onClick={() => p.departmentId && navigate(`/departments/${p.departmentId}`)}
+                                    style={{ cursor: p.departmentId ? 'pointer' : 'default' }}
+                                  />
+                                  <circle 
+                                    cx={p.x} 
+                                    cy={p.y} 
+                                    r="3" 
+                                    fill="#10b981"
+                                    onClick={() => p.departmentId && navigate(`/departments/${p.departmentId}`)}
+                                    style={{ cursor: p.departmentId ? 'pointer' : 'default' }}
+                                  />
+                                  <text x={p.x} y={padding.top + chartHeight + 20} textAnchor="middle" fontSize="11" fill="#475569" fontWeight="600">{p.name.length > 8 ? p.name.substring(0, 8) + '...' : p.name}</text>
+                                  <text x={p.x} y={p.y - 15} textAnchor="middle" fontSize="12" fontWeight="700" fill="#059669">{p.count}</text>
+                                </g>
+                              ))}}
+                            </g>
+                          );
+                        })()}
+                      </svg>
                     </div>
                   ) : (
                     <div className="empty-state">
                       <div className="empty-icon">
-                        <i className="fas fa-sitemap"></i>
+                        <i className="fas fa-chart-line"></i>
                       </div>
                       <div className="empty-text">No department data</div>
                     </div>
@@ -1563,9 +1595,93 @@ const Dashboard = () => {
                 </Card.Body>
               </Card>
             </Col>
+            <Col md={6}>
+              <Card className="modern-card h-100">
+                <Card.Header className="d-flex justify-content-between align-items-center">
+                  <span>
+                    <i className="fas fa-chart-area me-2"></i>Monthly Leave Trends
+                  </span>
+                  <Badge style={{ background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)", fontSize: "0.75rem" }}>
+                    {dashboardData.monthlyTrends?.reduce((sum, m) => sum + m.totalDays, 0) || 0} Days
+                  </Badge>
+                </Card.Header>
+                <Card.Body style={{ padding: "1.5rem" }}>
+                  {dashboardData.monthlyTrends?.length > 0 ? (
+                    <div style={{ position: "relative", width: "100%", height: "280px" }}>
+                      <svg viewBox="0 0 600 280" style={{ width: "100%", height: "100%" }} preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                          <linearGradient id="monthlyLineGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.2" />
+                            <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.05" />
+                          </linearGradient>
+                          <filter id="monthlyShadow">
+                            <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.15" />
+                          </filter>
+                        </defs>
+                        {(() => {
+                          const data = dashboardData.monthlyTrends;
+                          const padding = { left: 50, right: 30, top: 30, bottom: 50 };
+                          const chartWidth = 600 - padding.left - padding.right;
+                          const chartHeight = 280 - padding.top - padding.bottom;
+                          const stepX = chartWidth / (data.length - 1);
+                          const maxDays = Math.max(...data.map(d => d.totalDays));
+                          
+                          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                          
+                          const points = data.map((d, i) => ({
+                            x: padding.left + (i * stepX),
+                            y: padding.top + chartHeight - ((d.totalDays / maxDays) * chartHeight),
+                            totalDays: d.totalDays,
+                            month: months[d._id - 1] || d._id
+                          }));
+                          
+                          const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ');
+                          const areaD = `${pathD} L ${points[points.length - 1].x},${padding.top + chartHeight} L ${padding.left},${padding.top + chartHeight} Z`;
+                          
+                          const ySteps = 5;
+                          const yGridLines = Array.from({ length: ySteps + 1 }, (_, i) => {
+                            const value = Math.round((maxDays / ySteps) * i);
+                            const y = padding.top + chartHeight - ((value / maxDays) * chartHeight);
+                            return { y, value };
+                          });
+                          
+                          return (
+                            <g>
+                              {yGridLines.map((line, i) => (
+                                <g key={`grid-${i}`}>
+                                  <line x1={padding.left} y1={line.y} x2={600 - padding.right} y2={line.y} stroke="#e2e8f0" strokeWidth="1" strokeDasharray="4,4" />
+                                  <text x={padding.left - 10} y={line.y + 4} textAnchor="end" fontSize="11" fill="#64748b" fontWeight="500">{line.value}</text>
+                                </g>
+                              ))}
+                              <path d={areaD} fill="url(#monthlyLineGradient)" />
+                              <path d={pathD} stroke="#f59e0b" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" filter="url(#monthlyShadow)" />
+                              {points.map((p, i) => (
+                                <g key={i}>
+                                  <circle cx={p.x} cy={p.y} r="6" fill="#fff" stroke="#f59e0b" strokeWidth="3" />
+                                  <circle cx={p.x} cy={p.y} r="3" fill="#f59e0b" />
+                                  <text x={p.x} y={padding.top + chartHeight + 25} textAnchor="middle" fontSize="11" fill="#475569" fontWeight="600">{p.month}</text>
+                                  {p.totalDays > 0 && (
+                                    <text x={p.x} y={p.y - 15} textAnchor="middle" fontSize="12" fontWeight="700" fill="#d97706">{p.totalDays}d</text>
+                                  )}
+                                </g>
+                              ))}
+                            </g>
+                          );
+                        })()}
+                      </svg>
+                    </div>
+                  ) : (
+                    <div className="empty-state">
+                      <div className="empty-icon">
+                        <i className="fas fa-chart-area"></i>
+                      </div>
+                      <div className="empty-text">No monthly trends data</div>
+                    </div>
+                  )}
+                </Card.Body>
+              </Card>
+            </Col>
           </Row>
-
-          {/* Recent Activities & Leave Statistics */}
           <Row className="mb-4">
             <Col md={6}>
               <Card className="modern-card h-100">
@@ -1614,7 +1730,7 @@ const Dashboard = () => {
                 >
                   {dashboardData.recentActivities?.length > 0 ? (
                     <div style={{ padding: "0.5rem 0" }}>
-                      {dashboardData.recentActivities.map((activity, idx) => {
+                      {dashboardData.recentActivities.slice(0, 5).map((activity, idx) => {
                         const statusColors = {
                           PENDING: {
                             bg: "#fef3c7",
@@ -1760,188 +1876,82 @@ const Dashboard = () => {
             <Col md={6}>
               <Card className="modern-card h-100">
                 <Card.Header>
-                  <span
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.5rem",
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: "0.5rem",
-                        background: "linear-gradient(135deg,#10b981,#059669)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                      }}
-                    >
-                      <i
-                        className="fas fa-chart-bar"
-                        style={{ color: "#fff", fontSize: "0.72rem" }}
-                      ></i>
+                  <span style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <span style={{ width: 28, height: 28, borderRadius: "0.5rem", background: "linear-gradient(135deg,#3b82f6,#2563eb)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <i className="fas fa-chart-line" style={{ color: "#fff", fontSize: "0.72rem" }}></i>
                     </span>
-                    Leave Statistics
+                    Monthly Attendance Trend
                   </span>
-                  <span
-                    style={{
-                      fontSize: "0.7rem",
-                      fontWeight: 600,
-                      color: "#059669",
-                      background: "#d1fae5",
-                      borderRadius: "1rem",
-                      padding: "0.2rem 0.65rem",
-                    }}
-                  >
-                    {dashboardData.leaveStats?.reduce(
-                      (s, x) => s + x.count,
-                      0,
-                    ) || 0}{" "}
-                    total
+                  <span style={{ fontSize: "0.7rem", fontWeight: 600, color: "#2563eb", background: "#dbeafe", borderRadius: "1rem", padding: "0.2rem 0.65rem" }}>
+                    {new Date().getFullYear()}
                   </span>
                 </Card.Header>
-                <Card.Body style={{ padding: "1.25rem 1.4rem" }}>
-                  {dashboardData.leaveStats?.length > 0 ? (
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "1rem",
-                      }}
-                    >
-                      {(() => {
-                        const total = dashboardData.leaveStats.reduce(
-                          (sum, s) => sum + s.count,
-                          0,
-                        );
-                        const statColors = [
-                          { bar: "#6366f1", bg: "#ede9fe", text: "#4f46e5" },
-                          { bar: "#10b981", bg: "#d1fae5", text: "#059669" },
-                          { bar: "#f59e0b", bg: "#fef3c7", text: "#d97706" },
-                          { bar: "#ef4444", bg: "#fee2e2", text: "#dc2626" },
-                          { bar: "#06b6d4", bg: "#cffafe", text: "#0891b2" },
-                        ];
-                        return dashboardData.leaveStats.map((stat, idx) => {
-                          const pct =
-                            total > 0
-                              ? Math.round((stat.count / total) * 100)
-                              : 0;
-                          const sc = statColors[idx % statColors.length];
+                <Card.Body style={{ padding: "1.5rem" }}>
+                  {dashboardData.monthlyAttendance?.length > 0 ? (
+                    <div style={{ position: "relative", width: "100%", height: "280px" }}>
+                      <svg viewBox="0 0 600 280" style={{ width: "100%", height: "100%" }} preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                          <linearGradient id="lineGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.2" />
+                            <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.05" />
+                          </linearGradient>
+                          <filter id="shadow">
+                            <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.15" />
+                          </filter>
+                        </defs>
+                        {(() => {
+                          const data = dashboardData.monthlyAttendance;
+                          const padding = { left: 50, right: 30, top: 30, bottom: 50 };
+                          const chartWidth = 600 - padding.left - padding.right;
+                          const chartHeight = 280 - padding.top - padding.bottom;
+                          const stepX = chartWidth / (data.length - 1);
+                          
+                          const points = data.map((d, i) => ({
+                            x: padding.left + (i * stepX),
+                            y: padding.top + chartHeight - ((d.percentage / 100) * chartHeight),
+                            percentage: d.percentage,
+                            month: d.month
+                          }));
+                          
+                          const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ');
+                          const areaD = `${pathD} L ${points[points.length - 1].x},${padding.top + chartHeight} L ${padding.left},${padding.top + chartHeight} Z`;
+                          
+                          const ySteps = 5;
+                          const yGridLines = Array.from({ length: ySteps + 1 }, (_, i) => {
+                            const value = (100 / ySteps) * i;
+                            const y = padding.top + chartHeight - ((value / 100) * chartHeight);
+                            return { y, value };
+                          });
+                          
                           return (
-                            <div key={stat._id}>
-                              <div
-                                style={{
-                                  display: "flex",
-                                  justifyContent: "space-between",
-                                  alignItems: "center",
-                                  marginBottom: "0.45rem",
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "0.5rem",
-                                  }}
-                                >
-                                  <span
-                                    style={{
-                                      width: 8,
-                                      height: 8,
-                                      borderRadius: "50%",
-                                      background: sc.bar,
-                                      flexShrink: 0,
-                                    }}
-                                  ></span>
-                                  <span
-                                    style={{
-                                      fontWeight: 700,
-                                      fontSize: "0.82rem",
-                                      color: "#0f172a",
-                                      textTransform: "capitalize",
-                                    }}
-                                  >
-                                    {stat._id.replace(/_/g, " ").toLowerCase()}
-                                  </span>
-                                </div>
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "0.4rem",
-                                  }}
-                                >
-                                  <span
-                                    style={{
-                                      fontSize: "0.68rem",
-                                      fontWeight: 700,
-                                      background: sc.bg,
-                                      color: sc.text,
-                                      borderRadius: "0.4rem",
-                                      padding: "0.15rem 0.5rem",
-                                    }}
-                                  >
-                                    {stat.count} req
-                                  </span>
-                                  <span
-                                    style={{
-                                      fontSize: "0.68rem",
-                                      fontWeight: 700,
-                                      background: "#f1f5f9",
-                                      color: "#475569",
-                                      borderRadius: "0.4rem",
-                                      padding: "0.15rem 0.5rem",
-                                    }}
-                                  >
-                                    {stat.totalDays}d
-                                  </span>
-                                  <span
-                                    style={{
-                                      fontSize: "0.7rem",
-                                      fontWeight: 700,
-                                      color: sc.text,
-                                      minWidth: 32,
-                                      textAlign: "right",
-                                    }}
-                                  >
-                                    {pct}%
-                                  </span>
-                                </div>
-                              </div>
-                              <div
-                                style={{
-                                  height: 7,
-                                  borderRadius: "1rem",
-                                  background: "#f1f5f9",
-                                  overflow: "hidden",
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    height: "100%",
-                                    borderRadius: "1rem",
-                                    width: `${pct}%`,
-                                    background: `linear-gradient(90deg, ${sc.bar}, ${sc.bg})`,
-                                    transition:
-                                      "width 0.7s cubic-bezier(0.4,0,0.2,1)",
-                                    minWidth: pct > 0 ? 6 : 0,
-                                  }}
-                                ></div>
-                              </div>
-                            </div>
+                            <g>
+                              {yGridLines.map((line, i) => (
+                                <g key={`grid-${i}`}>
+                                  <line x1={padding.left} y1={line.y} x2={600 - padding.right} y2={line.y} stroke="#e2e8f0" strokeWidth="1" strokeDasharray="4,4" />
+                                  <text x={padding.left - 10} y={line.y + 4} textAnchor="end" fontSize="11" fill="#64748b" fontWeight="500">{line.value}%</text>
+                                </g>
+                              ))}
+                              <path d={areaD} fill="url(#lineGradient)" />
+                              <path d={pathD} stroke="#3b82f6" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" filter="url(#shadow)" />
+                              {points.map((p, i) => (
+                                <g key={i}>
+                                  <circle cx={p.x} cy={p.y} r="5" fill="#fff" stroke="#3b82f6" strokeWidth="3" />
+                                  <circle cx={p.x} cy={p.y} r="2" fill="#3b82f6" />
+                                  <text x={p.x} y={padding.top + chartHeight + 25} textAnchor="middle" fontSize="12" fill="#475569" fontWeight="600">{p.month}</text>
+                                  {p.percentage > 0 && (
+                                    <text x={p.x} y={p.y - 15} textAnchor="middle" fontSize="12" fontWeight="700" fill="#1e40af">{p.percentage}%</text>
+                                  )}
+                                </g>
+                              ))}
+                            </g>
                           );
-                        });
-                      })()}
+                        })()}
+                      </svg>
                     </div>
                   ) : (
                     <div className="empty-state">
-                      <div className="empty-icon">
-                        <i className="fas fa-chart-bar"></i>
-                      </div>
-                      <div className="empty-text">No statistics available</div>
+                      <div className="empty-icon"><i className="fas fa-chart-line"></i></div>
+                      <div className="empty-text">No attendance data available</div>
                     </div>
                   )}
                 </Card.Body>
