@@ -72,7 +72,7 @@ const Dashboard = () => {
       api
         .get("/api/journey/today")
         .then((r) => setJourneyData(r.data))
-        .catch(() => {});
+        .catch(() => { });
     }
 
     return () => {
@@ -866,10 +866,10 @@ const Dashboard = () => {
                     ))}
                   {holidays.filter((h) => new Date(h.date) >= new Date())
                     .length === 0 && (
-                    <p className="text-muted mb-0 text-center py-3">
-                      No upcoming holidays
-                    </p>
-                  )}
+                      <p className="text-muted mb-0 text-center py-3">
+                        No upcoming holidays
+                      </p>
+                    )}
                 </Card.Body>
               </Card>
             </Col>
@@ -1526,7 +1526,7 @@ const Dashboard = () => {
                           const chartHeight = 280 - padding.top - padding.bottom;
                           const stepX = chartWidth / (data.length - 1);
                           const maxCount = Math.max(...data.map(d => d.count));
-                          
+
                           const points = data.map((d, i) => ({
                             x: padding.left + (i * stepX),
                             y: padding.top + chartHeight - ((d.count / maxCount) * chartHeight),
@@ -1534,17 +1534,17 @@ const Dashboard = () => {
                             name: d._id || "Unassigned",
                             departmentId: d.departmentId
                           }));
-                          
+
                           const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ');
                           const areaD = `${pathD} L ${points[points.length - 1].x},${padding.top + chartHeight} L ${padding.left},${padding.top + chartHeight} Z`;
-                          
+
                           const ySteps = 5;
                           const yGridLines = Array.from({ length: ySteps + 1 }, (_, i) => {
                             const value = Math.round((maxCount / ySteps) * i);
                             const y = padding.top + chartHeight - ((value / maxCount) * chartHeight);
                             return { y, value };
                           });
-                          
+
                           return (
                             <g>
                               {yGridLines.map((line, i) => (
@@ -1557,20 +1557,20 @@ const Dashboard = () => {
                               <path d={pathD} stroke="#10b981" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" filter="url(#deptShadow)" />
                               {points.map((p, i) => (
                                 <g key={i} style={{ cursor: p.departmentId ? 'pointer' : 'default' }}>
-                                  <circle 
-                                    cx={p.x} 
-                                    cy={p.y} 
-                                    r="6" 
-                                    fill="#fff" 
-                                    stroke="#10b981" 
+                                  <circle
+                                    cx={p.x}
+                                    cy={p.y}
+                                    r="6"
+                                    fill="#fff"
+                                    stroke="#10b981"
                                     strokeWidth="3"
                                     onClick={() => p.departmentId && navigate(`/departments/${p.departmentId}`)}
                                     style={{ cursor: p.departmentId ? 'pointer' : 'default' }}
                                   />
-                                  <circle 
-                                    cx={p.x} 
-                                    cy={p.y} 
-                                    r="3" 
+                                  <circle
+                                    cx={p.x}
+                                    cy={p.y}
+                                    r="3"
                                     fill="#10b981"
                                     onClick={() => p.departmentId && navigate(`/departments/${p.departmentId}`)}
                                     style={{ cursor: p.departmentId ? 'pointer' : 'default' }}
@@ -1578,7 +1578,7 @@ const Dashboard = () => {
                                   <text x={p.x} y={padding.top + chartHeight + 20} textAnchor="middle" fontSize="11" fill="#475569" fontWeight="600">{p.name.length > 8 ? p.name.substring(0, 8) + '...' : p.name}</text>
                                   <text x={p.x} y={p.y - 15} textAnchor="middle" fontSize="12" fontWeight="700" fill="#059669">{p.count}</text>
                                 </g>
-                              ))}}
+                              ))}
                             </g>
                           );
                         })()}
@@ -1625,26 +1625,26 @@ const Dashboard = () => {
                           const chartHeight = 280 - padding.top - padding.bottom;
                           const stepX = chartWidth / (data.length - 1);
                           const maxDays = Math.max(...data.map(d => d.totalDays));
-                          
+
                           const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                          
+
                           const points = data.map((d, i) => ({
                             x: padding.left + (i * stepX),
                             y: padding.top + chartHeight - ((d.totalDays / maxDays) * chartHeight),
                             totalDays: d.totalDays,
                             month: months[d._id - 1] || d._id
                           }));
-                          
+
                           const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ');
                           const areaD = `${pathD} L ${points[points.length - 1].x},${padding.top + chartHeight} L ${padding.left},${padding.top + chartHeight} Z`;
-                          
+
                           const ySteps = 5;
                           const yGridLines = Array.from({ length: ySteps + 1 }, (_, i) => {
                             const value = Math.round((maxDays / ySteps) * i);
                             const y = padding.top + chartHeight - ((value / maxDays) * chartHeight);
                             return { y, value };
                           });
-                          
+
                           return (
                             <g>
                               {yGridLines.map((line, i) => (
@@ -1905,24 +1905,24 @@ const Dashboard = () => {
                           const chartWidth = 600 - padding.left - padding.right;
                           const chartHeight = 280 - padding.top - padding.bottom;
                           const stepX = chartWidth / (data.length - 1);
-                          
+
                           const points = data.map((d, i) => ({
                             x: padding.left + (i * stepX),
                             y: padding.top + chartHeight - ((d.percentage / 100) * chartHeight),
                             percentage: d.percentage,
                             month: d.month
                           }));
-                          
+
                           const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ');
                           const areaD = `${pathD} L ${points[points.length - 1].x},${padding.top + chartHeight} L ${padding.left},${padding.top + chartHeight} Z`;
-                          
+
                           const ySteps = 5;
                           const yGridLines = Array.from({ length: ySteps + 1 }, (_, i) => {
                             const value = (100 / ySteps) * i;
                             const y = padding.top + chartHeight - ((value / 100) * chartHeight);
                             return { y, value };
                           });
-                          
+
                           return (
                             <g>
                               {yGridLines.map((line, i) => (
@@ -2106,10 +2106,10 @@ const Dashboard = () => {
                     ))}
                   {holidays.filter((h) => new Date(h.date) >= new Date())
                     .length === 0 && (
-                    <p className="text-muted mb-0 text-center py-3">
-                      No upcoming holidays
-                    </p>
-                  )}
+                      <p className="text-muted mb-0 text-center py-3">
+                        No upcoming holidays
+                      </p>
+                    )}
                 </Card.Body>
               </Card>
             </Col>
