@@ -4,7 +4,9 @@ const {
   getManagerDashboard,
   getHRDashboard,
   exportLeaveReport,
-  getTeamMembers
+  getTeamMembers,
+  getMonthlyAttendance,
+  getTopPerformers
 } = require('../controllers/dashboardController');
 const { auth, authorize } = require('../middleware/auth');
 
@@ -15,5 +17,7 @@ router.get('/manager', auth, authorize('MANAGER', 'HR', 'ADMIN'), getManagerDash
 router.get('/hr', auth, authorize('HR', 'ADMIN'), getHRDashboard);
 router.get('/export', auth, authorize('HR', 'ADMIN', 'MANAGER'), exportLeaveReport);
 router.get('/team-members', auth, getTeamMembers);
+router.get('/monthly-attendance', auth, authorize('HR', 'ADMIN'), getMonthlyAttendance);
+router.get('/top-performers', auth, getTopPerformers);
 
 module.exports = router;

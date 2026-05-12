@@ -367,15 +367,17 @@ const cancelLeave = async (req, res) => {
 
 const getTeamCalendar = async (req, res) => {
   try {
+    const Department = require('../models/Department');
+    const mongoose = require('mongoose');
     let teamMemberIds = [];
     
     // Get team members based on role
     if (req.user.role === 'MANAGER') {
-      const teamMembers = await User.find({ managerId: req.user.id }).select('_id firstName lastName');
+      const teamMembers = await User.find({ managerId: req.user.id }).select('_id firstName lastName profileImage');
       teamMemberIds = teamMembers.map(m => m._id);
     } else if (['HR', 'ADMIN'].includes(req.user.role)) {
       // For HR/ADMIN, get all active employees
-      const allEmployees = await User.find({ isActive: true, role: { $ne: 'ADMIN' } }).select('_id firstName lastName');
+      const allEmployees = await User.find({ isActive: true, role: { $ne: 'ADMIN' } }).select('_id firstName lastName profileImage');
       teamMemberIds = allEmployees.map(e => e._id);
     } else {
       return res.status(403).json({ message: 'Not authorized' });
@@ -405,12 +407,32 @@ const getTeamCalendar = async (req, res) => {
 
     // Get team members info
     const teamMembers = await User.find({ _id: { $in: teamMemberIds } })
-      .select('firstName lastName email department role')
-      .sort({ firstName: 1 });
+      .select('firstName lastName email department role profileImage')
+      .sort({ firstName: 1 })
+      .lean();
+
+    // Populate department names for team members
+    const deptIds = [...new Set(teamMembers.map(m => m.department).filter(d => d && mongoose.Types.ObjectId.isValid(d)))];
+    const departments = await Department.find({ _id: { $in: deptIds } }).select('_id name').lean();
+    const deptMap = Object.fromEntries(departments.map(d => [d._id.toString(), d.name]));
+
+    const formattedTeamMembers = teamMembers.map(member => ({
+      ...member,
+      department: member.department && deptMap[member.department.toString()] ? deptMap[member.department.toString()] : null
+    }));
+
+    // Populate department names for leaves
+    const formattedLeaves = teamLeaves.map(leave => {
+      const leaveObj = leave.toObject();
+      if (leaveObj.userId && leaveObj.userId.department && deptMap[leaveObj.userId.department.toString()]) {
+        leaveObj.userId.department = deptMap[leaveObj.userId.department.toString()];
+      }
+      return leaveObj;
+    });
 
     res.json({
-      teamMembers,
-      leaves: teamLeaves
+      teamMembers: formattedTeamMembers,
+      leaves: formattedLeaves
     });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
@@ -664,6 +686,50 @@ const deleteLeave = async (req, res) => {
   }
 };
 
+const getEmployeeLeaveSummary = async (req, res) => {
+  try {
+    const currentYear = new Date().getFullYear();
+    const employees = await User.find({ isActive: true }).select('firstName lastName email department');
+    
+    const summaryData = await Promise.all(employees.map(async (employee) => {
+      const leaves = await LeaveRequest.find({ 
+        userId: employee._id,
+        startDate: { $gte: new Date(currentYear, 0, 1) }
+      });
+      
+      const approvedLeaves = leaves.filter(l => l.status === 'HR_APPROVED').reduce((sum, l) => sum + l.days, 0);
+      const pendingLeaves = leaves.filter(l => ['PENDING', 'MANAGER_APPROVED'].includes(l.status)).length;
+      const rejectedLeaves = leaves.filter(l => l.status === 'REJECTED').length;
+      
+      const balances = await LeaveBalance.find({ 
+        userId: employee._id, 
+        year: currentYear 
+      });
+      
+      const totalAllocated = balances.reduce((sum, b) => sum + b.allocated + b.carryForward, 0);
+      const totalUsed = balances.reduce((sum, b) => sum + b.used, 0);
+      const remainingLeaves = totalAllocated - totalUsed;
+      
+      return {
+        _id: employee._id,
+        firstName: employee.firstName,
+        lastName: employee.lastName,
+        email: employee.email,
+        department: employee.department,
+        totalLeavesTaken: approvedLeaves,
+        approvedLeaves,
+        pendingLeaves,
+        rejectedLeaves,
+        remainingLeaves: Math.max(0, remainingLeaves)
+      };
+    }));
+    
+    res.json(summaryData);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
 module.exports = {
   applyLeave,
   getLeaveRequests,
@@ -674,5 +740,6 @@ module.exports = {
   testLeaveReminder,
   checkConflicts,
   getEmployeeDetails,
-  deleteLeave
+  deleteLeave,
+  getEmployeeLeaveSummary
 };

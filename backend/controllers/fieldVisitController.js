@@ -203,10 +203,18 @@ exports.selfReportVisit = async (req, res) => {
 
     // Find or create an ad-hoc FieldClient entry
     const FieldClient = require('../models/FieldClient');
-    let client = await FieldClient.findOne({ name: clientName, createdBy: req.user.id });
+    
+    // Search for existing client by name (case-insensitive) or phone
+    let client = await FieldClient.findOne({
+      $or: [
+        { name: { $regex: new RegExp(`^${clientName.trim()}$`, 'i') } },
+        ...(phone ? [{ phone: phone.trim() }] : [])
+      ]
+    });
+    
     if (!client) {
       client = await FieldClient.create({
-        name: clientName,
+        name: clientName.trim(),
         contactPerson: personMet || 'Self-reported',
         phone: phone || '-',
         address: address || 'Self-reported',

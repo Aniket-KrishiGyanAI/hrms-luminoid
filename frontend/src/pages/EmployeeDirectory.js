@@ -22,8 +22,6 @@ const EmployeeDirectory = () => {
   const [editableProfile, setEditableProfile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
   const [collapsedSections, setCollapsedSections] = useState({});
   const [formData, setFormData] = useState({
     email: '',
@@ -38,7 +36,6 @@ const EmployeeDirectory = () => {
   useEffect(() => {
     fetchEmployees();
     fetchDepartments();
-    setCurrentPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter, filters]);
 
@@ -708,9 +705,6 @@ const EmployeeDirectory = () => {
     }
   };
 
-  const paginatedEmployees = filteredEmployees.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-  const totalPages = Math.ceil(filteredEmployees.length / itemsPerPage);
-
   return (
     <div className="employee-directory-v2">
       {/* Header */}
@@ -737,21 +731,6 @@ const EmployeeDirectory = () => {
       {/* Status Cards */}
       <div className="stats-cards-container mb-4">
         <div 
-          className={`stats-card stats-card-all ${statusFilter === 'all' ? 'active' : ''}`}
-          onClick={() => setStatusFilter('all')}
-        >
-          <div className="stats-card-icon-wrapper stats-icon-all">
-            <i className="fas fa-users"></i>
-          </div>
-          <div className="stats-card-content">
-            <div className="stats-card-label">All Employees</div>
-            <div className="stats-card-value">{stats.total}</div>
-            <div className="stats-card-trend">Total workforce</div>
-          </div>
-          <div className="stats-card-glow stats-glow-all"></div>
-        </div>
-        
-        <div 
           className={`stats-card stats-card-active ${statusFilter === 'active' ? 'active' : ''}`}
           onClick={() => setStatusFilter('active')}
         >
@@ -762,7 +741,7 @@ const EmployeeDirectory = () => {
             <div className="stats-card-label">Active</div>
             <div className="stats-card-value">{stats.active}</div>
             <div className="stats-card-trend">
-              <i className="fas fa-arrow-up"></i> {stats.total > 0 ? Math.round((stats.active / stats.total) * 100) : 0}% of total
+              <i className="fas fa-briefcase"></i> Currently working
             </div>
           </div>
           <div className="stats-card-glow stats-glow-active"></div>
@@ -776,10 +755,10 @@ const EmployeeDirectory = () => {
             <i className="fas fa-user-times"></i>
           </div>
           <div className="stats-card-content">
-            <div className="stats-card-label">Inactive</div>
+            <div className="stats-card-label">Exited</div>
             <div className="stats-card-value">{stats.inactive}</div>
             <div className="stats-card-trend">
-              <i className="fas fa-arrow-down"></i> {stats.total > 0 ? Math.round((stats.inactive / stats.total) * 100) : 0}% of total
+              <i className="fas fa-sign-out-alt"></i> Left company
             </div>
           </div>
           <div className="stats-card-glow stats-glow-inactive"></div>
@@ -846,118 +825,107 @@ const EmployeeDirectory = () => {
         </div>
       ) : (
         <div className="grid-view">
-          <Row>
-            {paginatedEmployees.map((employee) => (
-              <Col key={employee?._id} xs={12} sm={6} md={4} lg={3} className="mb-4">
-                <div className="employee-card-modern" onClick={() => handleViewProfile(employee)}>
-                  <div className="card-header-modern">
-                    <div className="employee-avatar-modern">
-                      {employee?.profileImage || employee?.userId?.profileImage ? (
-                        <img src={employee.profileImage || employee.userId.profileImage} alt="Profile" />
-                      ) : (
-                        <div className="avatar-initials-modern">
-                          {employee?.firstName?.charAt(0)?.toUpperCase()}{employee?.lastName?.charAt(0)?.toUpperCase()}
-                        </div>
-                      )}
+          <Row className="g-3">
+            {filteredEmployees.map((employee) => (
+              <Col key={employee?._id} xs={12} sm={6} md={4} lg={3} xl={2} className="mb-4">
+                <div 
+                  className="employee-card-modern" 
+                  onClick={() => handleViewProfile(employee)}
+                  style={{
+                    background: 'white',
+                    borderRadius: '12px',
+                    padding: '1.25rem',
+                    border: '2px solid #e2e8f0',
+                    transition: 'all 0.3s',
+                    cursor: 'pointer',
+                    textAlign: 'center',
+                    height: '100%',
+                    position: 'relative'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-8px)';
+                    e.currentTarget.style.boxShadow = '0 12px 24px rgba(0, 0, 0, 0.15)';
+                    e.currentTarget.style.borderColor = employee?.isActive ? '#10b981' : '#ef4444';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = 'none';
+                    e.currentTarget.style.borderColor = '#e2e8f0';
+                  }}
+                >
+                  {!employee?.isActive && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '8px',
+                      right: '8px',
+                      background: '#ef4444',
+                      color: 'white',
+                      padding: '0.2rem 0.5rem',
+                      borderRadius: '6px',
+                      fontSize: '0.65rem',
+                      fontWeight: '700',
+                      zIndex: 1
+                    }}>
+                      <i className="fas fa-sign-out-alt me-1"></i>
+                      Exited
                     </div>
-                    {!employee?.isActive && (
-                      <Badge bg="danger" className="status-badge-modern">Inactive</Badge>
+                  )}
+                  <div style={{ marginBottom: '1rem', position: 'relative', display: 'inline-block' }}>
+                    {employee?.profileImage || employee?.userId?.profileImage ? (
+                      <img
+                        src={employee.profileImage || employee.userId.profileImage}
+                        alt={`${employee?.firstName} ${employee?.lastName}`}
+                        style={{
+                          width: '80px',
+                          height: '80px',
+                          borderRadius: '50%',
+                          objectFit: 'cover',
+                          border: '3px solid ' + (employee?.isActive ? '#10b981' : '#ef4444')
+                        }}
+                      />
+                    ) : (
+                      <div style={{
+                        width: '80px',
+                        height: '80px',
+                        borderRadius: '50%',
+                        background: employee?.isActive ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                        color: 'white',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontWeight: '700',
+                        fontSize: '1.8rem',
+                        margin: '0 auto',
+                        border: '3px solid ' + (employee?.isActive ? '#10b981' : '#ef4444')
+                      }}>
+                        {employee?.firstName?.charAt(0)?.toUpperCase()}{employee?.lastName?.charAt(0)?.toUpperCase()}
+                      </div>
                     )}
                   </div>
-                  
-                  <div className="card-body-modern">
-                    <h4 className="employee-name-modern">
-                      {employee?.firstName} {employee?.lastName}
-                    </h4>
-                    <p className="employee-designation-modern">{employee?.designation || 'No Position'}</p>
-                    
-                    <div className="employee-details-modern">
-                      <div className="detail-item-modern">
-                        <i className="fas fa-briefcase"></i>
-                        <span>{employee?.role}</span>
-                      </div>
-                      <div className="detail-item-modern">
-                        <i className="fas fa-building"></i>
-                        <span>{employee?.department || 'Not Set'}</span>
-                      </div>
-                      <div className="detail-item-modern">
-                        <i className="fas fa-envelope"></i>
-                        <span className="text-truncate">{employee?.email}</span>
-                      </div>
+                  <div style={{ fontWeight: '700', color: '#1e293b', fontSize: '0.95rem', marginBottom: '0.25rem' }}>
+                    {employee?.firstName} {employee?.lastName}
+                  </div>
+                  {employee?.designation && (
+                    <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '0.75rem' }}>
+                      {employee?.designation}
                     </div>
-                  </div>
-                  
-                  <div className="card-footer-modern">
-                    <Button size="sm" variant="outline-primary" className="w-100" onClick={(e) => { e.stopPropagation(); handleViewProfile(employee); }}>
-                      <i className="fas fa-eye me-2"></i>View Profile
-                    </Button>
-                  </div>
+                  )}
+                  {employee?.department && (
+                    <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '0.5rem' }}>
+                      <i className="fas fa-building me-1" style={{ fontSize: '0.7rem' }}></i>
+                      {employee?.department}
+                    </div>
+                  )}
+                  <Badge 
+                    bg={employee?.role === 'ADMIN' ? 'danger' : employee?.role === 'HR' ? 'warning' : employee?.role === 'MANAGER' ? 'info' : 'secondary'}
+                    style={{ fontSize: '0.7rem', fontWeight: '600', padding: '0.35rem 0.75rem' }}
+                  >
+                    {employee?.role}
+                  </Badge>
                 </div>
               </Col>
             ))}
           </Row>
-        </div>
-      )}
-
-      {/* Pagination */}
-      {filteredEmployees.length > itemsPerPage && (
-        <div className="pagination-container">
-          <div className="pagination-info">
-            Showing {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, filteredEmployees.length)} of {filteredEmployees.length}
-          </div>
-          <div className="pagination-controls">
-            <button 
-              className="page-btn"
-              onClick={() => setCurrentPage(1)}
-              disabled={currentPage === 1}
-            >
-              <i className="fas fa-angle-double-left"></i>
-            </button>
-            <button 
-              className="page-btn"
-              onClick={() => setCurrentPage(prev => prev - 1)}
-              disabled={currentPage === 1}
-            >
-              <i className="fas fa-angle-left"></i>
-            </button>
-            <span className="page-numbers">
-              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                let pageNum;
-                if (totalPages <= 5) {
-                  pageNum = i + 1;
-                } else if (currentPage <= 3) {
-                  pageNum = i + 1;
-                } else if (currentPage >= totalPages - 2) {
-                  pageNum = totalPages - 4 + i;
-                } else {
-                  pageNum = currentPage - 2 + i;
-                }
-                return (
-                  <button
-                    key={pageNum}
-                    className={`page-num ${currentPage === pageNum ? 'active' : ''}`}
-                    onClick={() => setCurrentPage(pageNum)}
-                  >
-                    {pageNum}
-                  </button>
-                );
-              })}
-            </span>
-            <button 
-              className="page-btn"
-              onClick={() => setCurrentPage(prev => prev + 1)}
-              disabled={currentPage === totalPages}
-            >
-              <i className="fas fa-angle-right"></i>
-            </button>
-            <button 
-              className="page-btn"
-              onClick={() => setCurrentPage(totalPages)}
-              disabled={currentPage === totalPages}
-            >
-              <i className="fas fa-angle-double-right"></i>
-            </button>
-          </div>
         </div>
       )}
 
@@ -1893,7 +1861,7 @@ const EmployeeDirectory = () => {
               </div>
               
               <div className="profile-view-content">
-                {selectedEmployee.userId?.exitDetails && (
+                {selectedEmployee.userId?.exitDetails && selectedEmployee.userId?.isActive === false && (
                   <div style={{ padding: '1rem', background: '#fef2f2', borderLeft: '4px solid #ef4444', margin: '1rem', borderRadius: '8px' }}>
                     <h6 style={{ color: '#dc2626', marginBottom: '1rem' }}>
                       <i className="fas fa-exclamation-triangle me-2"></i>Exit Information

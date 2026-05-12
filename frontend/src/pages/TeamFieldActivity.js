@@ -59,6 +59,7 @@ const TeamFieldActivity = () => {
   const [clientSearchTerm, setClientSearchTerm] = useState('');
   const [clientStatusFilter, setClientStatusFilter] = useState('ALL');
   const [activeTab, setActiveTab] = useState('activity'); // 'activity' or 'clients'
+  const [imageLoadingStates, setImageLoadingStates] = useState({});
   
   const canDelete = user?.role === 'ADMIN' || user?.role === 'HR' || user?.role === 'MANAGER';
 
@@ -244,6 +245,14 @@ const TeamFieldActivity = () => {
   const handleVisitClick = (visit) => {
     setSelectedVisit(visit);
     setShowVisitDetailModal(true);
+    // Initialize all images as loading
+    if (visit.photos && visit.photos.length > 0) {
+      const initialStates = {};
+      visit.photos.forEach((_, idx) => {
+        initialStates[`${visit._id}-${idx}`] = true;
+      });
+      setImageLoadingStates(initialStates);
+    }
   };
 
   const handleDeleteVisit = async (visitId, clientName) => {
@@ -1145,7 +1154,7 @@ const TeamFieldActivity = () => {
                   marginBottom: "0.75rem",
                 }}
               >
-                Today's Visits
+                Visit History
               </div>
               <div style={{ overflowX: "auto" }}>
                 <Table hover responsive style={{ marginBottom: 0 }}>
@@ -1387,15 +1396,20 @@ const TeamFieldActivity = () => {
         <Modal.Body style={{ padding: "1.5rem", maxHeight: "75vh", overflowY: "auto" }}>
           {selectedVisit && (
             <>
+
               {/* Visit Photos */}
-              {selectedVisit.photos && selectedVisit.photos.length > 0 && (
+              {selectedVisit.photos && Array.isArray(selectedVisit.photos) && selectedVisit.photos.length > 0 ? (
                 <div style={{ marginBottom: "1.5rem" }}>
                   <div style={{ fontWeight: 600, fontSize: "0.9rem", color: "#1e293b", marginBottom: "0.75rem" }}>
                     <i className="fas fa-images me-2" style={{ color: "#10b981" }} />
-                    Visit Photos
+                    Visit Photos ({selectedVisit.photos.length})
                   </div>
                   <Row className="g-3">
-                    {selectedVisit.photos.map((photo, idx) => (
+                    {selectedVisit.photos.map((photo, idx) => {
+                      const imageKey = `${selectedVisit._id}-${idx}`;
+                      const isLoading = imageLoadingStates[imageKey] === true;
+                      
+                      return (
                       <Col xs={12} md={6} key={idx}>
                         <div
                           style={{
@@ -1403,38 +1417,86 @@ const TeamFieldActivity = () => {
                             overflow: "hidden",
                             border: "2px solid #e5e7eb",
                             background: "#f8fafc",
+                            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                            position: "relative",
+                            minHeight: 200,
                           }}
                         >
+                          {isLoading && (
+                            <div
+                              style={{
+                                position: "absolute",
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                height: 200,
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                background: "#f8fafc",
+                                zIndex: 2,
+                              }}
+                            >
+                              <div className="spinner-border" style={{ color: "#10b981", width: "3rem", height: "3rem" }} />
+                              <div style={{ marginTop: "1rem", fontSize: "0.85rem", color: "#64748b" }}>Loading image...</div>
+                            </div>
+                          )}
                           <img
-                            src={photo.url}
-                            alt={`Visit ${idx + 1}`}
+                            src={photo.url || photo}
+                            alt={`Visit Photo ${idx + 1}`}
+                            loading="eager"
+                            onLoad={() => {
+                              setImageLoadingStates(prev => ({ ...prev, [imageKey]: false }));
+                            }}
                             onError={(e) => {
+                              e.target.onerror = null;
                               e.target.src = 'https://via.placeholder.com/400x300?text=Image+Not+Available';
+                              setImageLoadingStates(prev => ({ ...prev, [imageKey]: false }));
                             }}
                             style={{
                               width: "100%",
                               height: 200,
                               objectFit: "cover",
+                              cursor: "pointer",
+                              opacity: isLoading ? 0 : 1,
+                              transition: "opacity 0.3s ease",
                             }}
+                            onClick={() => window.open(photo.url || photo, '_blank')}
                           />
-                          {photo.address && (
+                          {(photo.address || photo.capturedAt) && (
                             <div style={{ padding: "0.75rem", background: "#fff" }}>
-                              <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
-                                <i className="fas fa-map-marker-alt me-1" style={{ color: "#10b981" }} />
-                                {photo.address}
-                              </div>
-                              {photo.timestamp && (
+                              {photo.address && (
+                                <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                                  <i className="fas fa-map-marker-alt me-1" style={{ color: "#10b981" }} />
+                                  {photo.address}
+                                </div>
+                              )}
+                              {photo.capturedAt && (
                                 <div style={{ fontSize: "0.7rem", color: "#94a3b8", marginTop: "0.25rem" }}>
                                   <i className="fas fa-clock me-1" />
-                                  {new Date(photo.timestamp).toLocaleString()}
+                                  {new Date(photo.capturedAt).toLocaleString()}
                                 </div>
                               )}
                             </div>
                           )}
                         </div>
                       </Col>
-                    ))}
+                      );
+                    })}
                   </Row>
+                </div>
+              ) : (
+                <div style={{ 
+                  marginBottom: "1.5rem", 
+                  padding: "1rem", 
+                  background: "#f8fafc", 
+                  borderRadius: 10,
+                  textAlign: "center",
+                  color: "#94a3b8"
+                }}>
+                  <i className="fas fa-camera" style={{ fontSize: "2rem", marginBottom: "0.5rem", display: "block" }} />
+                  <div style={{ fontSize: "0.85rem" }}>No photos available for this visit</div>
                 </div>
               )}
 

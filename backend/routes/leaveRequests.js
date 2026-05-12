@@ -10,7 +10,8 @@ const {
   testLeaveReminder,
   checkConflicts,
   getEmployeeDetails,
-  deleteLeave
+  deleteLeave,
+  getEmployeeLeaveSummary
 } = require('../controllers/leaveRequestController');
 const { auth, authorize } = require('../middleware/auth');
 
@@ -30,6 +31,7 @@ const approveRejectValidation = [
 
 router.post('/', auth, leaveRequestValidation, applyLeave);
 router.get('/', auth, getLeaveRequests);
+router.get('/employee-summary', auth, authorize('MANAGER', 'HR', 'ADMIN'), getEmployeeLeaveSummary);
 router.get('/pending', auth, authorize('MANAGER', 'HR', 'ADMIN'), getPendingApprovals);
 router.get('/team-calendar', auth, authorize('MANAGER', 'HR', 'ADMIN'), getTeamCalendar);
 router.get('/employee/:employeeId', auth, authorize('MANAGER', 'HR', 'ADMIN'), getEmployeeDetails);

@@ -7,6 +7,7 @@ const Holiday = require('../models/Holiday');
 const Favorite = require('../models/Favorite');
 const File = require('../models/File');
 const Department = require('../models/Department');
+const Attendance = require('../models/Attendance');
 const { ensureBalancesForUser } = require('./leaveBalanceController');
 const { getSmartQuote } = require('../utils/quotes');
 const { getCache, setCache } = require('../config/cache');
@@ -181,7 +182,7 @@ const getHRDashboard = async (req, res) => {
     const currentDate = new Date();
     const next30Days = new Date(currentDate.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-    const [totalEmployees, activeEmployees, inactiveEmployees, employeesOnLeaveToday, departments, genderStats, pendingDocVerifications, employees] = await Promise.all([
+    const [totalEmployees, activeEmployees, inactiveEmployees, employeesOnLeaveToday, genderStats, pendingDocVerifications, employees] = await Promise.all([
       User.countDocuments({ isActive: true }),
       User.countDocuments({ isActive: true, role: 'EMPLOYEE' }),
       User.countDocuments({ isActive: false }),
@@ -190,7 +191,6 @@ const getHRDashboard = async (req, res) => {
         startDate: { $lte: currentDate },
         endDate: { $gte: currentDate }
       }),
-      Department.find({ status: 'ACTIVE' }).select('_id name employeeCount').lean(),
       User.aggregate([
         { $match: { isActive: true } },
         { $group: { _id: '$gender', count: { $sum: 1 } } }
@@ -202,11 +202,49 @@ const getHRDashboard = async (req, res) => {
       User.find({ isActive: true, joinDate: { $exists: true } }).select('joinDate dateOfBirth department firstName lastName').lean()
     ]);
 
-    const departmentStats = departments.map(dept => ({
-      _id: dept.name,
-      departmentId: dept._id,
-      count: dept.employeeCount || 0
-    })).sort((a, b) => b.count - a.count);
+    // Calculate department stats from actual user data
+    const departmentStatsRaw = await User.aggregate([
+      { 
+        $match: { 
+          isActive: true,
+          department: { $exists: true, $ne: null }
+        } 
+      },
+      {
+        $addFields: {
+          departmentObjectId: {
+            $cond: {
+              if: { $eq: [{ $type: '$department' }, 'objectId'] },
+              then: '$department',
+              else: { $toObjectId: { $cond: [{ $regexMatch: { input: { $toString: '$department' }, regex: /^[0-9a-fA-F]{24}$/ } }, '$department', null] } }
+            }
+          }
+        }
+      },
+      {
+        $match: {
+          departmentObjectId: { $ne: null }
+        }
+      },
+      {
+        $group: {
+          _id: '$departmentObjectId',
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { count: -1 } }
+    ]);
+
+    // Get department names
+    const deptIds = departmentStatsRaw.map(d => d._id);
+    const departments = await Department.find({ _id: { $in: deptIds } }).select('_id name').lean();
+    const deptMap = Object.fromEntries(departments.map(d => [d._id.toString(), d.name]));
+
+    const departmentStats = departmentStatsRaw.map(dept => ({
+      _id: deptMap[dept._id.toString()] || 'Unknown',
+      departmentId: dept._id.toString(),
+      count: dept.count
+    })).filter(d => d._id !== 'Unknown');
     
     const avgTenure = employees.length > 0 
       ? employees.reduce((sum, emp) => {
@@ -303,35 +341,77 @@ const getHRDashboard = async (req, res) => {
       return aBirthday - bBirthday;
     });
 
-    // Bulk fetch departments (fix N+1)
-    const deptIds = [...new Set(birthdaysInRange.map(u => u.department).filter(d => d && mongoose.Types.ObjectId.isValid(d)))];
-    const depts = await Department.find({ _id: { $in: deptIds } }).select('_id name').lean();
-    const deptMap = Object.fromEntries(depts.map(d => [d._id.toString(), d.name]));
+    // Bulk fetch departments for birthdays and new hires
+    const allDeptIds = [...new Set([...birthdaysInRange.map(u => u.department), ...employees.map(e => e.department)].filter(d => d && mongoose.Types.ObjectId.isValid(d)))];
+    const allDepts = await Department.find({ _id: { $in: allDeptIds } }).select('_id name').lean();
+    const allDeptMap = Object.fromEntries(allDepts.map(d => [d._id.toString(), d.name]));
 
-    const formattedBirthdays = birthdaysInRange.map(user => {
-      if (user.department && deptMap[user.department.toString()]) {
-        user.department = deptMap[user.department.toString()];
-      }
-      return user;
-    });
+    const formattedBirthdays = birthdaysInRange.map(user => ({
+      ...user,
+      department: user.department && allDeptMap[user.department.toString()] ? allDeptMap[user.department.toString()] : 'N/A'
+    }));
 
     const newHires = await User.find({
       isActive: true,
       joinDate: { $gte: new Date(currentDate.getTime() - 30 * 24 * 60 * 60 * 1000) }
     }).select('firstName lastName joinDate department').sort({ joinDate: -1 }).lean();
 
-    const formattedNewHires = newHires.map(user => {
-      if (user.department && deptMap[user.department.toString()]) {
-        user.department = deptMap[user.department.toString()];
-      }
-      return user;
-    });
+    const formattedNewHires = newHires.map(user => ({
+      ...user,
+      department: user.department && allDeptMap[user.department.toString()] ? allDeptMap[user.department.toString()] : 'N/A'
+    }));
 
     const recentActivities = await LeaveRequest.find()
       .populate('userId', 'firstName lastName')
       .populate('leaveTypeId', 'name')
       .sort({ createdAt: -1 })
       .limit(10);
+
+    const monthlyAttendance = await Attendance.aggregate([
+      {
+        $match: {
+          date: {
+            $gte: new Date(currentYear, 0, 1),
+            $lt: new Date(currentYear + 1, 0, 1)
+          },
+          isDeleted: false
+        }
+      },
+      {
+        $group: {
+          _id: { 
+            month: { $month: '$date' },
+            userId: '$userId'
+          },
+          presentDays: {
+            $sum: {
+              $cond: [{ $in: ['$status', ['Present', 'Late', 'Half Day']] }, 1, 0]
+            }
+          },
+          totalDays: { $sum: 1 }
+        }
+      },
+      {
+        $group: {
+          _id: '$_id.month',
+          totalPresentDays: { $sum: '$presentDays' },
+          totalWorkingDays: { $sum: '$totalDays' }
+        }
+      },
+      { $sort: { '_id': 1 } }
+    ]);
+
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const formattedAttendance = months.map((month, index) => {
+      const data = monthlyAttendance.find(d => d._id === index + 1);
+      const percentage = data && data.totalWorkingDays > 0 
+        ? Math.round((data.totalPresentDays / data.totalWorkingDays) * 100) 
+        : 0;
+      return {
+        month,
+        percentage
+      };
+    });
 
     const result = {
       motivationalQuote: getDailyQuote(req.user.role),
@@ -349,7 +429,8 @@ const getHRDashboard = async (req, res) => {
       pendingApprovals,
       upcomingBirthdays: formattedBirthdays,
       newHires: formattedNewHires,
-      recentActivities
+      recentActivities,
+      monthlyAttendance: formattedAttendance
     };
 
     await setCache(cacheKey, result, 300);
@@ -457,10 +538,127 @@ const getTeamMembers = async (req, res) => {
   }
 };
 
+const getMonthlyAttendance = async (req, res) => {
+  try {
+    const currentYear = new Date().getFullYear();
+    
+    const monthlyData = await Attendance.aggregate([
+      {
+        $match: {
+          date: {
+            $gte: new Date(currentYear, 0, 1),
+            $lt: new Date(currentYear + 1, 0, 1)
+          },
+          isDeleted: false
+        }
+      },
+      {
+        $group: {
+          _id: { $month: '$date' },
+          present: {
+            $sum: {
+              $cond: [{ $eq: ['$status', 'Present'] }, 1, 0]
+            }
+          },
+          absent: {
+            $sum: {
+              $cond: [{ $eq: ['$status', 'Absent'] }, 1, 0]
+            }
+          },
+          late: {
+            $sum: {
+              $cond: [{ $eq: ['$status', 'Late'] }, 1, 0]
+            }
+          },
+          halfDay: {
+            $sum: {
+              $cond: [{ $eq: ['$status', 'Half Day'] }, 1, 0]
+            }
+          },
+          onLeave: {
+            $sum: {
+              $cond: [{ $eq: ['$status', 'On Leave'] }, 1, 0]
+            }
+          }
+        }
+      },
+      { $sort: { '_id': 1 } }
+    ]);
+
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const formattedData = months.map((month, index) => {
+      const data = monthlyData.find(d => d._id === index + 1);
+      return {
+        month,
+        present: data?.present || 0,
+        absent: data?.absent || 0,
+        late: data?.late || 0,
+        halfDay: data?.halfDay || 0,
+        onLeave: data?.onLeave || 0
+      };
+    });
+
+    res.json(formattedData);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+const getTopPerformers = async (req, res) => {
+  try {
+    const startOfWeek = new Date();
+    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const topPerformers = await Attendance.aggregate([
+      {
+        $match: {
+          date: { $gte: startOfWeek },
+          isDeleted: false,
+          status: { $in: ['Present', 'Late', 'Half Day'] },
+          totalHours: { $exists: true, $gt: 0 }
+        }
+      },
+      {
+        $group: {
+          _id: '$userId',
+          totalHours: { $sum: '$totalHours' }
+        }
+      },
+      { $sort: { totalHours: -1 } },
+      { $limit: 3 },
+      {
+        $lookup: {
+          from: 'users',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'user'
+        }
+      },
+      { $unwind: '$user' },
+      {
+        $project: {
+          _id: '$user._id',
+          firstName: '$user.firstName',
+          lastName: '$user.lastName',
+          profileImage: '$user.profileImage',
+          totalHours: 1
+        }
+      }
+    ]);
+
+    res.json(topPerformers);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
 module.exports = {
   getEmployeeDashboard,
   getManagerDashboard,
   getHRDashboard,
   exportLeaveReport,
-  getTeamMembers
+  getTeamMembers,
+  getMonthlyAttendance,
+  getTopPerformers
 };

@@ -8,7 +8,7 @@ const fileSchema = new mongoose.Schema({
   size: Number,
   mimeType: String,
   type: { type: String, enum: ['ORGANIZATION', 'EMPLOYEE', 'HR_DOCUMENT'], required: true },
-  subType: { type: String, enum: ['SALARY_SLIP', 'OFFER_LETTER', 'APPRAISAL_LETTER', 'EXPERIENCE_LETTER', 'RELIEVING_LETTER', 'OTHER'], default: null },
+  subType: { type: String, enum: ['SALARY_SLIP', 'OFFER_LETTER', 'APPRAISAL_LETTER', 'EXPERIENCE_LETTER', 'RELIEVING_LETTER', 'OTHER'], required: false },
   month: { type: Number, min: 1, max: 12, default: null }, // for salary slips
   year: { type: Number, default: null },
   category: String,

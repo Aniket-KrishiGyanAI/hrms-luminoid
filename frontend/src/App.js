@@ -60,8 +60,6 @@ const LoadingFallback = () => (
   <div className="d-flex justify-content-center align-items-center" style={{ minHeight: "400px", padding: "2rem" }}>
     <div className="modern-spinner">
       <div className="spinner-ring"></div>
-      <div className="spinner-ring"></div>
-      <div className="spinner-ring"></div>
       <div className="spinner-text">Loading...</div>
     </div>
   </div>

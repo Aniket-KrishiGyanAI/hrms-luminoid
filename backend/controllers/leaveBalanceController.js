@@ -389,10 +389,42 @@ const carryForward = async () => {
   }
 };
 
+const updateBalance = async (req, res) => {
+  try {
+    const { userId, leaveTypeId, allocated, year } = req.body;
+    
+    if (!userId || !leaveTypeId || allocated === undefined) {
+      return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    const targetYear = year || new Date().getFullYear();
+    
+    let balance = await LeaveBalance.findOne({ userId, leaveTypeId, year: targetYear });
+    
+    if (balance) {
+      balance.allocated = allocated;
+      await balance.save();
+    } else {
+      balance = await LeaveBalance.create({
+        userId,
+        leaveTypeId,
+        year: targetYear,
+        allocated
+      });
+    }
+    
+    await balance.populate('leaveTypeId', 'name color');
+    res.json({ message: 'Leave balance updated successfully', balance });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
 module.exports = {
   getBalances,
   initializeBalances,
   accrueBalances,
   carryForward,
-  ensureBalancesForUser
+  ensureBalancesForUser,
+  updateBalance
 };

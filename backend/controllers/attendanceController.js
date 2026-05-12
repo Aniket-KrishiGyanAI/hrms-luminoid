@@ -400,7 +400,7 @@ const getTodayStatus = async (req, res) => {
         attendanceFilter.userId = { $in: [...teamMemberIds, req.user.id] };
       }
       
-      const allAttendance = await Attendance.find(attendanceFilter).populate("userId", "firstName lastName email");
+      const allAttendance = await Attendance.find(attendanceFilter).populate("userId", "firstName lastName email profileImage");
 
       // Get total active employees count
       const totalActiveEmployees = await User.countDocuments({
@@ -427,7 +427,22 @@ const getTodayStatus = async (req, res) => {
           acc[a.status] = (acc[a.status] || 0) + 1;
           return acc;
         }, {}),
+        // Employee lists grouped by status
+        presentEmployees: allAttendance
+          .filter(a => a.checkIn && (a.status === 'Present' || a.status === 'Late'))
+          .map(a => ({ _id: a.userId?._id, firstName: a.userId?.firstName, lastName: a.userId?.lastName, profileImage: a.userId?.profileImage, status: a.status, workMode: a.workMode, checkIn: a.checkIn, checkOut: a.checkOut })),
+        absentEmployees: [],  // filled below
+        lateEmployees: allAttendance
+          .filter(a => a.status === 'Late')
+          .map(a => ({ _id: a.userId?._id, firstName: a.userId?.firstName, lastName: a.userId?.lastName, profileImage: a.userId?.profileImage, checkIn: a.checkIn })),
       };
+
+      // Get absent employees (active users who haven't checked in)
+      const checkedInUserIds = new Set(allAttendance.map(a => a.userId?._id?.toString()));
+      const allActiveUsers = await User.find({ isActive: true }).select('firstName lastName profileImage').lean();
+      summary.absentEmployees = allActiveUsers
+        .filter(u => !checkedInUserIds.has(u._id.toString()))
+        .map(u => ({ _id: u._id, firstName: u.firstName, lastName: u.lastName, profileImage: u.profileImage }));
 
       return res.json({
         isAggregated: true,

@@ -9,6 +9,11 @@ const addActivity = async (task, type, user, message, metadata = {}) => {
 exports.createTask = async (req, res) => {
   try {
     logger.info('createTask', { userId: req.user?.id });
+    
+    if (!req.body.assignedTo || req.body.assignedTo.length === 0) {
+      return res.status(400).json({ message: 'Please assign at least one employee to the task' });
+    }
+    
     const task = await Task.create({
       ...req.body,
       assignedBy: req.user.id

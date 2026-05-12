@@ -166,7 +166,7 @@ const Files = () => {
       if (fileForm.targetUserId) formData.append("targetUserId", fileForm.targetUserId);
       if (uploadFolderId) formData.append("folderId", uploadFolderId);
       formData.append("visibility", JSON.stringify(fileForm.visibility));
-      if (fileForm.subType) formData.append("subType", fileForm.subType);
+      if (fileForm.subType && fileForm.subType.trim() !== "") formData.append("subType", fileForm.subType);
       if (fileForm.month) formData.append("month", fileForm.month);
       if (fileForm.year) formData.append("year", fileForm.year);
 

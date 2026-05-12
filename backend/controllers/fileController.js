@@ -122,7 +122,7 @@ const uploadFile = async (req, res) => {
       try { visibility = JSON.parse(req.body.visibility); } catch (e) {}
     }
 
-    const file = new File({
+    const fileData = {
       name: req.body.name || req.file.originalname,
       originalName: req.file.originalname,
       s3Key: s3Key,
@@ -130,9 +130,6 @@ const uploadFile = async (req, res) => {
       size: req.file.size,
       mimeType: req.file.mimetype,
       type: req.body.type,
-      subType: req.body.subType || null,
-      month: req.body.month ? Number(req.body.month) : null,
-      year: req.body.year ? Number(req.body.year) : null,
       category: req.body.category,
       uploadedBy: req.user.id,
       targetUserId: req.body.targetUserId,
@@ -143,7 +140,22 @@ const uploadFile = async (req, res) => {
       folderId: req.body.folderId || null,
       expiryDate: req.body.expiryDate || null,
       isHRGenerated: req.body.type === 'HR_DOCUMENT'
-    });
+    };
+
+    // Only add subType if it's provided
+    if (req.body.subType) {
+      fileData.subType = req.body.subType;
+    }
+
+    // Only add month/year if provided
+    if (req.body.month) {
+      fileData.month = Number(req.body.month);
+    }
+    if (req.body.year) {
+      fileData.year = Number(req.body.year);
+    }
+
+    const file = new File(fileData);
 
     await file.save();
     res.status(201).json(file);
