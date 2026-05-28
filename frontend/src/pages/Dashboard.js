@@ -74,7 +74,7 @@ const Dashboard = () => {
       api
         .get("/api/journey/today")
         .then((r) => setJourneyData(r.data))
-        .catch(() => {});
+        .catch(() => { });
     }
 
     return () => {
@@ -787,10 +787,10 @@ const Dashboard = () => {
                     ))}
                   {holidays.filter((h) => new Date(h.date) >= new Date())
                     .length === 0 && (
-                    <p className="text-muted mb-0 text-center py-3">
-                      No upcoming holidays
-                    </p>
-                  )}
+                      <p className="text-muted mb-0 text-center py-3">
+                        No upcoming holidays
+                      </p>
+                    )}
                 </Card.Body>
               </Card>
             </Col>
@@ -1558,24 +1558,24 @@ const Dashboard = () => {
                           const chartWidth = 600 - padding.left - padding.right;
                           const chartHeight = 280 - padding.top - padding.bottom;
                           const stepX = chartWidth / (data.length - 1);
-                          
+
                           const points = data.map((d, i) => ({
                             x: padding.left + (i * stepX),
                             y: padding.top + chartHeight - ((d.percentage / 100) * chartHeight),
                             percentage: d.percentage,
                             month: d.month
                           }));
-                          
+
                           const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ');
                           const areaD = `${pathD} L ${points[points.length - 1].x},${padding.top + chartHeight} L ${padding.left},${padding.top + chartHeight} Z`;
-                          
+
                           const ySteps = 5;
                           const yGridLines = Array.from({ length: ySteps + 1 }, (_, i) => {
                             const value = (100 / ySteps) * i;
                             const y = padding.top + chartHeight - ((value / 100) * chartHeight);
                             return { y, value };
                           });
-                          
+
                           return (
                             <g>
                               {yGridLines.map((line, i) => (
@@ -1759,10 +1759,10 @@ const Dashboard = () => {
                     ))}
                   {holidays.filter((h) => new Date(h.date) >= new Date())
                     .length === 0 && (
-                    <p className="text-muted mb-0 text-center py-3">
-                      No upcoming holidays
-                    </p>
-                  )}
+                      <p className="text-muted mb-0 text-center py-3">
+                        No upcoming holidays
+                      </p>
+                    )}
                 </Card.Body>
               </Card>
             </Col>
