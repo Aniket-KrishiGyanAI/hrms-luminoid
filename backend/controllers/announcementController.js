@@ -7,6 +7,7 @@ const getAnnouncements = async (req, res) => {
   try {
     const now = new Date();
     const isPrivileged = ['ADMIN', 'HR', 'MANAGER'].includes(req.user?.role);
+    const limit = parseInt(req.query.limit) || 10;
 
     const query = isPrivileged
       ? { isActive: true }
@@ -31,7 +32,9 @@ const getAnnouncements = async (req, res) => {
 
     const announcements = await Announcement.find(query)
       .populate('createdBy', 'firstName lastName')
-      .sort({ createdAt: -1 });
+      .sort({ priority: -1, createdAt: -1 })
+      .limit(limit)
+      .lean();
 
     res.json(announcements);
   } catch (error) {

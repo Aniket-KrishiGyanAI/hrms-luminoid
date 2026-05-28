@@ -98,17 +98,6 @@ const Files = () => {
   const [hrSubTypeFilter, setHrSubTypeFilter] = useState('');
   const [hrMonthFilter, setHrMonthFilter] = useState('');
   const [hrYearFilter, setHrYearFilter] = useState('');
-  const [showAutoGenerateModal, setShowAutoGenerateModal] = useState(false);
-  const [autoGenForm, setAutoGenForm] = useState({
-    month: new Date().getMonth() + 1,
-    year: new Date().getFullYear(),
-    employeeIds: [],
-    templateFileId: ''
-  });
-  const [generating, setGenerating] = useState(false);
-  const [templateFiles, setTemplateFiles] = useState([]);
-  const [uploadingTemplate, setUploadingTemplate] = useState(false);
-  const [templateUploadFile, setTemplateUploadFile] = useState(null);
 
   useEffect(() => {
     fetchFiles();
@@ -578,88 +567,6 @@ const Files = () => {
       toast.success('Document verification updated');
     } catch (error) {
       toast.error('Error updating verification');
-    }
-  };
-
-  const handleAutoGenerateSalarySlips = async () => {
-    if (!autoGenForm.templateFileId) {
-      toast.error('Please select a template file');
-      return;
-    }
-    
-    setGenerating(true);
-    try {
-      const employeeIdsToGenerate = autoGenForm.employeeIds.length > 0 
-        ? autoGenForm.employeeIds 
-        : employees.map(emp => emp._id);
-      
-      const response = await api.post('/api/files/auto-generate-salary-slips', {
-        month: autoGenForm.month,
-        year: autoGenForm.year,
-        employeeIds: employeeIdsToGenerate,
-        templateFileId: autoGenForm.templateFileId
-      });
-
-      setShowAutoGenerateModal(false);
-      setAutoGenForm({
-        month: new Date().getMonth() + 1,
-        year: new Date().getFullYear(),
-        employeeIds: [],
-        templateFileId: ''
-      });
-      fetchFiles();
-      toast.success(`Successfully generated ${response.data.count} salary slips`);
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Error generating salary slips');
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  const toggleEmployeeSelection = (empId) => {
-    setAutoGenForm(prev => ({
-      ...prev,
-      employeeIds: prev.employeeIds.includes(empId)
-        ? prev.employeeIds.filter(id => id !== empId)
-        : [...prev.employeeIds, empId]
-    }));
-  };
-
-  const handleUploadTemplate = async () => {
-    if (!templateUploadFile) {
-      toast.error('Please select a file to upload');
-      return;
-    }
-
-    setUploadingTemplate(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', templateUploadFile);
-      formData.append('type', 'HR_DOCUMENT');
-      formData.append('subType', 'SALARY_SLIP');
-      formData.append('category', 'Salary Slip Template');
-      formData.append('description', 'Template for auto-generation');
-      formData.append('month', autoGenForm.month);
-      formData.append('year', autoGenForm.year);
-      formData.append('targetUserId', employees[0]?._id || ''); // Use first employee as placeholder
-      formData.append('visibility', JSON.stringify({ type: 'ALL', departments: [], roles: [], employees: [] }));
-
-      const response = await api.post('/api/files/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-
-      // Add the newly uploaded file to template list and select it
-      const newFile = response.data.file || response.data;
-      setTemplateFiles(prev => [newFile, ...prev]);
-      setAutoGenForm(prev => ({ ...prev, templateFileId: newFile._id }));
-      setTemplateUploadFile(null);
-      
-      toast.success('Template uploaded successfully');
-      fetchFiles();
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Error uploading template');
-    } finally {
-      setUploadingTemplate(false);
     }
   };
 
@@ -1649,10 +1556,15 @@ const Files = () => {
 
           {/* Documents Section */}
           <Row>
-            <Col>
-              <Card className="modern-table-wrapper">
-                <Card.Body className="p-0">
-                  {(() => {
+          <Col>
+            <div style={{
+              background: '#fff',
+              borderRadius: '1rem',
+              padding: orgView === 'grid' ? '1.5rem' : '0',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+              border: '1px solid #f1f5f9'
+            }}>
+              {(() => {
                 let docs = filteredOrgFiles;
                 if (orgCategoryFilter) docs = docs.filter(f => f.category === orgCategoryFilter);
                 if (orgVisibilityFilter) docs = docs.filter(f => f.visibility?.type === orgVisibilityFilter);
@@ -1894,11 +1806,10 @@ const Files = () => {
                     </div>
                   );
                 })()}
-                </Card.Body>
-              </Card>
-            </Col>
-          </Row>
-        </>
+              </Card.Body>
+            </Card>
+          </Col>
+        </Row>
       )}
 
       {/* Organization Documents - Folder View */}
@@ -2213,34 +2124,13 @@ const Files = () => {
           <Col>
             <Card className="modern-table-wrapper">
               <Card.Header>
-                <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div className="d-flex justify-content-between align-items-center">
                   <h5 className="mb-0"><i className="fas fa-file-invoice-dollar me-2"></i>HR Documents by Employee</h5>
-                  <div className="d-flex gap-2 align-items-center">
-                    <Form.Control
-                      type="text" placeholder="Search employee..."
-                      value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
-                      style={{ width: 240, fontSize: '0.85rem' }}
-                    />
-                    <Button 
-                      variant="success" 
-                      size="sm"
-                      onClick={() => {
-                        // Get salary slip templates (HR_DOCUMENT type with SALARY_SLIP subType)
-                        const templates = hrDocumentFiles.filter(f => f.subType === 'SALARY_SLIP');
-                        setTemplateFiles(templates);
-                        setShowAutoGenerateModal(true);
-                      }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem',
-                        whiteSpace: 'nowrap'
-                      }}
-                    >
-                      <i className="fas fa-magic"></i>
-                      Auto-Generate Salary Slips
-                    </Button>
-                  </div>
+                  <Form.Control
+                    type="text" placeholder="Search employee..."
+                    value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+                    style={{ width: 240, fontSize: '0.85rem' }}
+                  />
                 </div>
               </Card.Header>
               <Card.Body>
@@ -3364,282 +3254,6 @@ const Files = () => {
             )}
           </Modal.Footer>
         </div>
-      </Modal>
-
-      {/* Auto-Generate Salary Slips Modal */}
-      <Modal show={showAutoGenerateModal} onHide={() => !generating && setShowAutoGenerateModal(false)} centered size="lg">
-        <Modal.Header closeButton style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff', borderBottom: 'none' }}>
-          <Modal.Title style={{ fontWeight: 700, fontSize: '1.1rem' }}>
-            <i className="fas fa-magic me-2"></i>
-            Auto-Generate Salary Slips
-          </Modal.Title>
-        </Modal.Header>
-        <Modal.Body style={{ background: '#f0fdf4', padding: '1.5rem' }}>
-          {/* Template Selection */}
-          <div style={{ background: '#fff', borderRadius: '0.75rem', border: '1px solid #d1fae5', padding: '1.25rem', marginBottom: '1rem' }}>
-            <div style={{ fontWeight: 700, color: '#374151', fontSize: '0.85rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ width: 24, height: 24, borderRadius: '50%', background: '#fef3c7', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-                <i className="fas fa-file-alt" style={{ color: '#d97706', fontSize: '0.75rem' }}></i>
-              </span>
-              Select Template File <span className="text-danger">*</span>
-            </div>
-
-            {/* Upload New Template Section */}
-            <div style={{ marginBottom: '1rem', padding: '1rem', background: '#f0fdf4', borderRadius: '0.5rem', border: '1px dashed #86efac' }}>
-              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#065f46', marginBottom: '0.75rem' }}>
-                <i className="fas fa-upload me-2"></i>Upload New Template
-              </div>
-              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                <input
-                  id="templateFileInput"
-                  type="file"
-                  accept=".pdf,.doc,.docx,.xls,.xlsx"
-                  onChange={(e) => setTemplateUploadFile(e.target.files[0])}
-                  style={{ display: 'none' }}
-                />
-                <button
-                  onClick={() => document.getElementById('templateFileInput').click()}
-                  style={{
-                    flex: 1,
-                    padding: '0.6rem 1rem',
-                    borderRadius: '0.5rem',
-                    border: '2px solid #10b981',
-                    background: '#fff',
-                    color: '#10b981',
-                    fontSize: '0.85rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.5rem'
-                  }}
-                >
-                  <i className="fas fa-file-upload"></i>
-                  {templateUploadFile ? templateUploadFile.name : 'Choose File'}
-                </button>
-                {templateUploadFile && (
-                  <button
-                    onClick={handleUploadTemplate}
-                    disabled={uploadingTemplate}
-                    style={{
-                      padding: '0.6rem 1.25rem',
-                      borderRadius: '0.5rem',
-                      border: 'none',
-                      background: uploadingTemplate ? '#6ee7b7' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                      color: '#fff',
-                      fontSize: '0.85rem',
-                      fontWeight: 700,
-                      cursor: uploadingTemplate ? 'not-allowed' : 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.5rem',
-                      whiteSpace: 'nowrap'
-                    }}
-                  >
-                    {uploadingTemplate ? (
-                      <><span className="spinner-border spinner-border-sm" role="status"></span>Uploading...</>
-                    ) : (
-                      <><i className="fas fa-check"></i>Upload</>  
-                    )}
-                  </button>
-                )}
-              </div>
-              {templateUploadFile && (
-                <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#059669' }}>
-                  <i className="fas fa-info-circle me-1"></i>
-                  File size: {formatFileSize(templateUploadFile.size)}
-                </div>
-              )}
-            </div>
-
-            {/* Existing Templates List */}
-            {templateFiles.length === 0 ? (
-              <div style={{ padding: '1.5rem', textAlign: 'center', background: '#fffbeb', borderRadius: '0.5rem', border: '1px dashed #fbbf24' }}>
-                <i className="fas fa-info-circle" style={{ fontSize: '2rem', color: '#f59e0b', marginBottom: '0.75rem', display: 'block' }}></i>
-                <div style={{ fontWeight: 600, color: '#92400e', marginBottom: '0.5rem' }}>No templates available</div>
-                <div style={{ fontSize: '0.85rem', color: '#78350f' }}>Upload a salary slip template above to get started.</div>
-              </div>
-            ) : (
-              <>
-                <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#065f46', marginBottom: '0.5rem' }}>
-                  <i className="fas fa-list me-2"></i>Or Select Existing Template
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: 200, overflowY: 'auto' }}>
-                  {templateFiles.map(file => {
-                    const selected = autoGenForm.templateFileId === file._id;
-                    const targetEmp = employees.find(e => e._id === file.targetUserId);
-                    return (
-                      <div
-                        key={file._id}
-                        onClick={() => setAutoGenForm({ ...autoGenForm, templateFileId: file._id })}
-                        style={{
-                          padding: '0.75rem',
-                          borderRadius: '0.5rem',
-                          cursor: 'pointer',
-                          border: selected ? '2px solid #10b981' : '1.5px solid #e2e8f0',
-                          background: selected ? '#ecfdf5' : '#f8fafc',
-                          transition: 'all 0.15s',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.75rem'
-                        }}
-                      >
-                        <div style={{ width: 40, height: 40, borderRadius: '0.5rem', background: '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                          <i className="fas fa-file-invoice-dollar" style={{ color: '#10b981', fontSize: '1.1rem' }}></i>
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {file.name}
-                          </div>
-                          <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.15rem' }}>
-                            {targetEmp ? `${targetEmp.firstName} ${targetEmp.lastName}` : 'Unknown'} • {file.month && file.year ? `${MONTHS[file.month - 1]} ${file.year}` : 'No date'}
-                          </div>
-                        </div>
-                        {selected && <i className="fas fa-check-circle" style={{ color: '#10b981', fontSize: '1.25rem' }}></i>}
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-          </div>
-
-          <div style={{ background: '#fff', borderRadius: '0.75rem', border: '1px solid #d1fae5', padding: '1.25rem', marginBottom: '1rem' }}>
-            <div style={{ fontWeight: 700, color: '#374151', fontSize: '0.85rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ width: 24, height: 24, borderRadius: '50%', background: '#d1fae5', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-                <i className="fas fa-calendar" style={{ color: '#10b981', fontSize: '0.75rem' }}></i>
-              </span>
-              Select Month & Year
-            </div>
-            <Row className="g-3">
-              <Col md={6}>
-                <Form.Label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#374151' }}>Month <span className="text-danger">*</span></Form.Label>
-                <Form.Select
-                  value={autoGenForm.month}
-                  onChange={(e) => setAutoGenForm({ ...autoGenForm, month: e.target.value })}
-                  style={{ fontSize: '0.85rem', borderRadius: '0.5rem' }}
-                >
-                  {MONTHS.map((m, idx) => (
-                    <option key={idx} value={idx + 1}>{m}</option>
-                  ))}
-                </Form.Select>
-              </Col>
-              <Col md={6}>
-                <Form.Label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#374151' }}>Year <span className="text-danger">*</span></Form.Label>
-                <Form.Select
-                  value={autoGenForm.year}
-                  onChange={(e) => setAutoGenForm({ ...autoGenForm, year: e.target.value })}
-                  style={{ fontSize: '0.85rem', borderRadius: '0.5rem' }}
-                >
-                  {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(y => (
-                    <option key={y} value={y}>{y}</option>
-                  ))}
-                </Form.Select>
-              </Col>
-            </Row>
-          </div>
-
-          <div style={{ background: '#fff', borderRadius: '0.75rem', border: '1px solid #d1fae5', padding: '1.25rem' }}>
-            <div style={{ fontWeight: 700, color: '#374151', fontSize: '0.85rem', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span style={{ width: 24, height: 24, borderRadius: '50%', background: '#d1fae5', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <i className="fas fa-users" style={{ color: '#10b981', fontSize: '0.75rem' }}></i>
-                </span>
-                Select Employees
-              </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>
-                {autoGenForm.employeeIds.length === 0 ? 'All employees' : `${autoGenForm.employeeIds.length} selected`}
-              </div>
-            </div>
-            <div style={{ marginBottom: '0.75rem' }}>
-              <button
-                onClick={() => setAutoGenForm({ ...autoGenForm, employeeIds: autoGenForm.employeeIds.length === employees.length ? [] : employees.map(e => e._id) })}
-                style={{
-                  padding: '0.4rem 0.75rem',
-                  borderRadius: '0.5rem',
-                  border: '1.5px solid #10b981',
-                  background: '#fff',
-                  color: '#10b981',
-                  fontSize: '0.8rem',
-                  fontWeight: 600,
-                  cursor: 'pointer'
-                }}
-              >
-                <i className="fas fa-check-double me-1"></i>
-                {autoGenForm.employeeIds.length === employees.length ? 'Deselect All' : 'Select All'}
-              </button>
-            </div>
-            <div style={{ maxHeight: 300, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.5rem' }}>
-              {employees.map(emp => {
-                const selected = autoGenForm.employeeIds.includes(emp._id);
-                const colors = ['#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899'];
-                const color = colors[(emp.firstName?.charCodeAt(0) || 0) % colors.length];
-                return (
-                  <div
-                    key={emp._id}
-                    onClick={() => toggleEmployeeSelection(emp._id)}
-                    style={{
-                      padding: '0.6rem 0.75rem',
-                      borderRadius: '0.5rem',
-                      cursor: 'pointer',
-                      border: selected ? `2px solid ${color}` : '1.5px solid #e2e8f0',
-                      background: selected ? `${color}10` : '#f8fafc',
-                      transition: 'all 0.15s',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.5rem'
-                    }}
-                  >
-                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: `${color}20`, border: `2px solid ${color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 700, color, flexShrink: 0 }}>
-                      {(emp.firstName?.[0] || '') + (emp.lastName?.[0] || '')}
-                    </div>
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {emp.firstName} {emp.lastName}
-                      </div>
-                      <div style={{ fontSize: '0.7rem', color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {emp.department || 'No dept'}
-                      </div>
-                    </div>
-                    {selected && <i className="fas fa-check-circle" style={{ color, fontSize: '0.9rem' }}></i>}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </Modal.Body>
-        <Modal.Footer style={{ background: '#f0fdf4', borderTop: '1px solid #d1fae5', padding: '1rem 1.5rem' }}>
-          <Button
-            variant="light"
-            onClick={() => setShowAutoGenerateModal(false)}
-            disabled={generating}
-            style={{ fontWeight: 600, fontSize: '0.85rem', borderRadius: '0.5rem', border: '1.5px solid #d1fae5', background: '#fff', color: '#64748b', padding: '0.5rem 1.5rem' }}
-          >
-            <i className="fas fa-times me-2"></i>Cancel
-          </Button>
-          <Button
-            onClick={handleAutoGenerateSalarySlips}
-            disabled={generating || !autoGenForm.templateFileId || templateFiles.length === 0}
-            style={{
-              background: generating ? '#6ee7b7' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-              border: 'none',
-              fontWeight: 700,
-              fontSize: '0.85rem',
-              borderRadius: '0.5rem',
-              padding: '0.5rem 1.5rem',
-              minWidth: 150,
-              color: '#fff',
-              opacity: (!autoGenForm.templateFileId || templateFiles.length === 0) ? 0.5 : 1
-            }}
-          >
-            {generating ? (
-              <><span className="spinner-border spinner-border-sm me-2" role="status"></span>Generating...</>
-            ) : (
-              <><i className="fas fa-magic me-2"></i>Generate Slips</>
-            )}
-          </Button>
-        </Modal.Footer>
       </Modal>
     </div>
   );

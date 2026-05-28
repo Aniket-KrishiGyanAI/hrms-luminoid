@@ -616,7 +616,7 @@ const getTopPerformers = async (req, res) => {
           date: { $gte: startOfWeek },
           isDeleted: false,
           status: { $in: ['Present', 'Late', 'Half Day'] },
-          totalHours: { $exists: true, $gt: 0 }
+          totalHours: { $gt: 0 }
         }
       },
       {
@@ -626,13 +626,16 @@ const getTopPerformers = async (req, res) => {
         }
       },
       { $sort: { totalHours: -1 } },
-      { $limit: 3 },
+      { $limit: 5 },
       {
         $lookup: {
           from: 'users',
           localField: '_id',
           foreignField: '_id',
-          as: 'user'
+          as: 'user',
+          pipeline: [
+            { $project: { firstName: 1, lastName: 1, profileImage: 1, department: 1 } }
+          ]
         }
       },
       { $unwind: '$user' },
@@ -642,12 +645,22 @@ const getTopPerformers = async (req, res) => {
           firstName: '$user.firstName',
           lastName: '$user.lastName',
           profileImage: '$user.profileImage',
+          department: '$user.department',
           totalHours: 1
         }
       }
-    ]);
+    ]).allowDiskUse(true);
 
-    res.json(topPerformers);
+    const deptIds = topPerformers.map(p => p.department).filter(d => d && mongoose.Types.ObjectId.isValid(d));
+    const departments = deptIds.length > 0 ? await Department.find({ _id: { $in: deptIds } }).select('_id name').lean() : [];
+    const deptMap = Object.fromEntries(departments.map(d => [d._id.toString(), d.name]));
+
+    const result = topPerformers.map(p => ({
+      ...p,
+      department: p.department && deptMap[p.department.toString()] ? deptMap[p.department.toString()] : null
+    }));
+
+    res.json(result);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }

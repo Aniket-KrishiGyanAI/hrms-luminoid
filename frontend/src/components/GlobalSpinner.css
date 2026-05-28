@@ -1,0 +1,131 @@
+/* Global Spinner Overlay (Full Screen) */
+.global-spinner-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+[data-theme="dark"] .global-spinner-overlay {
+  background: rgba(15, 23, 42, 0.95);
+}
+
+/* Global Spinner Container */
+.global-spinner-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+
+/* Inline Spinner */
+.global-spinner-inline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  min-height: 200px;
+}
+
+/* Gradient Spinner (if not already defined) */
+.gradient-spinner {
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    #f59e0b 90deg,
+    #d97706 180deg,
+    #b45309 270deg,
+    transparent 360deg
+  );
+  animation: rotate 1s linear infinite;
+  position: relative;
+}
+
+.gradient-spinner::before {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  background: white;
+  border-radius: 50%;
+}
+
+[data-theme="dark"] .gradient-spinner::before {
+  background: #1e293b;
+}
+
+@keyframes rotate {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Spinner Text */
+.spinner-text {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #64748b;
+  margin-top: 0.5rem;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+[data-theme="dark"] .spinner-text {
+  color: #94a3b8;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Small Spinner for Buttons */
+.btn-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    currentColor 90deg,
+    transparent 180deg
+  );
+  animation: rotate 0.8s linear infinite;
+  margin-right: 0.5rem;
+  vertical-align: middle;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .global-spinner-inline {
+    min-height: 150px;
+    padding: 1.5rem;
+  }
+  
+  .spinner-text {
+    font-size: 0.8rem;
+  }
+}

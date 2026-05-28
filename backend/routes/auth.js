@@ -66,7 +66,7 @@ router.post('/register', [
 
 router.post('/login', loginRateLimit, [
   body('email').isEmail().normalizeEmail(),
-  body('password').notEmpty()
+  body('password').notEmpty().withMessage('Password is required')
 ], login);
 
 router.post('/refresh', refreshToken);

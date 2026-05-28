@@ -1332,7 +1332,7 @@ const handleMarkReimbursed = async () => {
                                             onClick={async () => {
                                               try {
                                                 const token = localStorage.getItem('token');
-                                                const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+                                                const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
                                                 const url = `${apiUrl}/api/expenses/${expense._id}/bills/${idx}/view?token=${token}`;
                                                 console.log('Opening bill URL:', url);
                                                 window.open(url, '_blank');
@@ -1506,7 +1506,7 @@ const handleMarkReimbursed = async () => {
                                   onClick={async () => {
                                     try {
                                       const token = localStorage.getItem('token');
-                                      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+                                      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
                                       const url = `${apiUrl}/api/expenses/${expense._id}/bills/${idx}/view?token=${token}`;
                                       console.log('Opening bill URL:', url);
                                       window.open(url, '_blank');

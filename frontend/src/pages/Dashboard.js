@@ -16,6 +16,8 @@ import { toast } from "react-toastify";
 import { showAnnouncementNotification } from "../utils/notificationService";
 import { logger } from "../utils/logger";
 import TopPerformers from "../components/TopPerformers";
+import LatestAnnouncements from "../components/LatestAnnouncements";
+import GlobalSpinner from "../components/GlobalSpinner";
 import "../styles/Dashboard.css";
 
 const Dashboard = () => {
@@ -121,7 +123,7 @@ const Dashboard = () => {
 
   const fetchAnnouncements = async () => {
     try {
-      const response = await api.get("/api/announcements");
+      const response = await api.get("/api/announcements?limit=5");
       const newAnnouncements = response.data;
 
       if (
@@ -295,17 +297,7 @@ const Dashboard = () => {
   };
 
   if (loading) {
-    return (
-      <div
-        className="d-flex justify-content-center align-items-center"
-        style={{ height: "400px" }}
-      >
-        <div className="text-center">
-          <div className="spinner-border text-primary mb-3" role="status"></div>
-          <p className="text-muted">Loading dashboard...</p>
-        </div>
-      </div>
-    );
+    return <GlobalSpinner />;
   }
   return (
     <div className="dashboard-page">
@@ -653,80 +645,9 @@ const Dashboard = () => {
           </div>
 
           <Row className="mb-4">
-            <Col md={6}>
-              <Card className="modern-card h-100">
-                <Card.Header>
-                  <i className="fas fa-trophy me-2"></i>Top Performers This Week
-                </Card.Header>
-                <Card.Body className="p-0">
-                  <div style={{ maxHeight: "400px", overflowY: "auto" }}>
-                    <TopPerformers />
-                  </div>
-                </Card.Body>
-              </Card>
-            </Col>
+            <Col md={6}><TopPerformers /></Col>
             <Col md={6} className="d-none d-md-block">
-              <Card className="modern-card h-100">
-                <Card.Header>
-                  <i className="fas fa-bullhorn me-2"></i>Latest Announcements
-                </Card.Header>
-                <Card.Body className="p-0">
-                  <div style={{ maxHeight: "400px", overflowY: "auto" }}>
-                    {announcements.length > 0 ? (
-                      announcements.slice(0, 5).map((ann) => (
-                        <div key={ann._id} className="announcement-item">
-                          <div
-                            className="announcement-icon"
-                            style={{
-                              background:
-                                ann.priority === "HIGH"
-                                  ? "#ef4444"
-                                  : ann.priority === "MEDIUM"
-                                    ? "#f59e0b"
-                                    : "#3b82f6",
-                            }}
-                          >
-                            <i className="fas fa-bullhorn"></i>
-                          </div>
-                          <div className="announcement-content">
-                            <div className="d-flex justify-content-between align-items-start mb-1">
-                              <div className="announcement-title">
-                                {ann.title}
-                              </div>
-                              <Badge
-                                bg={
-                                  ann.priority === "HIGH"
-                                    ? "danger"
-                                    : ann.priority === "MEDIUM"
-                                      ? "warning"
-                                      : "info"
-                                }
-                                style={{ fontSize: "0.7rem" }}
-                              >
-                                {ann.priority}
-                              </Badge>
-                            </div>
-                            <div className="announcement-text">
-                              {ann.content}
-                            </div>
-                            <div className="announcement-meta">
-                              <i className="fas fa-clock me-1"></i>
-                              {new Date(ann.createdAt).toLocaleDateString()}
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="empty-state">
-                        <div className="empty-icon">
-                          <i className="fas fa-bullhorn"></i>
-                        </div>
-                        <div className="empty-text">No announcements</div>
-                      </div>
-                    )}
-                  </div>
-                </Card.Body>
-              </Card>
+              <LatestAnnouncements announcements={announcements} />
             </Col>
           </Row>
 
@@ -1098,18 +1019,7 @@ const Dashboard = () => {
         <>
           {/* Daily Updates & Discussion */}
           <Row className="mb-4">
-            <Col md={6}>
-              <Card className="modern-card h-100">
-                <Card.Header>
-                  <i className="fas fa-trophy me-2"></i>Top Performers This Week
-                </Card.Header>
-                <Card.Body className="p-0">
-                  <div style={{ maxHeight: "400px", overflowY: "auto" }}>
-                    <TopPerformers />
-                  </div>
-                </Card.Body>
-              </Card>
-            </Col>
+            <Col md={6}><TopPerformers /></Col>
           </Row>
 
           <Row className="mb-4">
@@ -1418,270 +1328,13 @@ const Dashboard = () => {
 
           {/* Department Distribution & Announcements */}
           <Row className="mb-4">
-            <Col md={6}>
-              <Card className="modern-card h-100">
-                <Card.Header>
-                  <i className="fas fa-trophy me-2"></i>Top Performers This Week
-                </Card.Header>
-                <Card.Body className="p-0">
-                  <div style={{ maxHeight: "400px", overflowY: "auto" }}>
-                    <TopPerformers />
-                  </div>
-                </Card.Body>
-              </Card>
-            </Col>
+            <Col md={6}><TopPerformers /></Col>
             <Col md={6} className="d-none d-md-block">
-              <Card className="modern-card h-100">
-                <Card.Header>
-                  <i className="fas fa-bullhorn me-2"></i>Latest Announcements
-                </Card.Header>
-                <Card.Body className="p-0">
-                  <div style={{ maxHeight: "400px", overflowY: "auto" }}>
-                    {announcements.length > 0 ? (
-                      announcements.slice(0, 5).map((ann) => (
-                        <div key={ann._id} className="announcement-item">
-                          <div
-                            className="announcement-icon"
-                            style={{
-                              background:
-                                ann.priority === "HIGH"
-                                  ? "#ef4444"
-                                  : ann.priority === "MEDIUM"
-                                    ? "#f59e0b"
-                                    : "#3b82f6",
-                            }}
-                          >
-                            <i className="fas fa-bullhorn"></i>
-                          </div>
-                          <div className="announcement-content">
-                            <div className="d-flex justify-content-between align-items-start mb-1">
-                              <div className="announcement-title">
-                                {ann.title}
-                              </div>
-                              <Badge
-                                bg={
-                                  ann.priority === "HIGH"
-                                    ? "danger"
-                                    : ann.priority === "MEDIUM"
-                                      ? "warning"
-                                      : "info"
-                                }
-                                style={{ fontSize: "0.7rem" }}
-                              >
-                                {ann.priority}
-                              </Badge>
-                            </div>
-                            <div className="announcement-text">
-                              {ann.content}
-                            </div>
-                            <div className="announcement-meta">
-                              <i className="fas fa-clock me-1"></i>
-                              {new Date(ann.createdAt).toLocaleDateString()}
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="empty-state">
-                        <div className="empty-icon">
-                          <i className="fas fa-bullhorn"></i>
-                        </div>
-                        <div className="empty-text">No announcements</div>
-                      </div>
-                    )}
-                  </div>
-                </Card.Body>
-              </Card>
+              <LatestAnnouncements announcements={announcements} />
             </Col>
           </Row>
 
-          <Row className="mb-4">
-            <Col md={6}>
-              <Card className="modern-card h-100">
-                <Card.Header className="d-flex justify-content-between align-items-center">
-                  <span>
-                    <i className="fas fa-chart-line me-2"></i>Department Distribution
-                  </span>
-                  <Badge style={{ background: "linear-gradient(135deg, #10b981 0%, #059669 100%)", fontSize: "0.75rem" }}>
-                    {dashboardData.departmentStats?.reduce((sum, d) => sum + d.count, 0) || 0} Total
-                  </Badge>
-                </Card.Header>
-                <Card.Body style={{ padding: "1.5rem" }}>
-                  {dashboardData.departmentStats?.length > 0 ? (
-                    <div style={{ position: "relative", width: "100%", height: "280px" }}>
-                      <svg viewBox="0 0 600 280" style={{ width: "100%", height: "100%" }} preserveAspectRatio="xMidYMid meet">
-                        <defs>
-                          <linearGradient id="deptLineGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                            <stop offset="0%" stopColor="#10b981" stopOpacity="0.2" />
-                            <stop offset="100%" stopColor="#10b981" stopOpacity="0.05" />
-                          </linearGradient>
-                          <filter id="deptShadow">
-                            <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.15" />
-                          </filter>
-                        </defs>
-                        {(() => {
-                          const data = dashboardData.departmentStats;
-                          const padding = { left: 50, right: 30, top: 30, bottom: 60 };
-                          const chartWidth = 600 - padding.left - padding.right;
-                          const chartHeight = 280 - padding.top - padding.bottom;
-                          const stepX = chartWidth / (data.length - 1);
-                          const maxCount = Math.max(...data.map(d => d.count));
-                          
-                          const points = data.map((d, i) => ({
-                            x: padding.left + (i * stepX),
-                            y: padding.top + chartHeight - ((d.count / maxCount) * chartHeight),
-                            count: d.count,
-                            name: d._id || "Unassigned",
-                            departmentId: d.departmentId
-                          }));
-                          
-                          const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ');
-                          const areaD = `${pathD} L ${points[points.length - 1].x},${padding.top + chartHeight} L ${padding.left},${padding.top + chartHeight} Z`;
-                          
-                          const ySteps = 5;
-                          const yGridLines = Array.from({ length: ySteps + 1 }, (_, i) => {
-                            const value = Math.round((maxCount / ySteps) * i);
-                            const y = padding.top + chartHeight - ((value / maxCount) * chartHeight);
-                            return { y, value };
-                          });
-                          
-                          return (
-                            <g>
-                              {yGridLines.map((line, i) => (
-                                <g key={`grid-${i}`}>
-                                  <line x1={padding.left} y1={line.y} x2={600 - padding.right} y2={line.y} stroke="#e2e8f0" strokeWidth="1" strokeDasharray="4,4" />
-                                  <text x={padding.left - 10} y={line.y + 4} textAnchor="end" fontSize="11" fill="#64748b" fontWeight="500">{line.value}</text>
-                                </g>
-                              ))}
-                              <path d={areaD} fill="url(#deptLineGradient)" />
-                              <path d={pathD} stroke="#10b981" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" filter="url(#deptShadow)" />
-                              {points.map((p, i) => (
-                                <g key={i} style={{ cursor: p.departmentId ? 'pointer' : 'default' }}>
-                                  <circle 
-                                    cx={p.x} 
-                                    cy={p.y} 
-                                    r="6" 
-                                    fill="#fff" 
-                                    stroke="#10b981" 
-                                    strokeWidth="3"
-                                    onClick={() => p.departmentId && navigate(`/departments/${p.departmentId}`)}
-                                    style={{ cursor: p.departmentId ? 'pointer' : 'default' }}
-                                  />
-                                  <circle 
-                                    cx={p.x} 
-                                    cy={p.y} 
-                                    r="3" 
-                                    fill="#10b981"
-                                    onClick={() => p.departmentId && navigate(`/departments/${p.departmentId}`)}
-                                    style={{ cursor: p.departmentId ? 'pointer' : 'default' }}
-                                  />
-                                  <text x={p.x} y={padding.top + chartHeight + 20} textAnchor="middle" fontSize="11" fill="#475569" fontWeight="600">{p.name.length > 8 ? p.name.substring(0, 8) + '...' : p.name}</text>
-                                  <text x={p.x} y={p.y - 15} textAnchor="middle" fontSize="12" fontWeight="700" fill="#059669">{p.count}</text>
-                                </g>
-                              ))}}
-                            </g>
-                          );
-                        })()}
-                      </svg>
-                    </div>
-                  ) : (
-                    <div className="empty-state">
-                      <div className="empty-icon">
-                        <i className="fas fa-chart-line"></i>
-                      </div>
-                      <div className="empty-text">No department data</div>
-                    </div>
-                  )}
-                </Card.Body>
-              </Card>
-            </Col>
-            <Col md={6}>
-              <Card className="modern-card h-100">
-                <Card.Header className="d-flex justify-content-between align-items-center">
-                  <span>
-                    <i className="fas fa-chart-area me-2"></i>Monthly Leave Trends
-                  </span>
-                  <Badge style={{ background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)", fontSize: "0.75rem" }}>
-                    {dashboardData.monthlyTrends?.reduce((sum, m) => sum + m.totalDays, 0) || 0} Days
-                  </Badge>
-                </Card.Header>
-                <Card.Body style={{ padding: "1.5rem" }}>
-                  {dashboardData.monthlyTrends?.length > 0 ? (
-                    <div style={{ position: "relative", width: "100%", height: "280px" }}>
-                      <svg viewBox="0 0 600 280" style={{ width: "100%", height: "100%" }} preserveAspectRatio="xMidYMid meet">
-                        <defs>
-                          <linearGradient id="monthlyLineGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                            <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.2" />
-                            <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.05" />
-                          </linearGradient>
-                          <filter id="monthlyShadow">
-                            <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.15" />
-                          </filter>
-                        </defs>
-                        {(() => {
-                          const data = dashboardData.monthlyTrends;
-                          const padding = { left: 50, right: 30, top: 30, bottom: 50 };
-                          const chartWidth = 600 - padding.left - padding.right;
-                          const chartHeight = 280 - padding.top - padding.bottom;
-                          const stepX = chartWidth / (data.length - 1);
-                          const maxDays = Math.max(...data.map(d => d.totalDays));
-                          
-                          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                          
-                          const points = data.map((d, i) => ({
-                            x: padding.left + (i * stepX),
-                            y: padding.top + chartHeight - ((d.totalDays / maxDays) * chartHeight),
-                            totalDays: d.totalDays,
-                            month: months[d._id - 1] || d._id
-                          }));
-                          
-                          const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`).join(' ');
-                          const areaD = `${pathD} L ${points[points.length - 1].x},${padding.top + chartHeight} L ${padding.left},${padding.top + chartHeight} Z`;
-                          
-                          const ySteps = 5;
-                          const yGridLines = Array.from({ length: ySteps + 1 }, (_, i) => {
-                            const value = Math.round((maxDays / ySteps) * i);
-                            const y = padding.top + chartHeight - ((value / maxDays) * chartHeight);
-                            return { y, value };
-                          });
-                          
-                          return (
-                            <g>
-                              {yGridLines.map((line, i) => (
-                                <g key={`grid-${i}`}>
-                                  <line x1={padding.left} y1={line.y} x2={600 - padding.right} y2={line.y} stroke="#e2e8f0" strokeWidth="1" strokeDasharray="4,4" />
-                                  <text x={padding.left - 10} y={line.y + 4} textAnchor="end" fontSize="11" fill="#64748b" fontWeight="500">{line.value}</text>
-                                </g>
-                              ))}
-                              <path d={areaD} fill="url(#monthlyLineGradient)" />
-                              <path d={pathD} stroke="#f59e0b" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" filter="url(#monthlyShadow)" />
-                              {points.map((p, i) => (
-                                <g key={i}>
-                                  <circle cx={p.x} cy={p.y} r="6" fill="#fff" stroke="#f59e0b" strokeWidth="3" />
-                                  <circle cx={p.x} cy={p.y} r="3" fill="#f59e0b" />
-                                  <text x={p.x} y={padding.top + chartHeight + 25} textAnchor="middle" fontSize="11" fill="#475569" fontWeight="600">{p.month}</text>
-                                  {p.totalDays > 0 && (
-                                    <text x={p.x} y={p.y - 15} textAnchor="middle" fontSize="12" fontWeight="700" fill="#d97706">{p.totalDays}d</text>
-                                  )}
-                                </g>
-                              ))}
-                            </g>
-                          );
-                        })()}
-                      </svg>
-                    </div>
-                  ) : (
-                    <div className="empty-state">
-                      <div className="empty-icon">
-                        <i className="fas fa-chart-area"></i>
-                      </div>
-                      <div className="empty-text">No monthly trends data</div>
-                    </div>
-                  )}
-                </Card.Body>
-              </Card>
-            </Col>
-          </Row>
+
           <Row className="mb-4">
             <Col md={6}>
               <Card className="modern-card h-100">
@@ -2447,3 +2100,4 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
+

@@ -3,6 +3,7 @@ const User = require('../models/User');
 const EmployeeProfile = require('../models/EmployeeProfile');
 const { validationResult } = require('express-validator');
 const tokenBlacklist = require('../utils/tokenBlacklist');
+const { generateEmployeeId } = require('../utils/employeeIdGenerator');
 const logger = require('../utils/logger');
 
 const generateTokens = (userId) => {
@@ -44,6 +45,9 @@ const register = async (req, res) => {
 
     await user.save();
     
+    // Generate unique employee ID
+    const employeeId = await generateEmployeeId();
+    
     // Create employee profile with basic information
     const employeeProfile = new EmployeeProfile({
       userId: user._id,
@@ -67,7 +71,7 @@ const register = async (req, res) => {
         maritalStatus: 'SINGLE'
       },
       professionalInfo: {
-        employeeId: '',
+        employeeId,
         designation: designation || '',
         reportingManager: managerId || null,
         workLocation: '',

@@ -151,7 +151,7 @@ const MyFieldVisits = () => {
                 {visit.photos?.length > 0 && (
                   <div className="d-flex gap-2 mb-2 flex-wrap">
                     {visit.photos.map((p, i) => (
-                      <img key={i} src={`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}${p.url}`} alt="visit" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 8, border: '1px solid #e5e7eb', cursor: 'pointer' }} onClick={() => window.open(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}${p.url}`, '_blank')} />
+                      <img key={i} src={`${process.env.REACT_APP_API_URL || 'http://localhost:5001'}${p.url}`} alt="visit" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 8, border: '1px solid #e5e7eb', cursor: 'pointer' }} onClick={() => window.open(`${process.env.REACT_APP_API_URL || 'http://localhost:5001'}${p.url}`, '_blank')} />
                     ))}
                   </div>
                 )}
@@ -188,7 +188,7 @@ const MyFieldVisits = () => {
               )}
               {mapVisit.photos?.map((p, i) => p.lat && (
                 <Marker key={i} position={[p.lat, p.lng]}>
-                  <Popup><img src={`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}${p.url}`} alt="photo" style={{ width: 120, borderRadius: 6 }} /></Popup>
+                  <Popup><img src={`${process.env.REACT_APP_API_URL || 'http://localhost:5001'}${p.url}`} alt="photo" style={{ width: 120, borderRadius: 6 }} /></Popup>
                 </Marker>
               ))}
             </MapContainer>
