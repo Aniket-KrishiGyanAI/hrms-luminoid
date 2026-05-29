@@ -107,7 +107,7 @@ const createMaterial = async (req, res) => {
       isMandatory: req.body.isMandatory === 'true',
       dueDate: req.body.dueDate || null,
       estimatedMinutes: req.body.estimatedMinutes || 0,
-      uploadedBy: req.user.id,
+      uploadedBy: req.user._id,
       s3Key, s3Url, originalName, mimeType, size,
       thumbnailS3Key, thumbnailUrl,
       additionalFiles
@@ -573,7 +573,7 @@ const uploadCertificate = async (req, res) => {
       s3Key,
       s3Url: s3Result.Location,
       originalName: req.file.originalname,
-      uploadedBy: req.user.id,
+      uploadedBy: req.user._id,
       uploadedAt: new Date()
     };
 

@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 import { toast } from 'react-toastify';
 import Swal from 'sweetalert2';
+import GlobalSpinner from '../components/GlobalSpinner';
 
 const Announcements = () => {
   const { user } = useAuth();
@@ -46,9 +47,7 @@ const Announcements = () => {
   useEffect(() => {
     fetchAnnouncements();
     fetchDepartments();
-    const interval = setInterval(fetchAnnouncements, 3000);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Removed auto-refresh - only manual refresh
   }, []);
 
   const handleDepartmentChange = (deptId, checked) => {
@@ -172,12 +171,7 @@ const Announcements = () => {
   };
 
   if (loading) {
-    return (
-      <div className="text-center p-5">
-        <div className="spinner-border text-primary" role="status"></div>
-        <p className="mt-3">Loading announcements...</p>
-      </div>
-    );
+    return <GlobalSpinner />;
   }
 
   return (

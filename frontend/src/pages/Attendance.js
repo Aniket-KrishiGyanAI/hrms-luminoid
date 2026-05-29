@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, memo } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { Row, Col, Card, Button, Table, Badge, Form, Modal } from "react-bootstrap";
 import { toast } from "react-toastify";
 import moment from "moment-timezone";
 import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
+import GlobalSpinner from "../components/GlobalSpinner";
 import './AttendanceEnhancements.css';
 
 const Attendance = () => {
@@ -98,32 +99,38 @@ const Attendance = () => {
 
   useEffect(() => {
     const initData = async () => {
-      await Promise.all([
-        fetchTodayStatus(selectedUser),
-        fetchWeekSummary(selectedUser)
-      ]);
-      fetchAttendanceHistory(selectedUser, 1);
+      setLoading(true);
+      try {
+        await fetchTodayStatus(selectedUser);
+      } finally {
+        setLoading(false);
+      }
+      
+      // Lazy load non-critical data
+      setTimeout(() => {
+        fetchWeekSummary(selectedUser);
+        fetchAttendanceHistory(selectedUser, 1);
+      }, 100);
+      
+      setTimeout(() => {
+        fetchOfficeLocations();
+        fetchAttendancePolicy();
+        if (user?.role && ["MANAGER", "HR", "ADMIN"].includes(user.role) && employees.length === 0) {
+          fetchEmployees();
+        }
+        if (user?.isFieldEmployee) {
+          fetchJourneyStatus();
+        }
+      }, 300);
     };
     initData();
-
-    if (user?.role && ["MANAGER", "HR", "ADMIN"].includes(user.role) && employees.length === 0) {
-      fetchEmployees();
-    }
-    fetchOfficeLocations();
-
-    // Fetch journey status for field employees
-    fetchJourneyStatus();
-
-    // Fetch attendance policy
-    fetchAttendancePolicy();
 
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, [selectedUser, showDeleted, selectedMonth]);
 
-  const fetchTodayStatus = async (userId = "") => {
+  const fetchTodayStatus = useCallback(async (userId = "") => {
     try {
-      setLoading(true);
       let url = "/api/attendance/today";
       if (userId && userId.trim() !== "") {
         url += `?userId=${userId}`;
@@ -160,14 +167,12 @@ const Attendance = () => {
         });
       }
     } catch (error) {
-      console.error("Error fetching today status:", error);
+      console.error('Error fetching today status:', error);
       setTodayStatus(null);
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [user?.role]);
 
-  const fetchAttendanceHistory = async (userId = "", page = 1) => {
+  const fetchAttendanceHistory = useCallback(async (userId = "", page = 1) => {
     try {
       // Calculate date range from selected month
       const [year, month] = selectedMonth.split('-');
@@ -193,11 +198,13 @@ const Attendance = () => {
       setTotalRecords(response.data.total || 0);
       setCurrentPage(page);
     } catch (error) {
-      console.error("Error fetching attendance history:", error);
+      console.error('Error fetching attendance history:', error);
+      setAttendanceHistory([]);
+      setTotalRecords(0);
     }
-  };
+  }, [selectedMonth, showDeleted]);
 
-  const fetchWeekSummary = async (userId = "") => {
+  const fetchWeekSummary = useCallback(async (userId = "") => {
     try {
       const today = moment.tz('Asia/Kolkata');
       const startOfWeek = today.clone().startOf('week'); // Sunday
@@ -271,10 +278,9 @@ const Attendance = () => {
       setWeekSummary(summary);
       setWeeklyHoursData(chartData);
     } catch (error) {
-      console.error('❌ Error fetching week summary:', error);
-      setWeekSummary({ presentDays: 0, totalHours: 0, lateDays: 0, absentDays: 0, holidayDays: 0, workingDaysThisWeek: 0 });
+      console.error('Error fetching week summary:', error);
     }
-  };
+  }, []);
 
   const fetchOfficeLocations = async () => {
     try {
@@ -519,10 +525,12 @@ const Attendance = () => {
 
       toast.success(`Checked in successfully (${workMode === 'OFFICE' ? '🏢 Office' : workMode === 'REMOTE' ? '🏠 Remote' : '🔄 Hybrid/Field'})`);
       
-      // Refresh data in background (no await - instant response to user)
+      // Instant UI update
       fetchTodayStatus(selectedUser);
-      fetchAttendanceHistory(selectedUser);
-      fetchWeekSummary(selectedUser);
+      setTimeout(() => {
+        fetchWeekSummary(selectedUser);
+        fetchAttendanceHistory(selectedUser, currentPage);
+      }, 100);
     } catch (error) {
       toast.error(
         error.response?.data?.message ||
@@ -576,10 +584,12 @@ const Attendance = () => {
 
       toast.success(data.message || "Checked out successfully");
 
-      // Refresh data in background (no await - instant response to user)
+      // Instant UI update
       fetchTodayStatus(selectedUser);
-      fetchAttendanceHistory(selectedUser);
-      fetchWeekSummary(selectedUser);
+      setTimeout(() => {
+        fetchWeekSummary(selectedUser);
+        fetchAttendanceHistory(selectedUser, currentPage);
+      }, 100);
     } catch (error) {
       console.error(error);
 
@@ -592,7 +602,7 @@ const Attendance = () => {
     }
   };
 
-  const getStatusBadge = useCallback((status) => {
+  const getStatusBadge = useMemo(() => (status) => {
     const config = {
       Present: { bg: "success", icon: "check-circle" },
       Absent: { bg: "danger", icon: "times-circle" },
@@ -610,31 +620,58 @@ const Attendance = () => {
     );
   }, []);
 
-  const formatDate = (date) => {
+  const formatDate = useMemo(() => (date) => {
     if (!date) return "N/A";
     return new Date(date).toLocaleDateString("en-GB", {
       timeZone: "Asia/Kolkata",
     });
-  };
+  }, []);
  
-  const formatTime = (dateString) => {
+  const formatTime = useMemo(() => (dateString) => {
     if (!dateString) return "-";
     return new Date(dateString).toLocaleTimeString("en-IN", {
       timeZone: "Asia/Kolkata",
     });
-  };
+  }, []);
 
-  const formatDuration = (hours = 0) => {
+  const formatDuration = useMemo(() => (hours = 0) => {
     if (!hours || isNaN(hours)) return "0h 0m";
     const h = Math.floor(hours);
     const m = Math.round((hours - h) * 60);
     return `${h}h ${m}m`;
-  };
+  }, []);
 
   const showLocationDetails = useCallback((record) => {
     setSelectedLocation(record.location);
     setShowLocationModal(true);
   }, []);
+
+  const paginatedHistory = useMemo(() => attendanceHistory, [attendanceHistory]);
+
+  // Memoize the weekly hours chart component
+  const weeklyHoursChart = useMemo(() => (
+    <ResponsiveContainer width="100%" height="100%">
+      <LineChart data={weeklyHoursData} margin={{ top: 15, right: 10, left: -20, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+        <XAxis dataKey="day" tick={({ x, y, payload }) => {
+          const isWeekend = payload.value === 'Sun' || payload.value === 'Sat';
+          return <text x={x} y={y + 12} textAnchor="middle" fontSize={11} fontWeight={600} fill={isWeekend ? '#ef4444' : '#64748b'}>{payload.value}</text>;
+        }} axisLine={false} tickLine={false} />
+        <YAxis domain={[0, 10]} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `${v}h`} />
+        <Tooltip formatter={(val, name, props) => [props.payload.isWeekend ? 'Weekend' : `${val}h`, 'Hours']} contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: '0.8rem' }} />
+        <ReferenceLine y={8} stroke="#10b981" strokeDasharray="4 4" strokeWidth={1.5} />
+        <Line type="monotone" dataKey="hours" stroke="#3b82f6" strokeWidth={3}
+          dot={(props) => {
+            const { cx, cy, payload } = props;
+            const color = payload.isWeekend ? '#ef4444' : '#3b82f6';
+            return <circle key={payload.date} cx={cx} cy={cy} r={5} fill={color} stroke="white" strokeWidth={2} />;
+          }}
+          activeDot={{ r: 7 }}
+          label={{ position: 'top', fontSize: 10, fill: '#1e3a8a', fontWeight: 700, formatter: (v) => v > 0 ? `${v}h` : '' }}
+        />
+      </LineChart>
+    </ResponsiveContainer>
+  ), [weeklyHoursData]);
 
   const getAddressFromCoordinates = async (lat, lng) => {
     const cacheKey = `${lat.toFixed(4)},${lng.toFixed(4)}`;
@@ -687,7 +724,7 @@ const Attendance = () => {
     loadAddresses();
   }, [showLocationModal, selectedLocation]);
 
-  const getWorkModeBadge = useCallback((mode) => {
+  const getWorkModeBadge = useMemo(() => (mode) => {
     const config = {
       OFFICE: { bg: 'primary', icon: 'building', text: 'Office' },
       REMOTE: { bg: 'success', icon: 'home', text: 'Remote' },
@@ -1027,10 +1064,7 @@ const Attendance = () => {
             </Card.Header>
             <Card.Body>
               {loading ? (
-                <div className="text-center py-4">
-                  <div className="spinner-border text-primary mb-3" role="status"></div>
-                  <p className="text-muted">Loading attendance data...</p>
-                </div>
+                <GlobalSpinner size="small" />
               ) : todayStatus ? (
                 todayStatus.isAggregated ? (
                   // Aggregated view for "All" employees
@@ -1189,62 +1223,177 @@ const Attendance = () => {
                   <>
                     {/* Work Mode Selector - Only show if not checked in */}
                     {(!selectedUser || selectedUser === user?.id) && !todayStatus.hasCheckedIn && (
-                      <div className="mb-4 p-3" style={{ background: 'linear-gradient(135deg, #f8f9ff 0%, #e8f0fe 100%)', borderRadius: '12px', border: '2px solid #e0e7ff' }}>
-                        <label className="form-label fw-semibold mb-3 d-flex align-items-center">
-                          <i className="fas fa-map-marker-alt me-2" style={{ color: '#667eea' }}></i>
-                          Select Work Location
-                        </label>
-                        <div className="btn-group w-100" role="group">
-                          <input type="radio" className="btn-check" name="workMode" id="office" checked={workMode === 'OFFICE'} onChange={() => setWorkMode('OFFICE')} />
-                          <label className="btn btn-outline-primary" htmlFor="office" style={{ padding: '12px', fontWeight: '600', borderRadius: '10px 0 0 10px' }}>
-                            <i className="fas fa-building fa-lg mb-2 d-block"></i>
-                            Office
-                            <small className="d-block text-muted" style={{ fontSize: '0.75rem' }}>GPS Required</small>
-                          </label>
+                      <div className="mb-4" style={{ 
+                        background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
+                        borderRadius: '16px',
+                        padding: '1.25rem',
+                        border: '1px solid #bae6fd',
+                        position: 'relative',
+                        overflow: 'hidden'
+                      }}>
+                        {/* Decorative background elements */}
+                        <div style={{ position: 'absolute', top: '-30px', right: '-30px', width: '120px', height: '120px', background: 'rgba(56, 189, 248, 0.08)', borderRadius: '50%', filter: 'blur(30px)' }}></div>
+                        
+                        <div className="position-relative" style={{ zIndex: 1 }}>
+                          {/* Header */}
+                          <div className="d-flex align-items-center mb-3">
+                            <div className="rounded-2 d-flex align-items-center justify-content-center me-2" style={{ 
+                              width: '36px', 
+                              height: '36px', 
+                              background: 'linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%)',
+                              boxShadow: '0 2px 8px rgba(14, 165, 233, 0.25)'
+                            }}>
+                              <i className="fas fa-map-marker-alt" style={{ color: 'white', fontSize: '0.9rem' }}></i>
+                            </div>
+                            <div>
+                              <h6 className="mb-0" style={{ fontWeight: '700', fontSize: '0.9rem', color: '#0c4a6e', letterSpacing: '-0.01em' }}>SELECT WORK LOCATION</h6>
+                              <small className="d-none d-sm-block" style={{ color: '#64748b', fontSize: '0.7rem', fontWeight: '500' }}>Choose where you'll be working today</small>
+                            </div>
+                          </div>
 
-                          <input type="radio" className="btn-check" name="workMode" id="remote" checked={workMode === 'REMOTE'} onChange={() => setWorkMode('REMOTE')} />
-                          <label className="btn btn-outline-success" htmlFor="remote" style={{ padding: '12px', fontWeight: '600' }}>
-                            <i className="fas fa-home fa-lg mb-2 d-block"></i>
-                            Remote
-                            <small className="d-block text-muted" style={{ fontSize: '0.75rem' }}>Work from Home</small>
-                          </label>
+                          {/* Work Mode Cards */}
+                          <div className="row g-2 mb-3">
+                            {/* Office Card */}
+                            <div className="col-12 col-sm-4">
+                              <input type="radio" className="btn-check" name="workMode" id="office" checked={workMode === 'OFFICE'} onChange={() => setWorkMode('OFFICE')} />
+                              <label htmlFor="office" style={{ 
+                                display: 'block',
+                                background: workMode === 'OFFICE' ? 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)' : 'white',
+                                borderRadius: '12px',
+                                padding: '0.875rem',
+                                border: workMode === 'OFFICE' ? 'none' : '2px solid #e5e7eb',
+                                cursor: 'pointer',
+                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                boxShadow: workMode === 'OFFICE' ? '0 4px 12px rgba(99, 102, 241, 0.3)' : '0 1px 3px rgba(0,0,0,0.05)',
+                                transform: workMode === 'OFFICE' ? 'translateY(-2px)' : 'translateY(0)',
+                                textAlign: 'center'
+                              }}>
+                                <div className="rounded-2 d-inline-flex align-items-center justify-content-center mb-2" style={{ 
+                                  width: '36px', 
+                                  height: '36px', 
+                                  background: workMode === 'OFFICE' ? 'rgba(255,255,255,0.2)' : '#eff6ff',
+                                  backdropFilter: workMode === 'OFFICE' ? 'blur(10px)' : 'none'
+                                }}>
+                                  <i className="fas fa-building" style={{ fontSize: '1rem', color: workMode === 'OFFICE' ? 'white' : '#3b82f6' }}></i>
+                                </div>
+                                <div style={{ fontSize: '0.8rem', fontWeight: '700', color: workMode === 'OFFICE' ? 'white' : '#1e293b', marginBottom: '2px' }}>Office</div>
+                                <small style={{ fontSize: '0.6rem', color: workMode === 'OFFICE' ? 'rgba(255,255,255,0.85)' : '#64748b', fontWeight: '600' }}>GPS Required</small>
+                              </label>
+                            </div>
 
-                          <input type="radio" className="btn-check" name="workMode" id="hybrid" checked={workMode === 'HYBRID'} onChange={() => setWorkMode('HYBRID')} />
-                          <label className="btn btn-outline-info" htmlFor="hybrid" style={{ padding: '12px', fontWeight: '600', borderRadius: '0 10px 10px 0' }}>
-                            <i className="fas fa-sync-alt fa-lg mb-2 d-block"></i>
-                            Hybrid / Field
-                            <small className="d-block text-muted" style={{ fontSize: '0.75rem' }}>Flexible / On-site</small>
-                          </label>
+                            {/* Remote Card */}
+                            <div className="col-12 col-sm-4">
+                              <input type="radio" className="btn-check" name="workMode" id="remote" checked={workMode === 'REMOTE'} onChange={() => setWorkMode('REMOTE')} />
+                              <label htmlFor="remote" style={{ 
+                                display: 'block',
+                                background: workMode === 'REMOTE' ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'white',
+                                borderRadius: '12px',
+                                padding: '0.875rem',
+                                border: workMode === 'REMOTE' ? 'none' : '2px solid #e5e7eb',
+                                cursor: 'pointer',
+                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                boxShadow: workMode === 'REMOTE' ? '0 4px 12px rgba(16, 185, 129, 0.3)' : '0 1px 3px rgba(0,0,0,0.05)',
+                                transform: workMode === 'REMOTE' ? 'translateY(-2px)' : 'translateY(0)',
+                                textAlign: 'center'
+                              }}>
+                                <div className="rounded-2 d-inline-flex align-items-center justify-content-center mb-2" style={{ 
+                                  width: '36px', 
+                                  height: '36px', 
+                                  background: workMode === 'REMOTE' ? 'rgba(255,255,255,0.2)' : '#f0fdf4',
+                                  backdropFilter: workMode === 'REMOTE' ? 'blur(10px)' : 'none'
+                                }}>
+                                  <i className="fas fa-home" style={{ fontSize: '1rem', color: workMode === 'REMOTE' ? 'white' : '#10b981' }}></i>
+                                </div>
+                                <div style={{ fontSize: '0.8rem', fontWeight: '700', color: workMode === 'REMOTE' ? 'white' : '#1e293b', marginBottom: '2px' }}>Remote</div>
+                                <small style={{ fontSize: '0.6rem', color: workMode === 'REMOTE' ? 'rgba(255,255,255,0.85)' : '#64748b', fontWeight: '600' }}>Work from Home</small>
+                              </label>
+                            </div>
+
+                            {/* Hybrid Card */}
+                            <div className="col-12 col-sm-4">
+                              <input type="radio" className="btn-check" name="workMode" id="hybrid" checked={workMode === 'HYBRID'} onChange={() => setWorkMode('HYBRID')} />
+                              <label htmlFor="hybrid" style={{ 
+                                display: 'block',
+                                background: workMode === 'HYBRID' ? 'linear-gradient(135deg, #06b6d4 0%, #0ea5e9 100%)' : 'white',
+                                borderRadius: '12px',
+                                padding: '0.875rem',
+                                border: workMode === 'HYBRID' ? 'none' : '2px solid #e5e7eb',
+                                cursor: 'pointer',
+                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                boxShadow: workMode === 'HYBRID' ? '0 4px 12px rgba(6, 182, 212, 0.3)' : '0 1px 3px rgba(0,0,0,0.05)',
+                                transform: workMode === 'HYBRID' ? 'translateY(-2px)' : 'translateY(0)',
+                                textAlign: 'center'
+                              }}>
+                                <div className="rounded-2 d-inline-flex align-items-center justify-content-center mb-2" style={{ 
+                                  width: '36px', 
+                                  height: '36px', 
+                                  background: workMode === 'HYBRID' ? 'rgba(255,255,255,0.2)' : '#ecfeff',
+                                  backdropFilter: workMode === 'HYBRID' ? 'blur(10px)' : 'none'
+                                }}>
+                                  <i className="fas fa-sync-alt" style={{ fontSize: '1rem', color: workMode === 'HYBRID' ? 'white' : '#06b6d4' }}></i>
+                                </div>
+                                <div style={{ fontSize: '0.8rem', fontWeight: '700', color: workMode === 'HYBRID' ? 'white' : '#1e293b', marginBottom: '2px' }}>Hybrid / Field</div>
+                                <small style={{ fontSize: '0.6rem', color: workMode === 'HYBRID' ? 'rgba(255,255,255,0.85)' : '#64748b', fontWeight: '600' }}>Flexible / On-site</small>
+                              </label>
+                            </div>
+                          </div>
+
+                          {/* Office location selector */}
+                          {workMode === 'OFFICE' && officeLocations.length > 0 && (
+                            <div style={{ 
+                              background: 'white',
+                              borderRadius: '12px',
+                              padding: '0.875rem',
+                              border: '2px solid #e0f2fe',
+                              boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
+                            }}>
+                              <div className="d-flex align-items-center mb-2">
+                                <div className="rounded-2 d-flex align-items-center justify-content-center me-2" style={{ width: '24px', height: '24px', background: '#eff6ff' }}>
+                                  <i className="fas fa-building" style={{ color: '#3b82f6', fontSize: '0.7rem' }}></i>
+                                </div>
+                                <label className="form-label mb-0 fw-bold" style={{ fontSize: '0.7rem', color: '#0f172a', letterSpacing: '-0.01em' }}>
+                                  SELECT OFFICE LOCATION
+                                </label>
+                              </div>
+                              <Form.Select
+                                value={selectedOfficeId}
+                                onChange={(e) => setSelectedOfficeId(e.target.value)}
+                                style={{ 
+                                  borderRadius: '10px', 
+                                  border: '2px solid #e0f2fe', 
+                                  padding: '8px 12px', 
+                                  fontWeight: '600',
+                                  fontSize: '0.75rem',
+                                  color: '#334155',
+                                  background: '#f8fafc'
+                                }}
+                              >
+                                <option value="">-- Choose your office --</option>
+                                {officeLocations.filter(o => o.isActive).map(o => (
+                                  <option key={o._id} value={o._id}>
+                                    {o.name} · {formatHour(o.startTime, o.startMinute || 0)} – {formatHour(o.endTime, o.endMinute || 0)}
+                                  </option>
+                                ))}
+                              </Form.Select>
+                            </div>
+                          )}
+
+                          {workMode === 'OFFICE' && officeLocations.length === 0 && (
+                            <div className="d-flex align-items-center p-2 p-sm-3" style={{ 
+                              background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+                              borderRadius: '12px',
+                              border: '2px solid #fbbf24'
+                            }}>
+                              <div className="rounded-2 d-flex align-items-center justify-content-center me-2" style={{ width: '28px', height: '28px', background: 'rgba(245, 158, 11, 0.2)', flexShrink: 0 }}>
+                                <i className="fas fa-exclamation-triangle" style={{ color: '#d97706', fontSize: '0.8rem' }}></i>
+                              </div>
+                              <div>
+                                <div style={{ fontSize: '0.75rem', fontWeight: '700', color: '#92400e', marginBottom: '1px' }}>No Office Locations</div>
+                                <small style={{ color: '#78350f', fontWeight: '500', fontSize: '0.65rem' }}>Contact admin to configure locations.</small>
+                              </div>
+                            </div>
+                          )}
                         </div>
-
-                        {/* Office location selector */}
-                        {workMode === 'OFFICE' && officeLocations.length > 0 && (
-                          <div className="mt-3">
-                            <label className="form-label fw-semibold mb-2 d-flex align-items-center">
-                              <i className="fas fa-building me-2" style={{ color: '#667eea' }}></i>
-                              Select Office Location
-                            </label>
-                            <Form.Select
-                              value={selectedOfficeId}
-                              onChange={(e) => setSelectedOfficeId(e.target.value)}
-                              style={{ borderRadius: '8px', border: '2px solid #e0e7ff' }}
-                            >
-                              <option value="">-- Choose your office --</option>
-                              {officeLocations.filter(o => o.isActive).map(o => (
-                                <option key={o._id} value={o._id}>
-                                  {o.name} &nbsp;({formatHour(o.startTime, o.startMinute || 0)} – {formatHour(o.endTime, o.endMinute || 0)})
-                                </option>
-                              ))}
-                            </Form.Select>
-                          </div>
-                        )}
-
-                        {workMode === 'OFFICE' && officeLocations.length === 0 && (
-                          <div className="mt-3 alert alert-warning py-2 mb-0">
-                            <i className="fas fa-exclamation-triangle me-2"></i>
-                            No office locations configured. Contact admin.
-                          </div>
-                        )}
                       </div>
                     )}
 
@@ -1268,7 +1417,7 @@ const Attendance = () => {
                                   className="attendance-btn btn-ripple"
                                 >
                                   {loading ? (
-                                    <div className="loading-spinner me-2"></div>
+                                    <span className="btn-spinner"></span>
                                   ) : (
                                     <i className="fas fa-sign-in-alt me-2"></i>
                                   )}
@@ -1313,7 +1462,7 @@ const Attendance = () => {
                                   className="attendance-btn btn-ripple"
                                 >
                                   {loading ? (
-                                    <div className="loading-spinner me-2"></div>
+                                    <span className="btn-spinner"></span>
                                   ) : (
                                     <i className="fas fa-sign-out-alt me-2"></i>
                                   )}
@@ -1489,29 +1638,9 @@ const Attendance = () => {
                       </span>
                     </div>
                     
-                    {/* Recharts Line Chart */}
+                    {/* Recharts Line Chart - Memoized */}
                     <div style={{ width: '100%', height: 180 }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={weeklyHoursData} margin={{ top: 15, right: 10, left: -20, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                          <XAxis dataKey="day" tick={({ x, y, payload }) => {
-                            const isWeekend = payload.value === 'Sun' || payload.value === 'Sat';
-                            return <text x={x} y={y + 12} textAnchor="middle" fontSize={11} fontWeight={600} fill={isWeekend ? '#ef4444' : '#64748b'}>{payload.value}</text>;
-                          }} axisLine={false} tickLine={false} />
-                          <YAxis domain={[0, 10]} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `${v}h`} />
-                          <Tooltip formatter={(val, name, props) => [props.payload.isWeekend ? 'Weekend' : `${val}h`, 'Hours']} contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: '0.8rem' }} />
-                          <ReferenceLine y={8} stroke="#10b981" strokeDasharray="4 4" strokeWidth={1.5} />
-                          <Line type="monotone" dataKey="hours" stroke="#3b82f6" strokeWidth={3}
-                            dot={(props) => {
-                              const { cx, cy, payload } = props;
-                              const color = payload.isWeekend ? '#ef4444' : '#3b82f6';
-                              return <circle key={payload.date} cx={cx} cy={cy} r={5} fill={color} stroke="white" strokeWidth={2} />;
-                            }}
-                            activeDot={{ r: 7 }}
-                            label={{ position: 'top', fontSize: 10, fill: '#1e3a8a', fontWeight: 700, formatter: (v) => v > 0 ? `${v}h` : '' }}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
+                      {weeklyHoursChart}
                     </div>
                   </div>
 
@@ -1520,7 +1649,7 @@ const Attendance = () => {
                     <div className="col-6">
                       <div className="text-center p-2" style={{ background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
                         <div className="fw-bold" style={{ color: '#065f46', fontSize: '1.25rem' }}>
-                          {weekSummary.presentDays}/{weekSummary.workingDaysThisWeek}
+                          {weekSummary.presentDays}
                         </div>
                         <small style={{ color: '#065f46', fontSize: '0.7rem' }}>Present Days</small>
                       </div>
@@ -1763,7 +1892,7 @@ const Attendance = () => {
 
               {/* Desktop table view */}
               <div className="d-none d-md-block">
-                <div className="table-responsive">
+                <div className="table-responsive" style={{ maxHeight: '600px', overflowY: 'auto' }}>
               <Table className="mb-0 attendance-table">
                 {(() => {
                   const thStyle = { color: '#64748b', fontWeight: '600', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '0.85rem 1rem', whiteSpace: 'nowrap', background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', borderBottom: '2px solid #e2e8f0' };

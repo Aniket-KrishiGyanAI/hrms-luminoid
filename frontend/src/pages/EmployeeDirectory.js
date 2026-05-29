@@ -1825,232 +1825,200 @@ const EmployeeDirectory = () => {
         <Modal.Body className="p-0">
           {selectedEmployee && (
             <>
-              <div className="profile-view-header">
-                <div className="profile-view-cover"></div>
-                <button className="profile-close-btn" onClick={() => setShowProfileModal(false)}>
-                  <i className="fas fa-times"></i>
-                </button>
-                <div className="profile-view-avatar-section">
-                  <div className="profile-view-avatar">
-                    {selectedEmployee.userId?.profileImage ? (
-                      <img src={selectedEmployee.userId.profileImage} alt="Profile" />
-                    ) : (
-                      <div className="avatar-initials-view">
-                        {selectedEmployee.userId?.firstName?.charAt(0)}{selectedEmployee.userId?.lastName?.charAt(0)}
-                      </div>
-                    )}
-                  </div>
-                  <div className="profile-view-info">
-                    <h3>{selectedEmployee.userId?.firstName} {selectedEmployee.userId?.lastName}</h3>
-                    <p>{selectedEmployee.workInfo?.designation || selectedEmployee.professionalInfo?.designation || 'No Position'}</p>
-                    <div className="profile-badges">
-                      <Badge bg={selectedEmployee.userId?.role === 'ADMIN' ? 'danger' : selectedEmployee.userId?.role === 'HR' ? 'warning' : selectedEmployee.userId?.role === 'MANAGER' ? 'info' : 'secondary'}>
-                        {selectedEmployee.userId?.role}
-                      </Badge>
-                      <Badge bg={(selectedEmployee.userId?.isActive !== false) ? 'success' : 'danger'}>
-                        {(selectedEmployee.userId?.isActive !== false) ? 'Active' : 'Inactive'}
-                      </Badge>
-                      {selectedEmployee.userId?.isFieldEmployee && (
-                        <Badge bg="success" style={{ background: '#10b981' }}>
-                          <i className="fas fa-route me-1" />Field Employee
-                        </Badge>
-                      )}
+              <button className="profile-close-btn" onClick={() => setShowProfileModal(false)}>
+                <i className="fas fa-times"></i>
+              </button>
+              
+              <div className="profile-modal-header">
+                <div className="profile-modal-avatar">
+                  {selectedEmployee.userId?.profileImage ? (
+                    <img src={selectedEmployee.userId.profileImage} alt="Profile" />
+                  ) : (
+                    <div className="profile-modal-initials">
+                      {selectedEmployee.userId?.firstName?.charAt(0)}{selectedEmployee.userId?.lastName?.charAt(0)}
                     </div>
+                  )}
+                </div>
+                <div className="profile-modal-info">
+                  <h2>{selectedEmployee.userId?.firstName} {selectedEmployee.userId?.lastName}</h2>
+                  <p className="profile-modal-designation">{selectedEmployee.workInfo?.designation || selectedEmployee.professionalInfo?.designation || 'No Position'}</p>
+                  <div className="profile-modal-badges">
+                    <span className={`profile-modal-badge badge-${selectedEmployee.userId?.role?.toLowerCase()}`}>
+                      {selectedEmployee.userId?.role}
+                    </span>
+                    <span className={`profile-modal-badge ${(selectedEmployee.userId?.isActive !== false) ? 'badge-active' : 'badge-inactive'}`}>
+                      {(selectedEmployee.userId?.isActive !== false) ? 'Active' : 'Inactive'}
+                    </span>
+                    {selectedEmployee.userId?.isFieldEmployee && (
+                      <span className="profile-modal-badge badge-field">
+                        <i className="fas fa-route me-1" />Field Employee
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
               
-              <div className="profile-view-content">
+              <div className="profile-modal-content">
                 {selectedEmployee.userId?.exitDetails && selectedEmployee.userId?.isActive === false && (
-                  <div style={{ padding: '1rem', background: '#fef2f2', borderLeft: '4px solid #ef4444', margin: '1rem', borderRadius: '8px' }}>
-                    <h6 style={{ color: '#dc2626', marginBottom: '1rem' }}>
-                      <i className="fas fa-exclamation-triangle me-2"></i>Exit Information
-                    </h6>
-                    <Row className="g-2">
-                      <Col md={6}>
-                        <small style={{ color: '#64748b' }}>Exit Reason:</small>
-                        <div style={{ fontWeight: 600 }}>{selectedEmployee.userId.exitDetails.reason?.replace(/_/g, ' ')}</div>
-                      </Col>
-                      <Col md={6}>
-                        <small style={{ color: '#64748b' }}>Last Working Day:</small>
-                        <div style={{ fontWeight: 600 }}>{new Date(selectedEmployee.userId.exitDetails.exitDate).toLocaleDateString()}</div>
-                      </Col>
-                      <Col md={6}>
-                        <small style={{ color: '#64748b' }}>Exit Interview:</small>
-                        <div style={{ fontWeight: 600 }}>{selectedEmployee.userId.exitDetails.exitInterview}</div>
-                      </Col>
-                      <Col md={6}>
-                        <small style={{ color: '#64748b' }}>Handover Status:</small>
-                        <div style={{ fontWeight: 600 }}>{selectedEmployee.userId.exitDetails.handoverStatus?.replace(/_/g, ' ')}</div>
-                      </Col>
+                  <div className="exit-info-banner">
+                    <div className="exit-info-header">
+                      <i className="fas fa-exclamation-triangle"></i>
+                      <span>Exit Information</span>
+                    </div>
+                    <div className="exit-info-grid">
+                      <div className="exit-info-item">
+                        <span className="exit-label">Exit Reason</span>
+                        <span className="exit-value">{selectedEmployee.userId.exitDetails.reason?.replace(/_/g, ' ')}</span>
+                      </div>
+                      <div className="exit-info-item">
+                        <span className="exit-label">Last Working Day</span>
+                        <span className="exit-value">{new Date(selectedEmployee.userId.exitDetails.exitDate).toLocaleDateString()}</span>
+                      </div>
+                      <div className="exit-info-item">
+                        <span className="exit-label">Exit Interview</span>
+                        <span className="exit-value">{selectedEmployee.userId.exitDetails.exitInterview}</span>
+                      </div>
+                      <div className="exit-info-item">
+                        <span className="exit-label">Handover Status</span>
+                        <span className="exit-value">{selectedEmployee.userId.exitDetails.handoverStatus?.replace(/_/g, ' ')}</span>
+                      </div>
                       {selectedEmployee.userId.exitDetails.notes && (
-                        <Col md={12}>
-                          <small style={{ color: '#64748b' }}>Notes:</small>
-                          <div style={{ fontWeight: 600 }}>{selectedEmployee.userId.exitDetails.notes}</div>
-                        </Col>
+                        <div className="exit-info-item exit-info-full">
+                          <span className="exit-label">Notes</span>
+                          <span className="exit-value">{selectedEmployee.userId.exitDetails.notes}</span>
+                        </div>
                       )}
-                      <Col md={12}>
-                        <small style={{ color: '#64748b' }}>Deactivated On:</small>
-                        <div style={{ fontWeight: 600 }}>{new Date(selectedEmployee.userId.exitDetails.deactivatedAt).toLocaleString()}</div>
-                      </Col>
-                    </Row>
+                      <div className="exit-info-item exit-info-full">
+                        <span className="exit-label">Deactivated On</span>
+                        <span className="exit-value">{new Date(selectedEmployee.userId.exitDetails.deactivatedAt).toLocaleString()}</span>
+                      </div>
+                    </div>
                   </div>
                 )}
                 
-                <Row className="g-3">
-                  <Col md={6}>
-                    <div className="profile-info-card">
-                      <div className="info-card-header">
-                        <i className="fas fa-envelope"></i>
-                        <span>Contact Information</span>
+                <div className="profile-info-grid">
+                  <div className="profile-info-section">
+                    <div className="profile-section-header">
+                      <i className="fas fa-envelope"></i>
+                      <span>Contact</span>
+                    </div>
+                    <div className="profile-section-body">
+                      <div className="profile-detail-row">
+                        <span className="detail-label">Email</span>
+                        <span className="detail-value">{selectedEmployee.userId?.email}</span>
                       </div>
-                      <div className="info-card-body">
-                        <div className="info-row">
-                          <span className="info-label">Email</span>
-                          <span className="info-value">{selectedEmployee.userId?.email}</span>
-                        </div>
-                        <div className="info-row">
-                          <span className="info-label">Phone</span>
-                          <span className="info-value">{selectedEmployee.personalInfo?.phone || 'Not provided'}</span>
-                        </div>
+                      <div className="profile-detail-row">
+                        <span className="detail-label">Phone</span>
+                        <span className="detail-value">{selectedEmployee.personalInfo?.phone || 'Not provided'}</span>
                       </div>
                     </div>
-                  </Col>
+                  </div>
                   
-                  <Col md={6}>
-                    <div className="profile-info-card">
-                      <div className="info-card-header">
-                        <i className="fas fa-briefcase"></i>
-                        <span>Work Information</span>
+                  <div className="profile-info-section">
+                    <div className="profile-section-header">
+                      <i className="fas fa-briefcase"></i>
+                      <span>Work</span>
+                    </div>
+                    <div className="profile-section-body">
+                      <div className="profile-detail-row">
+                        <span className="detail-label">Department</span>
+                        <span className="detail-value">{selectedEmployee.userId?.department || 'Not assigned'}</span>
                       </div>
-                      <div className="info-card-body">
-                        <div className="info-row">
-                          <span className="info-label">Department</span>
-                          <span className="info-value">{selectedEmployee.userId?.department || 'Not assigned'}</span>
-                        </div>
-                        <div className="info-row">
-                          <span className="info-label">Employee ID</span>
-                          <span className="info-value">{selectedEmployee.employeeId || selectedEmployee.professionalInfo?.employeeId || 'Not assigned'}</span>
-                        </div>
+                      <div className="profile-detail-row">
+                        <span className="detail-label">Employee ID</span>
+                        <span className="detail-value">{selectedEmployee.employeeId || selectedEmployee.professionalInfo?.employeeId || 'Not assigned'}</span>
                       </div>
                     </div>
-                  </Col>
+                  </div>
                   
-                  <Col md={6}>
-                    <div className="profile-info-card">
-                      <div className="info-card-header">
-                        <i className="fas fa-calendar"></i>
-                        <span>Important Dates</span>
+                  <div className="profile-info-section">
+                    <div className="profile-section-header">
+                      <i className="fas fa-calendar"></i>
+                      <span>Dates</span>
+                    </div>
+                    <div className="profile-section-body">
+                      <div className="profile-detail-row">
+                        <span className="detail-label">Join Date</span>
+                        <span className="detail-value">{selectedEmployee.userId?.joinDate ? new Date(selectedEmployee.userId.joinDate).toLocaleDateString() : 'Not set'}</span>
                       </div>
-                      <div className="info-card-body">
-                        <div className="info-row">
-                          <span className="info-label">Join Date</span>
-                          <span className="info-value">{selectedEmployee.userId?.joinDate ? new Date(selectedEmployee.userId.joinDate).toLocaleDateString() : 'Not set'}</span>
-                        </div>
-                        <div className="info-row">
-                          <span className="info-label">Date of Birth</span>
-                          <span className="info-value">{selectedEmployee.userId?.dateOfBirth ? new Date(selectedEmployee.userId.dateOfBirth).toLocaleDateString() : 'Not set'}</span>
-                        </div>
+                      <div className="profile-detail-row">
+                        <span className="detail-label">Date of Birth</span>
+                        <span className="detail-value">{selectedEmployee.userId?.dateOfBirth ? new Date(selectedEmployee.userId.dateOfBirth).toLocaleDateString() : 'Not set'}</span>
                       </div>
                     </div>
-                  </Col>
+                  </div>
                   
-                  <Col md={6}>
-                    <div className="profile-info-card">
-                      <div className="info-card-header">
-                        <i className="fas fa-map-marker-alt"></i>
-                        <span>Location</span>
+                  <div className="profile-info-section">
+                    <div className="profile-section-header">
+                      <i className="fas fa-map-marker-alt"></i>
+                      <span>Location</span>
+                    </div>
+                    <div className="profile-section-body">
+                      <div className="profile-detail-row">
+                        <span className="detail-label">Work Location</span>
+                        <span className="detail-value">{selectedEmployee.workInfo?.workLocation || selectedEmployee.professionalInfo?.workLocation || 'Not set'}</span>
                       </div>
-                      <div className="info-card-body">
-                        <div className="info-row">
-                          <span className="info-label">Work Location</span>
-                          <span className="info-value">{selectedEmployee.workInfo?.workLocation || selectedEmployee.professionalInfo?.workLocation || 'Not set'}</span>
-                        </div>
-                        <div className="info-row">
-                          <span className="info-label">Employment Type</span>
-                          <span className="info-value">{selectedEmployee.professionalInfo?.employmentType || 'Full Time'}</span>
-                        </div>
+                      <div className="profile-detail-row">
+                        <span className="detail-label">Employment Type</span>
+                        <span className="detail-value">{selectedEmployee.professionalInfo?.employmentType || 'Full Time'}</span>
                       </div>
                     </div>
-                  </Col>
-                </Row>
+                  </div>
+                </div>
                 
                 {['ADMIN', 'HR'].includes(user?.role) && (
-                  <div className="profile-view-actions">
-                    {/* Field Employee Toggle */}
-                    <div className="field-toggle-row">
-                      <div className="field-toggle-info">
-                        <div className="field-toggle-title">
-                          <i className="fas fa-route" />Field Employee Tracking
-                        </div>
-                        <div className="field-toggle-desc">
-                          {selectedEmployee.userId?.isFieldEmployee ? 'GPS journey tracking enabled' : 'Enable GPS journey tracking'}
+                  <div className="profile-modal-actions">
+                    <div className="field-employee-toggle">
+                      <div className="toggle-content">
+                        <i className="fas fa-route"></i>
+                        <div className="toggle-text">
+                          <span className="toggle-title">Field Employee Tracking</span>
+                          <span className="toggle-desc">{selectedEmployee.userId?.isFieldEmployee ? 'GPS tracking enabled' : 'Enable GPS tracking'}</span>
                         </div>
                       </div>
-                      <div className="form-check form-switch mb-0">
-                        <input className="form-check-input" type="checkbox" role="switch"
-                          checked={!!selectedEmployee.userId?.isFieldEmployee}
-                          onChange={() => handleToggleFieldEmployee(selectedEmployee.userId?._id, selectedEmployee.userId?.isFieldEmployee)}
-                          style={{ cursor: 'pointer', width: 44, height: 24 }}
-                        />
-                      </div>
+                      <label className="custom-switch">
+                        <input type="checkbox" checked={!!selectedEmployee.userId?.isFieldEmployee}
+                          onChange={() => handleToggleFieldEmployee(selectedEmployee.userId?._id, selectedEmployee.userId?.isFieldEmployee)} />
+                        <span className="switch-slider"></span>
+                      </label>
                     </div>
 
-                    {/* Action Buttons Grid */}
-                    <div className="action-btn-grid">
-                      <button className="action-btn action-btn-edit" onClick={handleEditProfile}>
-                        <div className="action-btn-icon"><i className="fas fa-user-edit" /></div>
-                        <div className="action-btn-text">
-                          <span className="action-btn-label">Edit Profile</span>
-                          <span className="action-btn-desc">Update employee info</span>
-                        </div>
+                    <div className="action-buttons">
+                      <button className="action-button action-edit" onClick={handleEditProfile}>
+                        <i className="fas fa-user-edit"></i>
+                        <span>Edit Profile</span>
                       </button>
 
                       {user?.role === 'ADMIN' && (
-                        <button className="action-btn action-btn-role" onClick={handleChangeRole}>
-                          <div className="action-btn-icon"><i className="fas fa-user-tag" /></div>
-                          <div className="action-btn-text">
-                            <span className="action-btn-label">Change Role</span>
-                            <span className="action-btn-desc">Current: {selectedEmployee.userId?.role}</span>
-                          </div>
+                        <button className="action-button action-role" onClick={handleChangeRole}>
+                          <i className="fas fa-user-tag"></i>
+                          <span>Change Role</span>
                         </button>
                       )}
 
                       {user?.role === 'ADMIN' && (
-                        <button className="action-btn action-btn-password" onClick={handleResetPassword}>
-                          <div className="action-btn-icon"><i className="fas fa-key" /></div>
-                          <div className="action-btn-text">
-                            <span className="action-btn-label">Reset Password</span>
-                            <span className="action-btn-desc">Set new credentials</span>
-                          </div>
+                        <button className="action-button action-password" onClick={handleResetPassword}>
+                          <i className="fas fa-key"></i>
+                          <span>Reset Password</span>
                         </button>
                       )}
 
                       {(selectedEmployee.userId?.isActive !== false) ? (
-                        <button className="action-btn action-btn-deactivate" onClick={handleConfirmDelete}>
-                          <div className="action-btn-icon"><i className="fas fa-user-slash" /></div>
-                          <div className="action-btn-text">
-                            <span className="action-btn-label">Deactivate</span>
-                            <span className="action-btn-desc">Revoke system access</span>
-                          </div>
+                        <button className="action-button action-deactivate" onClick={handleConfirmDelete}>
+                          <i className="fas fa-user-slash"></i>
+                          <span>Deactivate</span>
                         </button>
                       ) : (
-                        <button className="action-btn action-btn-reactivate" onClick={() => handleReactivate(selectedEmployee.userId?._id)}>
-                          <div className="action-btn-icon"><i className="fas fa-user-check" /></div>
-                          <div className="action-btn-text">
-                            <span className="action-btn-label">Reactivate</span>
-                            <span className="action-btn-desc">Restore system access</span>
-                          </div>
+                        <button className="action-button action-reactivate" onClick={() => handleReactivate(selectedEmployee.userId?._id)}>
+                          <i className="fas fa-user-check"></i>
+                          <span>Reactivate</span>
                         </button>
                       )}
 
                       {user?.role === 'ADMIN' && (
-                        <button className="action-btn action-btn-delete" onClick={handleDeletePermanently}>
-                          <div className="action-btn-icon"><i className="fas fa-trash-alt" /></div>
-                          <div className="action-btn-text">
-                            <span className="action-btn-label">Delete</span>
-                            <span className="action-btn-desc">Permanently remove</span>
-                          </div>
+                        <button className="action-button action-delete" onClick={handleDeletePermanently}>
+                          <i className="fas fa-trash-alt"></i>
+                          <span>Delete</span>
                         </button>
                       )}
                     </div>

@@ -14,8 +14,8 @@ const imageOptimizer = async (req, res, next) => {
 
     await sharp(filePath)
       .resize(1920, 1920, { fit: 'inside', withoutEnlargement: true })
-      .jpeg({ quality: 80, progressive: true })
-      .png({ compressionLevel: 9 })
+      .jpeg({ quality: 90, progressive: true })
+      .png({ compressionLevel: 6, quality: 90 })
       .toFile(optimizedPath);
 
     await fs.unlink(filePath);

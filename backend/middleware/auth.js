@@ -1,44 +1,56 @@
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
-const { checkUserPermission } = require('../controllers/permissionController');
-const tokenBlacklist = require('../utils/tokenBlacklist');
+const jwt = require("jsonwebtoken");
+const User = require("../models/User");
+const { checkUserPermission } = require("../controllers/permissionController");
+const tokenBlacklist = require("../utils/tokenBlacklist");
 
 const auth = async (req, res, next) => {
   try {
     // Try to get token from Authorization header first, then from query parameter
-    let token = req.header('Authorization')?.replace('Bearer ', '');
+    let token = req.header("Authorization")?.replace("Bearer ", "");
     if (!token && req.query.token) {
       token = req.query.token;
     }
-    
+
     if (!token) {
-      return res.status(401).json({ message: 'Access denied. No token provided.' });
+      return res
+        .status(401)
+        .json({ message: "Access denied. No token provided." });
     }
 
     // Check if token is blacklisted
     if (tokenBlacklist.isBlacklisted(token)) {
-      return res.status(401).json({ message: 'Token has been revoked.' });
+      return res.status(401).json({ message: "Token has been revoked." });
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id).select('-password -refreshToken');
-    
+    const user = await User.findById(decoded.id).select(
+      "-password -refreshToken",
+    );
+
     if (!user || !user.isActive) {
-      return res.status(401).json({ message: 'Invalid token or user inactive.' });
+      return res
+        .status(401)
+        .json({ message: "Invalid token or user inactive." });
     }
 
     req.user = user;
     req.token = token; // Store token for logout
     next();
   } catch (error) {
-    res.status(401).json({ message: 'Invalid token.' });
+    res.status(401).json({ message: "Invalid token." });
   }
+};
+
+const isPrivilegedRole = (role) => {
+  return ["ADMIN", "HR"].includes(role);
 };
 
 const authorize = (...roles) => {
   return (req, res, next) => {
     if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
+      return res
+        .status(403)
+        .json({ message: "Access denied. Insufficient permissions." });
     }
     next();
   };
@@ -48,22 +60,30 @@ const requirePermission = (resource, action) => {
   return async (req, res, next) => {
     try {
       if (!req.user) {
-        return res.status(401).json({ message: 'Access denied. User not authenticated.' });
+        return res
+          .status(401)
+          .json({ message: "Access denied. User not authenticated." });
       }
 
-      const hasPermission = await checkUserPermission(req.user.id, resource, action);
-      
+      const hasPermission = await checkUserPermission(
+        req.user.id,
+        resource,
+        action,
+      );
+
       if (!hasPermission) {
-        return res.status(403).json({ 
-          message: `Access denied. Missing permission: ${action} ${resource}` 
+        return res.status(403).json({
+          message: `Access denied. Missing permission: ${action} ${resource}`,
         });
       }
 
       next();
     } catch (error) {
-      res.status(500).json({ message: 'Permission check failed', error: error.message });
+      res
+        .status(500)
+        .json({ message: "Permission check failed", error: error.message });
     }
   };
 };
 
-module.exports = { auth, authorize, requirePermission };
+module.exports = { auth, authorize, requirePermission, isPrivilegedRole };

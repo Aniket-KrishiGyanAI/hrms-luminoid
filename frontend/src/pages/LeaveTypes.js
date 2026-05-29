@@ -17,6 +17,7 @@ const LeaveTypes = () => {
     carryForward: false,
     maxCarryForward: '',
     lopEnabled: false,
+    isPaid: true,
     color: '#007bff'
   });
   const [loading, setLoading] = useState(false);
@@ -68,6 +69,7 @@ const LeaveTypes = () => {
       carryForward: leaveType.carryForward,
       maxCarryForward: leaveType.maxCarryForward,
       lopEnabled: leaveType.lopEnabled,
+      isPaid: leaveType.isPaid !== undefined ? leaveType.isPaid : true,
       color: leaveType.color
     });
     setShowModal(true);
@@ -105,6 +107,7 @@ const LeaveTypes = () => {
       carryForward: false,
       maxCarryForward: '',
       lopEnabled: false,
+      isPaid: true,
       color: '#007bff'
     });
     setEditingType(null);
@@ -148,6 +151,7 @@ const LeaveTypes = () => {
               <thead>
                 <tr>
                   <th>Name</th>
+                  <th>Type</th>
                   <th>Accrual Type</th>
                   <th>Accrual Rate</th>
                   <th>Max Per Year</th>
@@ -168,6 +172,16 @@ const LeaveTypes = () => {
                         ></div>
                         <span className="fw-semibold">{type.name}</span>
                       </div>
+                    </td>
+                    <td>
+                      <Badge 
+                        bg={type.isPaid !== false ? 'success' : 'warning'} 
+                        className="px-3 py-2"
+                        style={{ fontSize: '0.85rem' }}
+                      >
+                        <i className={`fas fa-${type.isPaid !== false ? 'money-bill-wave' : 'hand-holding-usd'} me-1`}></i>
+                        {type.isPaid !== false ? 'Paid' : 'Unpaid'}
+                      </Badge>
                     </td>
                     <td>
                       <Badge bg="light" text="dark" className="px-3 py-2">
@@ -360,6 +374,57 @@ const LeaveTypes = () => {
                     checked={formData.lopEnabled}
                     onChange={handleChange}
                   />
+                </Form.Group>
+              </div>
+            </div>
+
+            <div className="row">
+              <div className="col-md-12">
+                <Form.Group className="mb-3">
+                  <Form.Label className="fw-semibold d-flex align-items-center">
+                    <i className="fas fa-money-bill-wave me-2 text-success"></i>
+                    Leave Payment Type
+                  </Form.Label>
+                  <div className="d-flex gap-3 p-3" style={{ background: '#f8f9fa', borderRadius: '8px', border: '1px solid #dee2e6' }}>
+                    <Form.Check
+                      type="radio"
+                      id="paid-leave"
+                      name="isPaid"
+                      label={
+                        <div className="d-flex align-items-center">
+                          <i className="fas fa-money-bill-wave me-2 text-success"></i>
+                          <div>
+                            <div className="fw-semibold">Paid Leave</div>
+                            <small className="text-muted">Employee receives full salary</small>
+                          </div>
+                        </div>
+                      }
+                      checked={formData.isPaid === true}
+                      onChange={() => setFormData({ ...formData, isPaid: true })}
+                      className="mb-0"
+                    />
+                    <Form.Check
+                      type="radio"
+                      id="unpaid-leave"
+                      name="isPaid"
+                      label={
+                        <div className="d-flex align-items-center">
+                          <i className="fas fa-hand-holding-usd me-2 text-warning"></i>
+                          <div>
+                            <div className="fw-semibold">Unpaid Leave</div>
+                            <small className="text-muted">No salary for leave days</small>
+                          </div>
+                        </div>
+                      }
+                      checked={formData.isPaid === false}
+                      onChange={() => setFormData({ ...formData, isPaid: false })}
+                      className="mb-0"
+                    />
+                  </div>
+                  <Form.Text className="text-muted">
+                    <i className="fas fa-info-circle me-1"></i>
+                    Paid leaves are deducted from employee's leave balance. Unpaid leaves don't affect balance but salary is deducted.
+                  </Form.Text>
                 </Form.Group>
               </div>
             </div>

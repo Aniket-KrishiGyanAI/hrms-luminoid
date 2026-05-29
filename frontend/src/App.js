@@ -22,9 +22,11 @@ import "./styles/modern-spinner.css";
 
 import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
+import { DataProvider } from "./context/DataContext";
 import ErrorBoundary from "./components/ErrorBoundary";
 import ProtectedRoute from "./components/ProtectedRoute";
 import EnhancedLayout from "./components/EnhancedLayout";
+import GlobalSpinner from "./components/GlobalSpinner";
 
 
 import Login from "./pages/Login";
@@ -44,7 +46,7 @@ const Announcements = lazy(() => import("./pages/Announcements"));
 const EmployeeProfile = lazy(() => import("./pages/EmployeeProfile"));
 const Expenses = lazy(() => import("./pages/Expenses"));
 const Assets = lazy(() => import("./pages/Assets"));
-const Reports = lazy(() => import("./pages/Reports"));
+
 const Departments = lazy(() => import("./pages/Departments"));
 const DepartmentDetails = lazy(() => import("./pages/DepartmentDetails"));
 const Tasks = lazy(() => import("./pages/Tasks"));
@@ -56,21 +58,15 @@ const TeamFieldActivity = lazy(() => import("./pages/TeamFieldActivity"));
 const FpoFormPage = lazy(() => import("./pages/FpoFormPage"));
 const FpoSubmissions = lazy(() => import("./pages/FpoSubmissions"));
 
-const LoadingFallback = () => (
-  <div className="d-flex justify-content-center align-items-center" style={{ minHeight: "400px", padding: "2rem" }}>
-    <div className="modern-spinner">
-      <div className="spinner-ring"></div>
-      <div className="spinner-text">Loading...</div>
-    </div>
-  </div>
-);
+const LoadingFallback = () => <GlobalSpinner />;
 
 function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider>
         <AuthProvider>
-          <Router>
+          <DataProvider>
+            <Router>
             <div className="App">
                 <Routes>
                   <Route path="/login" element={<Login />} />
@@ -283,18 +279,7 @@ function App() {
                 }
               />
 
-              <Route
-                path="/reports"
-                element={
-                  <ProtectedRoute roles={["HR", "ADMIN"]}>
-                    <EnhancedLayout>
-                      <Suspense fallback={<LoadingFallback />}>
-                        <Reports />
-                      </Suspense>
-                    </EnhancedLayout>
-                  </ProtectedRoute>
-                }
-              />
+
 
               <Route
                 path="/departments"
@@ -448,7 +433,8 @@ function App() {
             />
 
             </div>
-          </Router>
+            </Router>
+          </DataProvider>
         </AuthProvider>
       </ThemeProvider>
     </ErrorBoundary>

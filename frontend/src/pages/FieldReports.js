@@ -29,7 +29,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: require("leaflet/dist/images/marker-shadow.png"),
 });
 
-const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
+const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5001";
 const photoUrl = (url) => (url?.startsWith("http") ? url : `${API_BASE}${url}`);
 
 const OUTCOME_LABELS = {

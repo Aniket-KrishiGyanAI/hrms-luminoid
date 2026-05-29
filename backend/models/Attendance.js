@@ -121,6 +121,8 @@ const attendanceSchema = new mongoose.Schema(
 
 // 🔒 One attendance per user per day (excluding deleted records)
 attendanceSchema.index({ userId: 1, date: 1 }, { unique: true, partialFilterExpression: { isDeleted: false } });
+attendanceSchema.index({ date: 1, isDeleted: 1, status: 1, totalHours: 1 });
+attendanceSchema.index({ userId: 1, date: -1 });
 
 attendanceSchema.pre("save", async function (next) {
   const {

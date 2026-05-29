@@ -8,7 +8,8 @@
     "dev": "nodemon server.js",
     "migrate:profiles": "node scripts/createMissingProfiles.js",
     "migrate:s3": "node scripts/migrateFilesToS3.js",
-    "create:indexes": "node scripts/createIndexes.js"
+    "create:indexes": "node scripts/createIndexes.js",
+    "assign:employee-ids": "node scripts/assignEmployeeIds.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.995.0",

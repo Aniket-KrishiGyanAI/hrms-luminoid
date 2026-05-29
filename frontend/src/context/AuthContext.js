@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
 const AuthContext = createContext();
 
@@ -58,8 +58,9 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-      console.log('API URL:', apiUrl);
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+      console.log('🔍 API URL:', apiUrl);
+      console.log('🔍 Full login URL:', `${apiUrl}/api/auth/login`);
       const response = await axios.post(`${apiUrl}/api/auth/login`, { email, password });
       const { user, accessToken, refreshToken } = response.data;
       
@@ -70,14 +71,15 @@ export const AuthProvider = ({ children }) => {
       dispatch({ type: 'LOGIN_SUCCESS', payload: { user, accessToken } });
       return { success: true };
     } catch (error) {
-      console.error('Login error:', error.response?.data || error.message);
+      console.error('❌ Login error:', error.response?.data || error.message);
+      console.error('❌ Error details:', error);
       return { success: false, message: error.response?.data?.message || 'Login failed' };
     }
   };
 
   const register = async (payload) => {
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
       const response = await axios.post(`${apiUrl}/api/auth/register`, payload);
       const { user, accessToken, refreshToken } = response.data;
 

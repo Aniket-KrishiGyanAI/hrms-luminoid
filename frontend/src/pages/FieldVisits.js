@@ -722,7 +722,7 @@ const FieldVisits = () => {
                             cursor: 'pointer'
                           }}>
                             <img 
-                              src={`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}${p.url}`} 
+                              src={`${process.env.REACT_APP_API_URL || 'http://localhost:5001'}${p.url}`} 
                               alt="visit" 
                               style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                             />

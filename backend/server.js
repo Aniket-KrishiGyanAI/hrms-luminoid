@@ -238,6 +238,7 @@ app.get('/api/preview/expense-reminder', (req, res) => {
 });
 
 // Routes - rate limiting applied selectively
+app.use('/api/auth', authRoutes); // Auth routes first
 app.use('/api/leave-types', leaveTypeRoutes);
 app.use('/api/leave-balances', leaveBalanceRoutes);
 app.use('/api/leave-requests', leaveRequestRoutes);
@@ -269,7 +270,6 @@ app.use('/api/field-reports', fieldReportRoutes);
 app.use('/api/fpo-forms', fpoFormRoutes);
 app.use('/api/consent', consentRoutes);
 app.use('/api/attendance-policy', attendancePolicyRoutes);
-app.use('/api/auth', authRoutes); // Auth routes without rate limiting
 app.use('/uploads/visit-photos', express.static(require('path').join(__dirname, 'uploads/visit-photos')));
 
 // Error handling middleware
@@ -278,7 +278,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: 'Something went wrong!' });
 });
 
-// 404 handler
+// 404 handler - must be last
 app.use('*', (req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
